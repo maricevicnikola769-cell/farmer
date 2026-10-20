@@ -20,6 +20,7 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DisableProgramGroupPage=yes
+CloseApplications=force
 
 [Tasks]
 Name: "desktopicon"; Description: "Ikonica na radnoj površini (Desktop)"; GroupDescription: "Dodatno:"
@@ -36,3 +37,13 @@ Name: "{autodesktop}\Farmer"; Filename: "{app}\Farmer.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Farmer.exe"; Description: "Pokreni Farmer"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// Pre instalacije zatvori Farmer ako je otvoren (da instalacija ne zapne)
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Code: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM Farmer.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Result := '';
+end;

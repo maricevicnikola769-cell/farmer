@@ -796,14 +796,22 @@ class App:
         self.logo = {}
         try:
             self.logo = {k: tk.PhotoImage(data=v) for k, v in LOGO.items()}
-            root.iconphoto(True, self.logo[64], self.logo[32], self.logo[16])
-            ico = os.path.join(APP_DIR, "farmer.ico")
-            if not os.path.exists(ico): ico = os.path.join(APP_DIR, "rodoslov.ico")
-            if not os.path.exists(ico): ico = os.path.join(getattr(sys, "_MEIPASS", APP_DIR), "farmer.ico")
-            if sys.platform.startswith("win") and os.path.isfile(ico):
-                root.iconbitmap(default=ico)
         except tk.TclError:
             pass
+        # ikonica prozora: prvo .ico (za stare prozore), pa logo iz programa PREKO nje -
+        # tako je u naslovnoj traci i na traci zadataka uvek novi logo
+        ico = os.path.join(APP_DIR, "farmer.ico")
+        if not os.path.exists(ico): ico = os.path.join(getattr(sys, "_MEIPASS", APP_DIR), "farmer.ico")
+        if sys.platform.startswith("win") and os.path.isfile(ico):
+            try:
+                root.iconbitmap(default=ico)
+            except tk.TclError:
+                pass
+        if self.logo:
+            try:
+                root.iconphoto(True, self.logo[64], self.logo[32], self.logo[16])
+            except tk.TclError:
+                pass
         root.configure(bg=BG)
         root.geometry(self.pod.get("prozor", "1240x800"))
         root.minsize(980, 620)
