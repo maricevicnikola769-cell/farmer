@@ -1,0 +1,390 @@
+"""Podaci: kolone tablice, čitanje i čuvanje CSV tablice, istorija i podsetnici, pomoćne funkcije za datume."""
+import csv
+import os
+from datetime import date, datetime
+
+from osnova import EN, _uz_tablicu, prevedi_vrednost
+from jezik import NAZIVI
+
+
+KOLONE = ["id", "markica", "vrsta", "rasa", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
+          "poreklo", "poreklo_od", "stare_markice", "uneto"]
+
+
+def sada():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def nazivi(vrsta):
+    return NAZIVI.get((vrsta or "")[:3], (("male" if EN else "mužjak"), ("female" if EN else "ženka"), ("young" if EN else "mladunče"), ("young" if EN else "mladunčad")))
+
+
+def norm(t):
+    return "".join(c for c in str(t or "").upper() if c.isalnum())
+
+
+def kolona(k):
+    k = (k or "").strip().lower()
+    for a, b in (("đ", "dj"), ("č", "c"), ("ć", "c"), ("š", "s"), ("ž", "z")):
+        k = k.replace(a, b)
+    return "_".join(k.split())
+
+
+def stare_lista(r):
+    """Ranije usne markice grla (kolona stare_markice, razdvojene zarezom)."""
+    return [x.strip() for x in str(r.get("stare_markice", "") or "").split(",") if x.strip()]
+
+
+def sort_key(s):
+    """K2 < K10 (prirodno sortiranje)."""
+    import re
+    return [int(x) if x.isdigit() else x.lower() for x in re.split(r"(\d+)", str(s))]
+
+
+def parsiraj_datum(t):
+    t = str(t or "").strip().rstrip(".")
+    if not t:
+        return None
+    try:
+        t = t.split(" ")[0]
+        if "-" in t:
+            g, m, d = t.split("-")[:3]
+            return date(int(g), int(m), int(d))
+        for s in (".", "/"):
+            if s in t:
+                d, m, g = t.split(s)[:3]
+                return date(int(g), int(m), int(d))
+        if len(t) == 4 and t.isdigit():
+            return date(int(t), 7, 1)
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
+def fmt_datum(d):
+    return d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y.")) if d else ""
+
+
+def starost_meseci(d):
+    if not d:
+        return None
+    n = date.today()
+    return (n.year - d.year) * 12 + n.month - d.month - (n.day < d.day)
+
+
+def fmt_starost(m):
+    if m is None:
+        return ""
+    if m < 24:
+        return (f"{m} mo." if EN else f"{m} mes.")
+    g = m // 12
+    if EN:
+        return f"{g} " + ("year" if g == 1 else "years")
+    else:
+        return f"{g} " + ("godine" if 2 <= g % 10 <= 4 and not 12 <= g % 100 <= 14 else "godina")
+
+
+def fmt_upis(t):
+    """'2026-10-05 14:30:00' -> '05.10.2026.'"""
+    try:
+        return datetime.strptime(t[:10], "%Y-%m-%d").strftime(("%d/%m/%Y" if EN else "%d.%m.%Y."))
+    except (ValueError, TypeError):
+        return "–"
+
+
+def pct(f):
+    if EN:
+        return (f"{f * 100:.2f}" if 0 < f < 0.1 else f"{f * 100:.1f}") + "%"
+    else:
+        return (f"{f * 100:.2f}" if 0 < f < 0.1 else f"{f * 100:.1f}").replace(".", ",") + "%"
+
+
+# =============================================================== podaci (CSV)
+
+class Tablica:
+    def __init__(self, putanja, ucitaj=True):
+        self.putanja = putanja
+        self.redovi = []          # lista dict-ova sa kljucevima iz KOLONE (+ dodatne kolone)
+        self.dodatne = []
+        self.mtime = None
+        if ucitaj:
+            self.ucitaj()
+
+    def ucitaj(self):
+        self.redovi, self.dodatne = [], []
+        if not os.path.isfile(self.putanja):
+            self.mtime = None
+            return
+        redovi, zaglavlje = procitaj_csv(self.putanja)
+        self.dodatne = [k for k in zaglavlje if k not in KOLONE and k not in ALIAS]
+        self.redovi = redovi
+        self.mtime = os.path.getmtime(self.putanja)
+
+    def sacuvaj(self):
+        zagl = KOLONE + self.dodatne
+        tmp = self.putanja + ".tmp"
+        if EN:
+            with open(tmp, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.writer(f, delimiter=";")
+                w.writerow([EN_KOL.get(k, k) for k in zagl])
+                for r in self.redovi:            # redosled upisa se cuva
+                    vr = dict(r)
+                    vr["status"] = STATUS_EN.get(vr.get("status", ""), vr.get("status", ""))
+                    vr["pol"] = {"z": "f"}.get(vr.get("pol", ""), vr.get("pol", ""))
+                    w.writerow([vr.get(k, "") for k in zagl])
+        else:
+            with open(tmp, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.writer(f, delimiter=";")
+                w.writerow(zagl)
+                for r in self.redovi:            # redosled upisa se cuva
+                    w.writerow([r.get(k, "") for k in zagl])
+        os.replace(tmp, self.putanja)
+        self.mtime = os.path.getmtime(self.putanja)
+
+
+EN_KOL = {"id": "id", "markica": "ear_tag", "vrsta": "species", "rasa": "breed", "pol": "sex",
+          "datum_rodjenja": "birth_date", "otac": "sire", "majka": "dam", "status": "status", "stado": "herd",
+          "poreklo": "origin", "poreklo_od": "origin_from", "stare_markice": "old_ear_tags", "uneto": "added"}
+
+
+EN_IST = {"grlo": "animal", "datum": "date", "dogadjaj": "event", "opis": "description", "partner": "partner",
+          "vrednost": "value", "automatski": "automatic", "uneto": "added", "ishod": "outcome", "ter": "heat",
+          "karenca_meso": "withdrawal_meat_days", "karenca_mleko": "withdrawal_milk_days"}
+
+
+EN_POD = {"grlo": "animal", "datum": "date", "tip": "type", "tekst": "text", "ponavljanje": "repeat_days",
+          "gotovo": "done", "uneto": "added"}
+
+
+STATUS_EN = {"aktivno": "active", "neaktivno": "inactive", "obrisano": "deleted"}
+
+
+ALIAS = {"oznaka": "id", "grlo": "id", "usna_markica": "markica", "usni_broj": "markica",
+         "broj_markice": "markica", "rodjen": "datum_rodjenja", "rodjeno": "datum_rodjenja",
+         "datum": "datum_rodjenja", "tag": "id", "animal": "id", "name": "id", "eartag": "markica",
+         "ear_tag_number": "markica", "father": "otac", "mother": "majka", "date_of_birth": "datum_rodjenja",
+         "dob": "datum_rodjenja", "birthdate": "datum_rodjenja", "born": "datum_rodjenja", "gender": "pol",
+         **{v: k for k, v in EN_KOL.items()}}
+
+
+POL_MAP = {"m": "m", "z": "z", "ž": "z", "f": "z", "b": "m", "k": "z"}
+
+
+def norm_rasa(r):
+    """Rase se pišu malim slovima, osim oznake hibrida: 'hibrid L×J'."""
+    r = " ".join(str(r or "").split())
+    if r.lower().startswith(("hybrid" if EN else "hibrid")):
+        kod = r[6:].strip().upper().replace("X", "×").replace("*", "×").replace(" ", "")
+        return (f"hybrid {kod}" if EN else f"hibrid {kod}") if kod else ("hybrid" if EN else "hibrid")
+    return r.lower()
+
+
+def kod_rase(rasa, druga=""):
+    """Oznaka rase u nazivu hibrida: prvo slovo (dva, ako obe rase počinju istim slovom).
+    Hibrid kao roditelj ulazi u zagradi: D×(L×J)."""
+    rasa = norm_rasa(rasa)
+    if rasa.startswith(("hybrid " if EN else "hibrid ")):
+        return f"({rasa[7:]})"
+    if not rasa:
+        return "?"
+    d = norm_rasa(druga)
+    if d and not d.startswith(("hybrid" if EN else "hibrid")) and d[0] == rasa[0] and d != rasa:
+        return rasa[:2].capitalize()
+    return rasa[0].upper()
+
+
+def rasa_potomka(rasa_oca, rasa_majke):
+    """Ista rasa -> ta rasa; različite -> 'hibrid O×M' (prvo otac, pa majka); jedna nepoznata -> poznata."""
+    ro, rm = norm_rasa(rasa_oca), norm_rasa(rasa_majke)
+    if not ro or ro == rm:
+        return rm
+    if not rm:
+        return ro
+    return (f"hybrid {kod_rase(ro, rm)}×{kod_rase(rm, ro)}" if EN else f"hibrid {kod_rase(ro, rm)}×{kod_rase(rm, ro)}")
+
+
+def vrsta_norm(v):
+    v = (v or "").strip().lower()
+    return {"gov": "goveda", "bik": "goveda", "kra": "goveda", "ovc": "ovce", "ova": "ovce",
+            "koz": "koze", "svi": "svinje", "kon": "konji",
+            "cat": "goveda", "cow": "goveda", "bul": "goveda", "she": "ovce", "ewe": "ovce", "ram": "ovce",
+            "goa": "koze", "pig": "svinje", "swi": "svinje", "sow": "svinje", "boa": "svinje",
+            "hor": "konji", "mar": "konji"}.get(v[:3], v) if not EN else {"cat": "cattle", "cow": "cattle", "bul": "cattle", "gov": "cattle", "bik": "cattle", "kra": "cattle",
+            "she": "sheep", "ewe": "sheep", "ram": "sheep", "ovc": "sheep", "ova": "sheep",
+            "goa": "goats", "koz": "goats", "pig": "pigs", "swi": "pigs", "sow": "pigs", "boa": "pigs",
+            "svi": "pigs", "hor": "horses", "mar": "horses", "kon": "horses"}.get(v[:3], v)
+
+
+def procitaj_csv(putanja):
+    kod = "latin-1"
+    for k in ("utf-8-sig", "cp1250"):
+        try:
+            with open(putanja, encoding=k) as f:
+                f.read()
+            kod = k
+            break
+        except UnicodeDecodeError:
+            continue
+    with open(putanja, newline="", encoding=kod) as f:
+        prvi = f.readline()
+        f.seek(0)
+        sep = ";" if prvi.count(";") >= prvi.count(",") else ","
+        citac = csv.reader(f, delimiter=sep)
+        try:
+            zaglavlje = [kolona(k) for k in next(citac)]
+        except StopIteration:
+            return [], []
+        zaglavlje = [ALIAS.get(k, k) if ALIAS.get(k, k) not in zaglavlje else k for k in zaglavlje]
+        if "id" not in zaglavlje and "markica" not in zaglavlje:
+            raise ValueError(("The table must have an 'id' (tag) or 'ear_tag' column.\n" if EN else
+                              "Tablica mora imati kolonu 'id' (oznaka) ili 'markica'.\n") +
+                             (f"Columns found: {', '.join(zaglavlje)}" if EN else f"Pronađene kolone: {', '.join(zaglavlje)}"))
+        redovi = []
+        for red in citac:
+            if not any(x.strip() for x in red):
+                continue
+            r = {k: (red[i].strip() if i < len(red) else "") for i, k in enumerate(zaglavlje)}
+            r["id"] = r.get("id") or r.get("markica", "")
+            if not r["id"]:
+                continue
+            r["pol"] = POL_MAP.get(r.get("pol", "").lower()[:1], "")
+            r["vrsta"] = vrsta_norm(r.get("vrsta", ""))
+            r["rasa"] = norm_rasa(r.get("rasa", ""))
+            for p in ("otac", "majka"):
+                if r.get(p, "") == "0":
+                    r[p] = ""
+            st = r.get("status", "").lower()
+            r["status"] = ("aktivno" if st == "" or st.startswith(("akt", "act")) else
+                           "obrisano" if st.startswith(("obr", "del")) else "neaktivno")
+            for p in ("poreklo", "rasa"):
+                r[p] = prevedi_vrednost(r.get(p, ""))
+            redovi.append(r)
+        return redovi, zaglavlje
+
+
+# =============================================================== istorija grla
+
+IST_KOLONE = ["grlo", "datum", "dogadjaj", "opis", "partner", "vrednost", "automatski", "uneto", "ishod",
+              "ter", "karenca_meso", "karenca_mleko"]
+
+
+class Istorija:
+    """Dnevnik dogadjaja za svako grlo, cuva se u <tablica>_istorija.csv."""
+
+    def __init__(self, putanja_tablice):
+        self.putanja = _uz_tablicu(putanja_tablice, "_istorija.csv", "_history.csv")
+        self.zapisi = []
+        if os.path.isfile(self.putanja):
+            try:
+                kod = "utf-8-sig"
+                try:
+                    open(self.putanja, encoding=kod).read()
+                except UnicodeDecodeError:
+                    kod = "cp1250"
+                with open(self.putanja, newline="", encoding=kod) as f:
+                    prvi = f.readline()
+                    f.seek(0)
+                    sep = ";" if prvi.count(";") >= prvi.count(",") else ","
+                    for r in csv.DictReader(f, delimiter=sep):
+                        r = {({v_: k_ for k_, v_ in EN_IST.items()}.get(kolona(k), kolona(k))): (v or "").strip()
+                             for k, v in r.items() if k}
+                        for p in ("dogadjaj", "ishod", "ter"):
+                            if r.get(p):
+                                r[p] = prevedi_vrednost(r[p])
+                        if r.get("grlo"):
+                            self.zapisi.append({k: r.get(k, "") for k in IST_KOLONE})
+            except OSError:
+                pass
+
+    def sacuvaj(self):
+        tmp = self.putanja + ".tmp"
+        if EN:
+            with open(tmp, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.writer(f, delimiter=";")
+                w.writerow([EN_IST.get(k, k) for k in IST_KOLONE])
+                for z in self.zapisi:
+                    w.writerow([z.get(k, "") for k in IST_KOLONE])
+        else:
+            with open(tmp, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.writer(f, delimiter=";")
+                w.writerow(IST_KOLONE)
+                for z in self.zapisi:
+                    w.writerow([z.get(k, "") for k in IST_KOLONE])
+        os.replace(tmp, self.putanja)
+
+    def dodaj(self, grlo, dogadjaj, opis="", datum=None, partner="", vrednost="", automatski=False,
+              karenca_meso="", karenca_mleko=""):
+        z = dict(grlo=grlo, datum=datum or date.today().strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), dogadjaj=dogadjaj, opis=opis,
+                 partner=partner, vrednost=vrednost, automatski="1" if automatski else "", uneto=sada(),
+                 ishod="", ter="", karenca_meso=karenca_meso, karenca_mleko=karenca_mleko)
+        self.zapisi.append(z)
+        return z
+
+    def za(self, grlo=None, auto=True):
+        z = [x for x in self.zapisi if (grlo is None or x["grlo"] == grlo) and (auto or not x["automatski"])]
+        return sorted(z, key=lambda x: (parsiraj_datum(x["datum"]) or date.min, x["uneto"]), reverse=True)
+
+    def preimenuj(self, staro, novo):
+        for z in self.zapisi:
+            if z["grlo"] == staro:
+                z["grlo"] = novo
+            if z["partner"] == staro:
+                z["partner"] = novo
+
+
+class Podsetnici:
+    """Podsetnici za grla (vakcinacija, lečenje…), čuvaju se u <tablica>_podsetnici.csv."""
+    KOLONE = ["grlo", "datum", "tip", "tekst", "ponavljanje", "gotovo", "uneto"]
+
+    def __init__(self, putanja_tablice):
+        self.putanja = _uz_tablicu(putanja_tablice, "_podsetnici.csv", "_reminders.csv")
+        self.zapisi = []
+        if os.path.isfile(self.putanja):
+            try:
+                kod = "utf-8-sig"
+                try:
+                    open(self.putanja, encoding=kod).read()
+                except UnicodeDecodeError:
+                    kod = "cp1250"
+                with open(self.putanja, newline="", encoding=kod) as f:
+                    for r in csv.DictReader(f, delimiter=";"):
+                        r = {({v_: k_ for k_, v_ in EN_POD.items()}.get(kolona(k), kolona(k))): (v or "").strip()
+                             for k, v in r.items() if k}
+                        if r.get("tip"):
+                            r["tip"] = prevedi_vrednost(r["tip"])
+                        if r.get("datum"):
+                            self.zapisi.append({k: r.get(k, "") for k in self.KOLONE})
+            except OSError:
+                pass
+
+    def sacuvaj(self):
+        if not self.zapisi and not os.path.isfile(self.putanja):
+            return
+        tmp = self.putanja + ".tmp"
+        if EN:
+            with open(tmp, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.writer(f, delimiter=";")
+                w.writerow([EN_POD.get(k, k) for k in self.KOLONE])
+                for z in self.zapisi:
+                    w.writerow([z.get(k, "") for k in self.KOLONE])
+        else:
+            with open(tmp, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.writer(f, delimiter=";")
+                w.writerow(self.KOLONE)
+                for z in self.zapisi:
+                    w.writerow([z.get(k, "") for k in self.KOLONE])
+        os.replace(tmp, self.putanja)
+
+    def dodaj(self, grlo, datum, tip, tekst="", ponavljanje=0):
+        z = dict(grlo=grlo or "", datum=datum, tip=tip, tekst=tekst, ponavljanje=str(ponavljanje or ""),
+                 gotovo="", uneto=sada())
+        self.zapisi.append(z)
+        return z
+
+    def aktivni(self, grlo=None):
+        return [z for z in self.zapisi if not z["gotovo"] and (grlo is None or z["grlo"] == grlo)]
+
+    def preimenuj(self, staro, novo):
+        for z in self.zapisi:
+            if z["grlo"] == staro:
+                z["grlo"] = novo

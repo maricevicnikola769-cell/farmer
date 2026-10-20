@@ -1,30 +1,31 @@
 """Automatski testovi za Farmer: račun srodstva, čitanje i čuvanje tablica, oba jezika.
 GitHub ih pokreće pre svake izgradnje; ako neki padne, nova verzija se ne objavljuje."""
-import importlib.util
-import json
 import os
-import shutil
 import sys
 
 import pytest
 
 KOREN = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-IZVOR = next(os.path.join(KOREN, f) for f in ("Farmer.pyw", "Farmer_English.pyw", "farmer.pyw")
-             if os.path.exists(os.path.join(KOREN, f)))
+sys.path.insert(0, KOREN)
+
+import jezik      # noqa: E402  (fajlovi programa su u korenu repozitorijuma)
+import podaci     # noqa: E402
+import rodoslov   # noqa: E402
+import app        # noqa: E402,F401  (proverava da se ceo program učitava bez greške)
 
 
-def ucitaj(folder, jezik):
-    """Učita program kao modul, sa podacima u privremenom folderu i zadatim jezikom."""
-    os.makedirs(folder, exist_ok=True)
-    kopija = os.path.join(folder, "farmer_test.py")
-    shutil.copy(IZVOR, kopija)
-    with open(os.path.join(folder, "rodoslov_podesavanja.json"), "w", encoding="utf-8") as f:
-        json.dump({"jezik": jezik}, f)
-    ime = f"farmer_{jezik}_{abs(hash(folder))}"
-    spec = importlib.util.spec_from_file_location(ime, kopija)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+class Program:
+    """Pristup imenima programa bez obzira u kom fajlu su (Model, DOGADJAJI, procitaj_csv...)."""
+    def __getattr__(self, ime):
+        for m in (jezik, podaci, rodoslov):
+            if ime in vars(m):
+                return getattr(m, ime)
+        raise AttributeError(ime)
+
+
+def na_jeziku(j):
+    jezik.postavi_jezik(j)
+    return Program()
 
 
 def red(i, o="", m="", pol="z", vrsta="ovce"):
@@ -36,8 +37,9 @@ STADO = [red("O", pol="m"), red("M"), red("B", "O", "M", "m"), red("S", "O", "M"
 
 
 @pytest.fixture(params=["sr", "en"])
-def F(request, tmp_path):
-    return ucitaj(str(tmp_path / request.param), request.param)
+def F(request):
+    yield na_jeziku(request.param)
+    jezik.postavi_jezik("sr")
 
 
 @pytest.mark.parametrize("grlo, ocekivano", [("X", 0.25), ("Y", 0.125), ("Z", 0.375), ("B", 0.0), ("O", 0.0)])
@@ -79,24 +81,38 @@ def test_cuvanje_i_citanje_tablice(F, tmp_path):
 
 def test_citanje_tablice_drugog_jezika(tmp_path):
     """Tablica sačuvana na engleskom mora da se pročita i na srpskom (i obrnuto)."""
-    en = ucitaj(str(tmp_path / "en"), "en")
+    en = na_jeziku("en")
     put = str(tmp_path / "herd.csv")
     t = en.Tablica(put, ucitaj=False)
     t.redovi = [dict(r, vrsta="ovce") for r in STADO]
     t.sacuvaj()
-    sr = ucitaj(str(tmp_path / "sr"), "sr")
+    sr = na_jeziku("sr")
     redovi, _ = sr.procitaj_csv(put)
     assert len(redovi) == len(STADO)
     assert all(r["vrsta"] == "ovce" for r in redovi)
     assert sr.Model(redovi).inbr("Z") == pytest.approx(0.375)
 
 
-def test_prevod_vrednosti(tmp_path):
-    sr = ucitaj(str(tmp_path / "sr"), "sr")
-    en = ucitaj(str(tmp_path / "en"), "en")
-    assert en.prevedi_vrednost(sr.DOGADJAJI[0]) == en.DOGADJAJI[0]
-    assert sr.prevedi_vrednost(en.DOGADJAJI[2]) == sr.DOGADJAJI[2]
+def test_prevod_vrednosti():
+    sr_dogadjaji = list(na_jeziku("sr").DOGADJAJI)
+    en = na_jeziku("en")
+    assert en.prevedi_vrednost(sr_dogadjaji[0]) == en.DOGADJAJI[0]
+    en_dogadjaji = list(en.DOGADJAJI)
+    sr = na_jeziku("sr")
+    assert sr.prevedi_vrednost(en_dogadjaji[2]) == sr.DOGADJAJI[2]
     assert sr.prevedi_vrednost("neki moj tekst") == "neki moj tekst"
+
+
+def test_promena_jezika_stize_do_svih_fajlova():
+    """Posle promene jezika svaki fajl programa vidi nove nazive (bez ponovnog pokretanja)."""
+    import kopije
+    import istorija
+    na_jeziku("en")
+    assert kopije.EN and istorija.EN and podaci.EN
+    assert istorija.DOGADJAJI[0] == "Mating / insemination"
+    na_jeziku("sr")
+    assert not kopije.EN and not istorija.EN
+    assert istorija.DOGADJAJI[0] == "Parenje / osemenjavanje"
 
 
 def test_vrsta(F):
