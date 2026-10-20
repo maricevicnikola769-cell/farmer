@@ -14,11 +14,36 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import tkinter.font as tkfont
 
-# Kao .exe (PyInstaller) podaci se čuvaju pored samog .exe fajla, a ne u privremenom folderu
-if getattr(sys, "frozen", False):
-    APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
-else:
-    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+def _folder_za_podatke():
+    """Gde program čuva stado, podešavanja i rezervne kopije.
+    - pokrenut kao .py: pored samog fajla (kao i do sada);
+    - prenosni .exe koji pored sebe već ima podatke: tu (stari način);
+    - instaliran program: Dokumenti\\Farmer (Windows ne dozvoljava pisanje u folder programa)."""
+    if not getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(__file__))
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    for ime in ("stado.csv", "rodoslov_podesavanja.json"):
+        if os.path.exists(os.path.join(exe_dir, ime)):
+            return exe_dir
+    dok = ""
+    try:
+        import ctypes
+        buf = ctypes.create_unicode_buffer(260)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf) == 0:  # 5 = Dokumenti
+            dok = buf.value
+    except Exception:
+        pass
+    if not dok:
+        dok = os.path.join(os.path.expanduser("~"), "Documents")
+    folder = os.path.join(dok, "Farmer")
+    try:
+        os.makedirs(folder, exist_ok=True)
+        return folder
+    except OSError:
+        return exe_dir
+
+
+APP_DIR = _folder_za_podatke()
 PODESAVANJA = os.path.join(APP_DIR, "rodoslov_podesavanja.json")
 KOLONE = ["id", "markica", "vrsta", "rasa", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
           "poreklo", "poreklo_od", "stare_markice", "uneto"]
