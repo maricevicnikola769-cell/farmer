@@ -812,6 +812,9 @@ class App:
                 root.iconphoto(True, self.logo[64], self.logo[32], self.logo[16])
             except tk.TclError:
                 pass
+        # Windows: ikonica u naslovnoj traci se postavlja i direktno preko sistema (najpouzdanije)
+        if sys.platform.startswith("win") and os.path.isfile(ico):
+            root.after(150, lambda: postavi_win_ikonicu(root, ico))
         root.configure(bg=BG)
         root.geometry(self.pod.get("prozor", "1240x800"))
         root.minsize(980, 620)
@@ -5244,6 +5247,29 @@ class App:
         y = self.root.winfo_rooty() + max(20, (self.root.winfo_height() - win.winfo_height()) // 2)
         win.geometry(f"+{x}+{y}")
         (e_id if not v.get("id") else vr).focus_set()
+
+
+def postavi_win_ikonicu(prozor, ico):
+    """Učita .ico i postavi ga kao malu i veliku ikonicu prozora (naslovna traka, Alt+Tab)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        u = ctypes.windll.user32
+        u.LoadImageW.restype = wintypes.HANDLE
+        u.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        u.SendMessageW.restype = ctypes.c_ssize_t
+        u.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t]
+        u.GetParent.restype = wintypes.HWND
+        u.GetParent.argtypes = [wintypes.HWND]
+        prozor.update_idletasks()
+        hwnd = u.GetParent(prozor.winfo_id()) or prozor.winfo_id()
+        for vrsta, metrika, rezerva in ((0, 49, 16), (1, 11, 32)):   # ICON_SMALL / ICON_BIG
+            vel = u.GetSystemMetrics(metrika) or rezerva
+            h = u.LoadImageW(None, ico, 1, vel, vel, 0x10)            # IMAGE_ICON, LR_LOADFROMFILE
+            if h:
+                u.SendMessageW(hwnd, 0x0080, vrsta, h)                  # WM_SETICON
+    except Exception:
+        pass
 
 
 def main():
