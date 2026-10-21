@@ -124,3 +124,48 @@ def test_vrsta(F):
 def test_procenat(F):
     assert F.pct(0.25) in ("25,0%", "25.0%")
     assert F.pct(0.0625) in ("6,25%", "6.25%")
+
+
+# ---------------------------------------------------------------- telefon: spajanje podataka
+def _z(grlo, uneto, dog, **kw):
+    z = dict(grlo=grlo, datum="01.10.2026", dogadjaj=dog, opis="", partner="", vrednost="", automatski="", uneto=uneto,
+             ishod="", ter="", karenca_meso="", karenca_mleko="")
+    z.update(kw)
+    return z
+
+
+def test_telefon_spajanje_obe_strane():
+    import telefon_prenos as telefon
+    na_jeziku("sr")
+    baza = [_z("M1", "2026-10-01 10:00:00", "Parenje / osemenjavanje", partner="O2")]
+    tel = [dict(baza[0], ishod="leglo:2:21.10.2026:"), _z("M1", "2026-10-21 08:00:00", "Porođaj", vrednost="2")]
+    rac = [dict(baza[0]), _z("O1", "2026-10-20 09:00:00", "Merenje težine", vrednost="78")]
+    rez, st = telefon.spoji(baza, tel, rac, telefon._kljuc_ist, podaci.IST_KOLONE)
+    assert len(rez) == 3
+    assert rez[0]["ishod"] == "leglo:2:21.10.2026:"           # izmena sa telefona
+    assert {z["dogadjaj"] for z in rez} == {"Parenje / osemenjavanje", "Merenje težine", "Porođaj"}
+    assert st == dict(sa_telefona=2, novo=1, sukob=0)
+
+
+def test_telefon_brisanje_na_racunaru_i_sukob():
+    import telefon_prenos as telefon
+    na_jeziku("sr")
+    a, b = _z("A", "2026-10-01 10:00:00", "Napomena", opis="x"), _z("B", "2026-10-01 10:00:00", "Napomena", opis="y")
+    rez, st = telefon.spoji([a, b], [a, dict(b, opis="telefon")], [dict(b, opis="racunar")], telefon._kljuc_ist, podaci.IST_KOLONE)
+    assert [z["grlo"] for z in rez] == ["B"]                   # A obrisan na računaru ostaje obrisan
+    assert rez[0]["opis"] == "telefon" and st["sukob"] == 1     # oba menjala -> telefon
+
+
+def test_telefon_drugi_jezik_nije_sukob():
+    """Računar je u međuvremenu prebačen na engleski: isti zapis na dva jezika nije promena."""
+    import telefon_prenos as telefon
+    try:
+        na_jeziku("en")
+        baza = [_z("M1", "2026-10-01 10:00:00", "Parenje / osemenjavanje", partner="O2")]
+        rac = [dict(baza[0], dogadjaj="Mating / insemination")]
+        tel = [dict(baza[0]), _z("S1", "2026-10-21 08:00:00", "Tera se")]
+        rez, st = telefon.spoji(baza, tel, rac, telefon._kljuc_ist, podaci.IST_KOLONE)
+        assert [z["dogadjaj"] for z in rez] == ["Mating / insemination", "In heat"]
+        assert st == dict(sa_telefona=1, novo=1, sukob=0)
+    finally:
+        na_jeziku("sr")

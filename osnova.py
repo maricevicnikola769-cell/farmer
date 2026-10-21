@@ -4,7 +4,7 @@ import os
 import sys
 
 
-VERZIJA = "2.1"
+VERZIJA = "2.3"
 
 
 _IMENA_PODATAKA = ("stado.csv", "herd.csv", "rodoslov_podesavanja.json", "herd_pedigree_settings.json")

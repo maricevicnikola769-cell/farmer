@@ -224,7 +224,8 @@ class OsnovaProzora:
         for key, txt, ic in (("grla", ("Animals" if EN else "Grla"), "☰"), ("parenje", ("Mating" if EN else "Parenje"), "⚭"),
                              ("srodstvo", ("Relationship" if EN else "Srodstvo"), "⑂"), ("istorija", ("History" if EN else "Istorija"), "◷"),
                              ("obavestenja", ("Notifications" if EN else "Obaveštenja"), "◉"), ("pregled", ("Overview" if EN else "Pregled"), "▥"),
-                             ("statistika", T("Statistika", "Statistics"), "▤"), ("stampa", T("Štampa i PDF", "Print and PDF"), "⎙")):
+                             ("statistika", T("Statistika", "Statistics"), "▤"), ("stampa", T("Štampa i PDF", "Print and PDF"), "⎙"),
+                             ("telefon", T("Telefon", "Phone"), "☏")):
             row = tk.Frame(side, bg=SURF, cursor="hand2")
             row.pack(fill="x", padx=12, pady=1)
             li = tk.Label(row, text=ic, bg=SURF, fg=INK2, font=self.f(12), width=2)
