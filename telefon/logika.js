@@ -233,8 +233,24 @@ function dodaj(grlo, dogadjaj, o = {}) {
   S.istorija.push(z);
   return z;
 }
+// indeks istorije (po grlu i spisak parenja) – da i farma od više hiljada grla radi brzo
+let _ix = { ref: null, n: -1, poGrlu: null, parenja: null, par: "" };
+function ixIstorije() {
+  const par = K().PARENJE;
+  if (_ix.ref !== S.istorija || _ix.n !== S.istorija.length || _ix.par !== par) {
+    const poGrlu = new Map(), parenja = [];
+    for (const z of S.istorija) {
+      let l = poGrlu.get(z.grlo);
+      if (!l) poGrlu.set(z.grlo, (l = []));
+      l.push(z);
+      if (z.dogadjaj === par && !z.automatski) parenja.push(z);
+    }
+    _ix = { ref: S.istorija, n: S.istorija.length, poGrlu, parenja, par };
+  }
+  return _ix;
+}
 function istorijaZa(grlo, auto = true) {
-  return S.istorija.filter(x => (grlo === null || x.grlo === grlo) && (auto || !x.automatski))
+  return (grlo === null ? S.istorija : (ixIstorije().poGrlu.get(grlo) || [])).filter(x => (grlo === null || x.grlo === grlo) && (auto || !x.automatski))
     .sort((a, b) => ((parsirajDatum(b.datum) || 0) - (parsirajDatum(a.datum) || 0)) || ((a.uneto || "") < (b.uneto || "") ? 1 : (a.uneto || "") > (b.uneto || "") ? -1 : 0));
 }
 function zabelezi(tekst) { S.promene.push({ vreme: sada(), tekst }); }
@@ -285,7 +301,7 @@ function opisIshoda(z) {
 }
 function cekajuPorodjaj(x = null) {
   const posl = {};
-  for (const z of S.istorija) {
+  for (const z of ixIstorije().parenja) {
     if (z.dogadjaj !== K().PARENJE || z.automatski) continue;
     const [majka] = roditeljiParenja(z);
     if (x !== null && ![z.grlo, majka, M.nadji(z.partner)].includes(x)) continue;
@@ -297,12 +313,12 @@ function cekajuPorodjaj(x = null) {
 function zatvoriStaraParenja(nz) {
   if (nz.dogadjaj !== K().PARENJE) return;
   const [majka] = roditeljiParenja(nz), d = parsirajDatum(nz.datum) || new Date(0);
-  for (const z of S.istorija)
+  for (const z of ixIstorije().parenja)
     if (z !== nz && cekaPorodjaj(z) && roditeljiParenja(z)[0] === majka && (parsirajDatum(z.datum) || new Date(0)) <= d) z.ishod = "ponovljeno";
 }
 function cekajuMindjusu(x = null) {
-  return S.istorija.filter(z => {
-    if (z.dogadjaj !== K().PARENJE || !leglo(z)) return false;
+  return ixIstorije().parenja.filter(z => {
+    if (!leglo(z)) return false;
     const [majka, otac] = roditeljiParenja(z);
     return x === null || [z.grlo, majka, otac].includes(x);
   }).sort((a, b) => (parsirajDatum(leglo(a)[1]) || 0) - (parsirajDatum(leglo(b)[1]) || 0));
@@ -330,8 +346,7 @@ function posleNovogZapisa(nz) {
 }
 function karenca(x) {
   const d0 = danas(), rez = {};
-  for (const z of S.istorija) {
-    if (z.grlo !== x) continue;
+  for (const z of ixIstorije().poGrlu.get(x) || []) {
     const d = parsirajDatum(z.datum);
     if (!d) continue;
     for (const [vrsta, kljuc] of [["meso", "karenca_meso"], ["mleko", "karenca_mleko"]]) {
@@ -409,7 +424,7 @@ function obavestenja(x = null) {
   const gravidne = new Set(cekajuPorodjaj().map(z => roditeljiParenja(z)[0]));
   for (const [g, d] of Object.entries(poslednji)) {
     if ((x !== null && x !== g) || gravidne.has(g) || !M.A[g] || !M.A[g].aktivno) continue;
-    if (S.istorija.some(z => z.dogadjaj === K().PARENJE && roditeljiParenja(z)[0] === g && (parsirajDatum(z.datum) || new Date(0)) >= d)) continue;
+    if (ixIstorije().parenja.some(z => roditeljiParenja(z)[0] === g && (parsirajDatum(z.datum) || new Date(0)) >= d)) continue;
     const c = ciklusTera(M.A[g].vrsta);
     let sl = dodajDane(d, c);
     while (sl < dodajDane(d0, -2)) sl = dodajDane(sl, c);

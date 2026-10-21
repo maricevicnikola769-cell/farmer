@@ -1,6 +1,6 @@
 // Farmer za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "1.0";
+const VERZIJA_TEL = "1.2";
 const t = (sr, en) => (EN() ? en : sr);
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -8,17 +8,58 @@ const ekran = $("#ekran");
 const KLJUC = "farmer-telefon-v1";
 
 // ---------------------------------------------------------------- čuvanje u telefonu
-function sacuvaj() {
-  try {
-    localStorage.setItem(KLJUC, JSON.stringify({ jezik: S.jezik, prag: S.prag, grav: S.grav, grla: S.grla, istorija: S.istorija,
-      podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false }));
-  } catch (e) { poruka(t("Podaci nisu sačuvani u telefonu: ", "Data was not saved on the phone: ") + e.message); }
+// IndexedDB: baza u telefonu bez male granice od 5 MB (i farma od 10.000 grla staje).
+// Ako je telefon/pregledač ne podržava, koristi se staro čuvanje (localStorage).
+const BAZA = "farmer", SKLADISTE = "stanje";
+let bazaP = null, bezBaze = false, redCuvanja = Promise.resolve();
+function otvoriBazu() {
+  if (!bazaP) bazaP = new Promise((res, rej) => {
+    if (!window.indexedDB) return rej(new Error("IndexedDB"));
+    const r = indexedDB.open(BAZA, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(SKLADISTE);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  return bazaP;
 }
-function ucitajIzTelefona() {
-  try {
-    const d = JSON.parse(localStorage.getItem(KLJUC) || "null");
-    if (d) Object.assign(S, d);
-  } catch (e) { /* prazno */ }
+function bazaRadnja(nacin, fn) {
+  return otvoriBazu().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(SKLADISTE, nacin), st = tx.objectStore(SKLADISTE);
+    let rez;
+    const zahtev = fn(st);
+    if (zahtev) zahtev.onsuccess = () => { rez = zahtev.result; };
+    tx.oncomplete = () => res(rez);
+    tx.onerror = tx.onabort = () => rej(tx.error || new Error("IndexedDB"));
+  }));
+}
+const bazaCitaj = k => bazaRadnja("readonly", st => st.get(k));
+const bazaUpisi = (k, v) => bazaRadnja("readwrite", st => st.put(v, k));
+const bazaBrisi = k => bazaRadnja("readwrite", st => st.delete(k));
+const kopija = o => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
+const stanjeZaCuvanje = () => ({ jezik: S.jezik, prag: S.prag, grav: S.grav, grla: S.grla, istorija: S.istorija,
+  podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false });
+function sacuvajStaro(podaci) {
+  try { localStorage.setItem(KLJUC, JSON.stringify(podaci)); return true; }
+  catch (e) { poruka(t("Podaci nisu sačuvani u telefonu: ", "Data was not saved on the phone: ") + e.message); return false; }
+}
+function sacuvaj() {
+  const podaci = kopija(stanjeZaCuvanje());          // snimak trenutnog stanja, upisuje se redom
+  if (bezBaze) return sacuvajStaro(podaci);
+  redCuvanja = redCuvanja.then(() => bazaUpisi("glavno", podaci)).catch(() => { bezBaze = true; sacuvajStaro(podaci); });
+  return redCuvanja;
+}
+async function ucitajIzTelefona() {
+  let d = null;
+  try { d = await bazaCitaj("glavno"); } catch (e) { bezBaze = true; }
+  let staro = null;
+  try { staro = JSON.parse(localStorage.getItem(KLJUC) || "null"); } catch (e) { /* */ }
+  if (!d && staro) {
+    d = staro;
+    if (!bezBaze) {                                    // prvi put posle nove verzije: prebaci podatke u bazu
+      try { await bazaUpisi("glavno", staro); localStorage.removeItem(KLJUC); } catch (e) { bezBaze = true; }
+    }
+  }
+  if (d) Object.assign(S, d);
   osveziModel();
 }
 const imaPodatke = () => S.izvoz || S.pocetak || S.grla.length;
@@ -40,7 +81,7 @@ function delovi() {
   const p = (put || "").split("/");
   return { ekran: p[0] || "", arg: p.slice(1).join("/"), upit: new URLSearchParams(upit || "") };
 }
-window.addEventListener("hashchange", prikazi);
+
 $("#nazad").onclick = () => (history.length > 1 ? history.back() : idi("grla"));
 
 function postaviVrh(naslov, nazad) {
@@ -83,13 +124,15 @@ function opisGrla(a) {
   if (a.markica) del.unshift("🏷 " + a.markica);
   return del.join(" · ");
 }
-function listaGrla(spisak, prazanTekst) {
+const NA_STRANI = 100;
+function listaGrla(spisak, prazanTekst, koliko = NA_STRANI) {
   if (!spisak.length) return `<div class="prazno">${h(prazanTekst)}</div>`;
-  return `<div class="lista">` + spisak.map(a => {
-    const gr = cekajuPorodjaj(a.id).some(z => roditeljiParenja(z)[0] === a.id), kar = Object.keys(karenca(a.id)).length;
+  const gravidne = new Set(cekajuPorodjaj().map(z => roditeljiParenja(z)[0]));
+  return `<div class="lista">` + spisak.slice(0, koliko).map(a => {
+    const gr = gravidne.has(a.id), kar = Object.keys(karenca(a.id)).length;
     return `<a class="red" href="#karton/${encodeURIComponent(a.id)}">${cip(a.id, false)}<div class="sred"><b>${h(opisGrla(a))}</b>` +
       `<span>${[a.stado, !a.aktivno ? t("van zapata", "out of herd") : "", gr ? "⏳ " + t("gravidna", "pregnant") : "", kar ? "⚠ " + t("karenca", "withdrawal") : ""].filter(Boolean).map(h).join(" · ") || "&nbsp;"}</span></div>${znakInbr(M.inbr(a.id))}</a>`;
-  }).join("") + `</div>`;
+  }).join("") + `</div>` + (spisak.length > koliko ? `<button class="dug puno" data-jos="${koliko + NA_STRANI}">${t(`Prikaži još (${spisak.length - koliko})`, `Show more (${spisak.length - koliko})`)}</button>` : "");
 }
 function datalistGrla(id, spisak) {
   return `<datalist id="${id}">${spisak.map(a => `<option value="${h(a.id)}">${h(opisGrla(a))}</option>`).join("")}</datalist>`;
@@ -140,22 +183,25 @@ const filt = { q: "", pol: "", van: false };
 function ekranGrla() {
   postaviVrh("Farmer", false); meni("grla");
   const sva = M.grla(false);
-  ekran.innerHTML = `<input class="pretraga" id="q" type="search" placeholder="🔍 ${t("Traži oznaku, markicu, rasu…", "Search tag, ear tag, breed…")}" value="${h(filt.q)}">
+  ekran.innerHTML = `<div class="sakam"><input class="pretraga" id="q" type="search" placeholder="🔍 ${t("Traži oznaku, markicu, rasu…", "Search tag, ear tag, breed…")}" value="${h(filt.q)}"><button type="button" class="kam" id="skenGrla" aria-label="${t("Skeniraj minđušu", "Scan ear tag")}">📷</button></div>
     <div class="filteri">${[["", t("Sva", "All")], ["z", t("Ženska", "Females")], ["m", t("Muška", "Males")]].map(([k, n]) =>
       `<button data-pol="${k}" class="${filt.pol === k ? "akt" : ""}">${n}</button>`).join("")}
       <button id="van" class="${filt.van ? "akt" : ""}">${t("i van zapata", "incl. out of herd")}</button>
       <button id="novo">＋ ${t("Novo grlo", "New animal")}</button></div><div id="sp"></div>`;
-  const crtaj = () => {
+  const crtaj = (koliko = NA_STRANI) => {
     const q = norm(filt.q), ql = filt.q.trim().toLowerCase();
     const sp = sva.filter(a => (filt.van || a.aktivno) && (!filt.pol || a.pol === filt.pol) &&
       (!q || norm(a.id).includes(q) || norm(a.markica).includes(q) || a.stare.some(s => norm(s).includes(q)) || (ql && (a.rasa || "").includes(ql))));
     $("#sp").innerHTML = `<div class="mali" style="margin:0 4px 8px">${t(`${sp.length} grla`, `${sp.length} animals`)}</div>` +
-      listaGrla(sp, sva.length ? t("Nema grla za ovu pretragu.", "No animals match.") : t("Stado je još prazno. Učitaj podatke sa računara ili dodaj grlo.", "The herd is empty. Load data from the computer or add an animal."));
+      listaGrla(sp, sva.length ? t("Nema grla za ovu pretragu.", "No animals match.") : t("Stado je još prazno. Učitaj podatke sa računara ili dodaj grlo.", "The herd is empty. Load data from the computer or add an animal."), koliko);
+    const jos = $("#sp [data-jos]");
+    if (jos) jos.onclick = () => crtaj(+jos.dataset.jos);
   };
   $("#q").oninput = e => { filt.q = e.target.value; crtaj(); };
   ekran.querySelectorAll("[data-pol]").forEach(b => b.onclick = () => { filt.pol = b.dataset.pol; ekranGrla(); });
   $("#van").onclick = () => { filt.van = !filt.van; ekranGrla(); };
   $("#novo").onclick = () => idi("novo");
+  $("#skenGrla").onclick = skenirajIOtvori;
   crtaj();
 }
 
@@ -215,7 +261,7 @@ function ekranDogadjaj(_, upit) {
   const nazivVr = { [k.DOGADJAJI[5]]: t("Težina (kg)", "Weight (kg)"), [k.VAKCINA]: t("Vakcina / preparat", "Vaccine / product"), [k.LECENJE]: t("Lek / dijagnoza", "Drug / diagnosis"),
     [k.PRODAJA]: t("Kupac / cena", "Buyer / price"), [k.DOGADJAJI[6]]: t("Novo stado / lokacija", "New herd / location"), [k.PARENJE]: t("Način (prirodno / VO)", "Method (natural / AI)") };
   ekran.innerHTML = `<div class="kart">
-    <label class="polje"><span>${t("Grlo *", "Animal *")}</span><input class="unos" id="grlo" list="dl-grla" value="${h(st.grlo)}" autocomplete="off" placeholder="${t("oznaka ili markica", "tag or ear tag")}"></label>
+    <label class="polje"><span>${t("Grlo *", "Animal *")}</span>${saKamerom(`<input class="unos" id="grlo" list="dl-grla" value="${h(st.grlo)}" autocomplete="off" placeholder="${t("oznaka ili markica", "tag or ear tag")}">`, "grlo")}</label>
     ${datalistGrla("dl-grla", sva)}
     <label class="polje"><span>${t("Datum *", "Date *")}</span><input class="unos" id="datum" type="date" value="${uIso(danas())}"></label>
     <div class="polje"><span class="mali" style="font-weight:700">${t("Događaj *", "Event *")}</span><div class="izbor" id="tipovi" style="margin-top:6px">
@@ -323,7 +369,7 @@ function ekranMindjuse(ix) {
     d.className = "mlado";
     d.innerHTML = `<div class="zag">${i + 1}. ${h(n[2])} <button class="dug" style="min-height:36px" data-x>✕</button></div>
       <div class="dve"><label class="polje"><span>${t("Oznaka *", "Tag *")}</span><input class="unos" data-id></label>
-      <label class="polje"><span>${t("Markica", "Ear tag")}</span><input class="unos" data-mk></label></div>
+      <label class="polje"><span>${t("Markica", "Ear tag")}</span>${saKamerom('<input class="unos" data-mk>', "markica")}</label></div>
       <div class="izbor" data-pol><button data-p="z">${t("Žensko", "Female")}</button><button data-p="m">${t("Muško", "Male")}</button></div>`;
     const r = { el: d, pol: "" };
     d.querySelector("[data-pol]").onclick = e => { const b = e.target.closest("button"); if (!b) return; r.pol = b.dataset.p; d.querySelectorAll("[data-p]").forEach(x => x.classList.toggle("akt", x === b)); };
@@ -343,7 +389,7 @@ function ekranMindjuse(ix) {
 }
 
 // ---------------------------------------------------------------- Novo grlo
-function ekranNovoGrlo() {
+function ekranNovoGrlo(_, upit) {
   postaviVrh(t("Novo grlo", "New animal"), true); meni("grla");
   const k = K(), sva = M.grla(), posl = sva[0] || {};
   const cesto = l => { const c = {}; l.forEach(x => { if (x) c[x] = (c[x] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ""; };
@@ -351,7 +397,7 @@ function ekranNovoGrlo() {
   let pol = "";
   ekran.innerHTML = `<div class="kart">
     <div class="dve"><label class="polje"><span>${t("Oznaka *", "Tag *")}</span><input class="unos" id="id"></label>
-      <label class="polje"><span>${t("Markica", "Ear tag")}</span><input class="unos" id="mk"></label></div>
+      <label class="polje"><span>${t("Markica", "Ear tag")}</span>${saKamerom(`<input class="unos" id="mk" value="${h(upit ? upit.get("mk") || "" : "")}">`, "markica")}</label></div>
     <div class="polje"><span class="mali" style="font-weight:700">${t("Pol *", "Sex *")}</span><div class="izbor" id="pol" style="margin-top:6px"><button data-p="z">${t("Žensko", "Female")}</button><button data-p="m">${t("Muško", "Male")}</button></div></div>
     <div style="height:12px"></div>
     <div class="dve"><label class="polje"><span>${t("Vrsta", "Species")}</span><select class="unos" id="vrsta">${k.VRSTE.map(v => `<option ${v === (posl.vrsta || k.VRSTE[0]) ? "selected" : ""}>${h(v)}</option>`).join("")}</select></label>
@@ -386,16 +432,21 @@ function ekranParenje(id) {
     const zenke = M.grla(true).filter(a => a.pol === "z");
     ekran.innerHTML = `<p class="mali" style="margin:4px 4px 10px">${t("Izaberi ženku – program pokazuje sa kojim mužjacima je najmanji inbriding potomaka.", "Choose a female – the program shows which males give the least inbreeding in the offspring.")}</p>
       <input class="pretraga" id="q" type="search" placeholder="🔍 ${t("Traži ženku", "Search female")}"><div style="height:10px"></div><div id="sp"></div>`;
-    const crtaj = () => { const q = norm($("#q").value); $("#sp").innerHTML = listaGrla(zenke.filter(a => !q || norm(a.id).includes(q) || norm(a.markica).includes(q)), t("Nema ženki u zapatu.", "No females in the herd."))
-      .replace(/href="#karton\//g, 'href="#parenje/'); };
-    $("#q").oninput = crtaj; crtaj();
+    const crtaj = (koliko = NA_STRANI) => {
+      const q = norm($("#q").value);
+      $("#sp").innerHTML = listaGrla(zenke.filter(a => !q || norm(a.id).includes(q) || norm(a.markica).includes(q)), t("Nema ženki u zapatu.", "No females in the herd."), koliko)
+        .replace(/href="#karton\//g, 'href="#parenje/');
+      const jos = $("#sp [data-jos]");
+      if (jos) jos.onclick = () => crtaj(+jos.dataset.jos);
+    };
+    $("#q").oninput = () => crtaj(); crtaj();
     return;
   }
-  const p = partneri(id), a = M.A[id];
+  const svi = partneri(id), p = svi.slice(0, 60), a = M.A[id];
   ekran.innerHTML = `<div class="kart" style="display:flex;gap:10px;align-items:center">${cip(id)}<div class="mali">${h(opisGrla(a))}<br>${t("Granica rizika", "Risk limit")} ${pct(S.prag)}</div></div>` +
     (p.length ? `<div class="lista">${p.map(x => { const [tx, kl] = procena(x.f, S.prag); return `<a class="red" href="#dogadjaj?grlo=${encodeURIComponent(id)}&tip=${encodeURIComponent(K().PARENJE)}&partner=${encodeURIComponent(x.id)}">${cip(x.id, false)}
       <div class="sred"><b class="znak ${kl}" style="display:inline-block">${h(tx)}</b><span>${t("zajednički geni", "shared genes")} ${pct(x.r)}${x.rasa ? " · " + h(x.rasa) : ""} · ${h(M.odnos(id, x.id))}</span></div><div class="f">${pct(x.f)}</div></a>`; }).join("")}</div>
-      <p class="mali" style="margin:0 4px">${t("Broj desno = očekivani inbriding potomka. Klikni partnera da upišeš parenje.", "Number on the right = expected inbreeding of the offspring. Tap a partner to record the mating.")}</p>`
+      <p class="mali" style="margin:0 4px">${svi.length > p.length ? t(`Prikazano ${p.length} najboljih od ${svi.length}. `, `Showing the best ${p.length} of ${svi.length}. `) : ""}${t("Broj desno = očekivani inbriding potomka. Klikni partnera da upišeš parenje.", "Number on the right = expected inbreeding of the offspring. Tap a partner to record the mating.")}</p>`
       : `<div class="prazno">${t("Nema grla suprotnog pola iste vrste u zapatu.", "No animals of the opposite sex and same species in the herd.")}</div>`);
 }
 
@@ -505,12 +556,16 @@ function ekranPrenos() {
     if (!confirm(t("Obrisati sve podatke sa ovog telefona? (Na računaru ostaju.)", "Delete all data from this phone? (They stay on the computer.)"))) return;
     if (S.promene.length && !confirm(t(`${S.promene.length} promena nije poslato računaru i biće izgubljeno. Sigurno?`, `${S.promene.length} changes were not sent and will be lost. Sure?`))) return;
     try { localStorage.removeItem(KLJUC); } catch (e) { /* */ }
-    location.hash = ""; location.reload();
+    const kraj = () => { location.hash = ""; location.reload(); };
+    redCuvanja.then(() => bazaBrisi("glavno")).then(kraj, kraj);
   };
 }
 
 // ---------------------------------------------------------------- start
-ucitajIzTelefona();
-prikazi();
+ekran.innerHTML = `<div class="prazno">${t("Učitavam…", "Loading…")}</div>`;
+ucitajIzTelefona().then(() => {
+  window.addEventListener("hashchange", prikazi);
+  prikazi();
+});
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
