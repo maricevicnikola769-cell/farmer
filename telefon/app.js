@@ -1,6 +1,6 @@
 // Farmer za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "1.2";
+const VERZIJA_TEL = "1.4";
 const t = (sr, en) => (EN() ? en : sr);
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
