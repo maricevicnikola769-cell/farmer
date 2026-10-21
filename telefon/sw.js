@@ -1,6 +1,6 @@
 // Farmer za telefon – radi i bez interneta: svi fajlovi aplikacije se čuvaju u telefonu.
-const VERZIJA = "farmer-tel-1.4";
-const FAJLOVI = ["./", "index.html", "app.js", "skener.js", "zxing.min.js", "logika.js", "konstante.js", "manifest.webmanifest",
+const VERZIJA = "farmer-tel-2.0";
+const FAJLOVI = ["./", "index.html", "app.js", "skener.js", "oblak.js", "oblak-konfig.js", "zxing.min.js", "logika.js", "konstante.js", "manifest.webmanifest",
   "ikone/ikona-192.png", "ikone/ikona-512.png", "ikone/ikona-maskable-512.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(VERZIJA).then(c => c.addAll(FAJLOVI)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys()

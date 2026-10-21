@@ -141,6 +141,9 @@ textarea.unos { min-height: 90px; resize: vertical; }
 .koraci { text-align: left; margin: 0; padding-left: 20px; color: var(--ink2); }
 .koraci li { margin-bottom: 6px; }
 .skriveno { display: none !important; }
+.oblak { color: #fff; text-decoration: none; font-weight: 800; font-size: 15px; padding: 6px 8px; border-radius: 10px; }
+.oblak.ceka { background: rgba(244,196,0,.25); } .oblak.greska { background: rgba(179,38,30,.5); } .oblak:empty { display: none; }
+.sinh-tekst { font-weight: 700; } .sinh-tekst.ok { color: var(--ok); } .sinh-tekst.ceka { color: var(--warn); } .sinh-tekst.greska { color: var(--bad); }
 
 /* skener minđuše */
 .sakam { display: flex; gap: 8px; align-items: stretch; }
@@ -160,13 +163,15 @@ textarea.unos { min-height: 90px; resize: vertical; }
 </style>
 </head>
 <body>
-<header class="vrh"><button class="nazad skriveno" id="nazad" aria-label="Nazad">‹</button><img class="logo" id="logo" src="ikone/ikona-192.png" alt=""><h1 id="naslov">Farmer</h1></header>
+<header class="vrh"><button class="nazad skriveno" id="nazad" aria-label="Nazad">‹</button><img class="logo" id="logo" src="ikone/ikona-192.png" alt=""><h1 id="naslov">Farmer</h1><a id="oblak" class="oblak" href="#sinh"></a></header>
 <main id="ekran"></main>
 <nav class="dno" id="meni"></nav>
 <input type="file" id="fajl" accept=".json,.txt,application/json,text/plain" class="skriveno">
 <script src="konstante.js"></script>
 <script src="logika.js"></script>
+<script src="oblak-konfig.js"></script>
 <script src="app.js"></script>
 <script src="skener.js"></script>
+<script src="oblak.js"></script>
 </body>
 </html>

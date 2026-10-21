@@ -1,6 +1,6 @@
 // Farmer za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "1.4";
+const VERZIJA_TEL = "2.0";
 const t = (sr, en) => (EN() ? en : sr);
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -37,7 +37,8 @@ const bazaUpisi = (k, v) => bazaRadnja("readwrite", st => st.put(v, k));
 const bazaBrisi = k => bazaRadnja("readwrite", st => st.delete(k));
 const kopija = o => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 const stanjeZaCuvanje = () => ({ jezik: S.jezik, prag: S.prag, grav: S.grav, grla: S.grla, istorija: S.istorija,
-  podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false });
+  podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false,
+  sinh: S.sinh || null, poslato: S.poslato || [] });
 function sacuvajStaro(podaci) {
   try { localStorage.setItem(KLJUC, JSON.stringify(podaci)); return true; }
   catch (e) { poruka(t("Podaci nisu sačuvani u telefonu: ", "Data was not saved on the phone: ") + e.message); return false; }
@@ -72,7 +73,7 @@ function poruka(tekst) {
   document.body.appendChild(d);
   clearTimeout(tajmer); tajmer = setTimeout(() => d.remove(), 3200);
 }
-function promena(tekst) { sacuvaj(); if (tekst) poruka(tekst); }
+function promena(tekst) { sacuvaj(); if (tekst) poruka(tekst); usaglasiUskoro(); }
 
 // ---------------------------------------------------------------- ruter (#grla, #karton/ID ...)
 const idi = adresa => { location.hash = adresa; };
@@ -101,11 +102,16 @@ function meni(akt) {
 }
 
 function prikazi() {
+  if (location.hash.startsWith("#upari=")) {            // QR kod sa računara (skeniran i običnom kamerom)
+    const p = procitajLink(location.hash);
+    history.replaceState(null, "", location.pathname + "#grla");   // ključ ne ostaje u adresi
+    if (p && oblakPodesen()) { upari(p).then(() => prikazi()); return; }
+  }
   const { ekran: e, arg, upit } = delovi();
   window.scrollTo(0, 0);
-  if (!imaPodatke() && e !== "prenos") return dobrodoslica();
+  if (!imaPodatke() && e !== "prenos" && e !== "sinh") return dobrodoslica();
   const ekrani = { grla: ekranGrla, karton: ekranKarton, danas: ekranDanas, dogadjaj: ekranDogadjaj, parenje: ekranParenje, srodstvo: ekranSrodstvo,
-    vise: ekranVise, prenos: ekranPrenos, novo: ekranNovoGrlo, rodjenje: ekranRodjenje, mindjuse: ekranMindjuse, podsetnik: ekranPodsetnik };
+    vise: ekranVise, prenos: ekranPrenos, sinh: ekranSinh, novo: ekranNovoGrlo, rodjenje: ekranRodjenje, mindjuse: ekranMindjuse, podsetnik: ekranPodsetnik };
   (ekrani[e] || ekranGrla)(arg, upit);
 }
 
@@ -169,7 +175,8 @@ function dobrodoslica() {
       <li>${t("U programu Farmer na računaru otvori <b>Telefon</b> i klikni <b>Pošalji na telefon</b>.", "In Farmer on the computer open <b>Phone</b> and click <b>Send to phone</b>.")}</li>
       <li>${t("Fajl prebaci na telefon (Google Drive, Viber, kabl…).", "Move the file to the phone (Google Drive, Viber, cable…).")}</li>
       <li>${t("Ovde klikni <b>Učitaj sa računara</b> i izaberi taj fajl.", "Here, tap <b>Load from computer</b> and choose that file.")}</li></ol></div>
-    <button class="dug glavno puno" id="ucitaj">📂 ${t("Učitaj sa računara", "Load from computer")}</button>
+    ${oblakPodesen() ? `<a class="dug glavno puno" href="#sinh">📱 ${t("Upari sa računarom (QR kod)", "Pair with computer (QR code)")}</a><div style="height:10px"></div>` : ""}
+    <button class="dug ${oblakPodesen() ? "" : "glavno"} puno" id="ucitaj">📂 ${t("Učitaj sa računara (fajl)", "Load from computer (file)")}</button>
     <div style="height:10px"></div>
     <div class="dugmad"><button class="dug" id="pocni">${t("Počni bez računara", "Start without computer")}</button>
       <button class="dug" id="jezik">🌐 ${S.jezik === "en" ? "Srpski" : "English"}</button></div>`;
@@ -493,6 +500,7 @@ function ekranVise() {
   postaviVrh(t("Više", "More"), false); meni("vise");
   const n = S.promene.length;
   ekran.innerHTML = `<div class="lista">
+    ${oblakPodesen() ? `<a class="red" href="#sinh"><span style="font-size:24px">☁</span><div class="sred"><b>${S.sinh ? t("Povezano sa računarom", "Connected to computer") : t("Upari sa računarom (QR kod)", "Pair with computer (QR code)")}</b><span>${h(S.sinh ? (sinhStanje.tekst || S.sinh.naziv || "") : t("jednom skeniraš i sve se samo usklađuje", "scan once and everything syncs"))}</span></div></a>` : ""}
     <a class="red" href="#prenos"><span style="font-size:24px">⇅</span><div class="sred"><b>${t("Prenos sa računarom", "Transfer with computer")}</b><span>${n ? t(`${n} promena čeka slanje računaru`, `${n} changes waiting to be sent`) : t("sve je poslato", "everything sent")}</span></div>${n ? `<span class="znak warn">${n}</span>` : ""}</a>
     <a class="red" href="#srodstvo"><span style="font-size:24px">⚯</span><div class="sred"><b>${t("Srodstvo dva grla", "Relationship of two animals")}</b><span>${t("koliko su srodni, zajednički preci", "how related they are, common ancestors")}</span></div></a>
     <a class="red" href="#novo"><span style="font-size:24px">＋</span><div class="sred"><b>${t("Novo grlo", "New animal")}</b><span>${t("kupljeno ili rođeno", "bought or born")}</span></div></a>
@@ -566,6 +574,7 @@ ekran.innerHTML = `<div class="prazno">${t("Učitavam…", "Loading…")}</div>`
 ucitajIzTelefona().then(() => {
   window.addEventListener("hashchange", prikazi);
   prikazi();
+  pokreniUsaglasavanje();
 });
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
