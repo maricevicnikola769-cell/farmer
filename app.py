@@ -19,9 +19,10 @@ from kopije import KopijeDeo
 from obavestenja import ObavestenjaDeo
 from stampa import StampaDeo
 from telefon_prenos import TelefonDeo
+from sinhronizacija import SinhronizacijaDeo
 
 
-class App(OsnovaProzora, GrlaEkran, ParenjeEkran, KartonEkran, GravidnostDeo, IstorijaDeo, KopijeDeo, ObavestenjaDeo, StampaDeo, TelefonDeo):
+class App(OsnovaProzora, GrlaEkran, ParenjeEkran, KartonEkran, GravidnostDeo, IstorijaDeo, KopijeDeo, ObavestenjaDeo, StampaDeo, TelefonDeo, SinhronizacijaDeo):
     """Glavni prozor programa, sklopljen iz delova (svaki deo je u svom fajlu)."""
 
 

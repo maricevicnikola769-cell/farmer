@@ -75,6 +75,40 @@ def spoji(baza, telefon, racunar, kljuc, kolone):
     return rez, stat
 
 
+def spoji_razlike(stavke, racunar, kljuc, kolone):
+    """Spajanje paketa sa telefona koji nosi samo promenjene zapise: [{n, b (kakav je bio), t (kakav je sad)}].
+    n = koji po redu zapis sa istim ključem (npr. dva događaja u istoj sekundi). Ostali zapisi računara ostaju."""
+    R, red = _indeksiraj(racunar, kljuc)
+    rez = dict(R)
+
+    def poredi(x):
+        return None if x is None else tuple(_normalizuj(k, x.get(k, "")) for k in kolone)
+    stat = dict(sa_telefona=0, novo=0, sukob=0)
+    for s in stavke:
+        b, t = s.get("b"), s.get("t")
+        osnovni = t or b
+        if not osnovni:
+            continue
+        k = f"{kljuc(osnovni)}#{int(s.get('n') or 0)}"
+        r = rez.get(k)
+        cb, ct, cr = poredi(b), poredi(t), poredi(r)
+        if ct == cb or ct == cr:              # telefon nije menjao, ili računar već ima isto
+            continue
+        if cr == cb:
+            stat["sa_telefona"] += 1
+            if b is None and r is None:
+                stat["novo"] += 1
+        else:
+            stat["sukob"] += 1
+        if t is None:
+            rez.pop(k, None)
+            continue
+        if k not in rez:
+            red.append(k)
+        rez[k] = {k_: _normalizuj(k_, v) for k_, v in t.items()}
+    return [rez[k] for k in red if k in rez], stat
+
+
 def _kljuc_ist(z):
     return f"{z.get('grlo', '')}|{z.get('uneto', '')}|{_normalizuj('dogadjaj', z.get('dogadjaj', ''))}"
 
@@ -191,6 +225,7 @@ class TelefonDeo:
         body.pack(fill="both", expand=True, padx=32, pady=28)
         self.zaglavlje(body, T("Telefon", "Phone"), T("Farmer na Android telefonu – gledanje i upis u štali, radi i bez interneta.",
                                                      "Farmer on an Android phone – view and record in the barn, works offline."))
+        self.kartica_sinhronizacije(body)
         o, c = self.card(body)
         o.pack(fill="x", pady=(0, 12))
         red = tk.Frame(c, bg=SURF)

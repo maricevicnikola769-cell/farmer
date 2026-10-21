@@ -118,6 +118,7 @@ class OsnovaProzora:
         self.prikazi("grla")
         root.after(700, self.obavestenja_na_startu)
         root.after(1500, self.dnevna_kopija)
+        self.pokreni_sinhronizaciju()
         root.bind("<FocusIn>", self.proveri_promenu)
         root.protocol("WM_DELETE_WINDOW", self.zatvori)
 
@@ -252,6 +253,10 @@ class OsnovaProzora:
         self.lbl_kopija = tk.Label(foot, text="", bg=SURF, fg=INK2, font=self.f(9), anchor="w", cursor="hand2")
         self.lbl_kopija.pack(anchor="w", pady=(8, 0))
         self.lbl_kopija.bind("<Button-1>", lambda e: self.prikazi("pregled"))
+        self.lbl_sinh = tk.Label(foot, text=getattr(self, "sinh_stanje", {}).get("tekst", ""), bg=SURF, fg=getattr(self, "sinh_stanje", {}).get("boja", INK2),
+                                 font=self.f(9), anchor="w", cursor="hand2", justify="left", wraplength=180)
+        self.lbl_sinh.pack(anchor="w", pady=(4, 0))
+        self.lbl_sinh.bind("<Button-1>", lambda e: self.prikazi("telefon"))
         self.osvezi_fajl_label()
         self.osvezi_kopija_label()
 

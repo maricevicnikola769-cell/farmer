@@ -169,3 +169,60 @@ def test_telefon_drugi_jezik_nije_sukob():
         assert st == dict(sa_telefona=1, novo=1, sukob=0)
     finally:
         na_jeziku("sr")
+
+
+# ---------------------------------------------------------------- usklađivanje preko interneta (lažni server)
+def test_oblak_zakljucavanje():
+    pytest.importorskip("cryptography")
+    import oblak
+    farma, kljuc = oblak.novo_gazdinstvo()
+    assert len(farma) >= 40
+    tekst = oblak.zakljucaj({"grla": [{"id": "Ž1", "rasa": "romanovska"}]}, kljuc)
+    assert "romanovska" not in tekst                       # server vidi samo nečitljiv tekst
+    assert oblak.otkljucaj(tekst, kljuc)["grla"][0]["id"] == "Ž1"
+    with pytest.raises(oblak.OblakGreska):
+        oblak.otkljucaj(tekst, oblak.novo_gazdinstvo()[1])  # tuđi ključ ne otvara
+
+
+def test_oblak_snimak_i_paketi():
+    pytest.importorskip("cryptography")
+    import secrets
+    import oblak
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import lazni_firebase
+    srv, st, konfig = lazni_firebase.napravi_server()
+    try:
+        farma, kljuc = oblak.novo_gazdinstvo()
+        o = oblak.Oblak(konfig, farma, kljuc)
+        v = o.posalji_snimak({"x": secrets.token_hex(700_000)})          # ne sažima se -> više delova
+        pz = o.citaj("stanje", "poslednji")
+        assert pz["verzija"] == v and int(pz["ukupno"]) >= 2
+        assert len(oblak.otkljucaj(o.procitaj_veliko("snimci", v, pz["ukupno"]), kljuc)["x"]) == 1_400_000
+        # paket sa telefona u dva dela; nekompletan se ne uzima
+        tekst = oblak.zakljucaj({"razlike": {}, "promene": [{"tekst": "probа"}]}, kljuc)
+        o.upisi("paketi", "p1_000", dict(pid="p1", n=0, ukupno=2, deo=tekst[:10]))
+        assert o.paketi() == []
+        o.upisi("paketi", "p1_001", dict(pid="p1", n=1, ukupno=2, deo=tekst[10:]))
+        (pid, sadrzaj, dok), = o.paketi()
+        assert pid == "p1" and sadrzaj["promene"][0]["tekst"] == "probа"
+        o.obrisi_paket(dok)
+        assert o.lista("paketi") == []
+        # drugo gazdinstvo ne vidi ove podatke
+        assert oblak.Oblak(konfig, *oblak.novo_gazdinstvo()).citaj("stanje", "poslednji") is None
+    finally:
+        srv.shutdown()
+
+
+def test_telefon_paket_razlike():
+    import telefon_prenos as telefon
+    na_jeziku("sr")
+    rac = [_z("M1", "2026-10-01 10:00:00", "Parenje / osemenjavanje", partner="O2"),
+           _z("O1", "2026-10-20 09:00:00", "Merenje težine", vrednost="78")]
+    b = dict(rac[0])
+    stavke = [dict(n=0, b=b, t=dict(b, ishod="leglo:2:21.10.2026:")),          # telefon zatvorio parenje
+              dict(n=0, b=None, t=_z("M1", "2026-10-21 08:00:00", "Porođaj", vrednost="2"))]
+    rez, st = telefon.spoji_razlike(stavke, rac, telefon._kljuc_ist, podaci.IST_KOLONE)
+    assert [z["dogadjaj"] for z in rez] == ["Parenje / osemenjavanje", "Merenje težine", "Porođaj"]
+    assert rez[0]["ishod"] == "leglo:2:21.10.2026:" and st == dict(sa_telefona=2, novo=1, sukob=0)
+    rez2, st2 = telefon.spoji_razlike(stavke, rez, telefon._kljuc_ist, podaci.IST_KOLONE)   # isti paket dva puta
+    assert len(rez2) == 3 and st2["sa_telefona"] == 0
