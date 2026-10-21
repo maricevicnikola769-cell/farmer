@@ -22,11 +22,11 @@ jobs:
 
       - name: Testovi
         run: |
-          python -m pip install pytest
+          python -m pip install pytest cryptography qrcode
           python -m pytest -q testovi
 
       - name: Instaliraj PyInstaller
-        run: python -m pip install --upgrade pip pyinstaller
+        run: python -m pip install --upgrade pip pyinstaller cryptography qrcode
 
       - name: Napravi EXE
         run: pyinstaller --onefile --windowed --name Farmer --icon farmer.ico --add-data "farmer.ico;." Farmer.pyw
