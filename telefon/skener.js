@@ -4,6 +4,7 @@
 const SKENER_FORMATI = ["qr_code", "code_128", "code_39", "code_93", "ean_13", "ean_8", "upc_a", "upc_e", "itf", "codabar", "data_matrix", "pdf417", "aztec"];
 
 // skeniraj(naslov) -> Promise<string|null>  (null = otkazano)
+// Kamera samo prikazuje sliku; kod se čita tek kad se pritisne „Skeniraj“ (da se slučajno ne pročita pogrešan kod).
 // Kamera: prvo zadnja; ako za 2,5 s ne da sliku (telefoni sa više sočiva), sama proba sledeću. Dugme "Druga kamera" menja ručno.
 function skeniraj(naslov) {
   return new Promise(resolve => {
@@ -12,8 +13,9 @@ function skeniraj(naslov) {
     ov.innerHTML = `<video autoplay playsinline muted></video><div class="okvir"></div>
       <div class="skener-vrh"><b>${h(naslov || t("Skeniraj minđušu", "Scan the ear tag"))}</b><span>${t("Pokrećem kameru…", "Starting the camera…")}</span></div>
       <div class="skener-info"></div>
-      <div class="skener-dno"><button class="dug skriveno" data-s="lampa">🔦</button><button class="dug skriveno" data-s="druga">🔄 ${t("Druga kamera", "Other camera")}</button>
-        <button class="dug" data-s="rucno">⌨ ${t("Ručno", "Type")}</button><button class="dug glavno" data-s="otkazi">${t("Otkaži", "Cancel")}</button></div>`;
+      <div class="skener-dno"><button class="dug glavno okidac" data-s="skeniraj" disabled>📷 ${t("Skeniraj", "Scan")}</button>
+        <button class="dug skriveno" data-s="lampa">🔦</button><button class="dug skriveno" data-s="druga">🔄 ${t("Druga kamera", "Other camera")}</button>
+        <button class="dug" data-s="rucno">⌨ ${t("Ručno", "Type")}</button><button class="dug" data-s="otkazi">${t("Otkaži", "Cancel")}</button></div>`;
     document.body.appendChild(ov);
     const video = ov.querySelector("video"), natpis = ov.querySelector(".skener-vrh span"), info = ov.querySelector(".skener-info");
     video.muted = true; video.playsInline = true; video.setAttribute("playsinline", ""); video.setAttribute("webkit-playsinline", "");
@@ -50,13 +52,15 @@ function skeniraj(naslov) {
     });
     const pokreni = async uslovi => {
       ugasi();
-      const t_ = await navigator.mediaDevices.getUserMedia({ video: uslovi, audio: false });
+      const ostro = { width: { ideal: 1920 }, height: { ideal: 1080 } };   // veća slika = sitan QR kod (npr. sa ekrana računara) se čita
+      const t_ = await navigator.mediaDevices.getUserMedia({ video: uslovi === true ? ostro : Object.assign({}, ostro, uslovi), audio: false });
       if (gotovo) { t_.getTracks().forEach(x => x.stop()); return false; }
       tok = t_;
       video.srcObject = tok;
       const pl = video.play();                           // ne čekamo: crna kamera nikad ne krene
       if (pl && pl.catch) pl.catch(() => {});
       const traka = tok.getVideoTracks()[0], pod = traka.getSettings ? traka.getSettings() : {};
+      try { traka.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(() => {}); } catch (e) { /* telefon ne podržava */ }
       const ok = await imaSliku(2500);
       info.textContent = `${traka.label || t("kamera", "camera")} · ${video.videoWidth}×${video.videoHeight}${ok ? "" : " · " + t("nema slike", "no picture")}`;
       const lb = ov.querySelector('[data-s="lampa"]');
@@ -124,18 +128,35 @@ function skeniraj(naslov) {
       }
       if (!ok) return greska(t("Kamera se uključila, ali ne daje sliku. Zatvori druge aplikacije koje koriste kameru i probaj ponovo, ili upiši broj ručno.",
         "The camera started but gives no picture. Close other apps that use the camera and try again, or type the number."));
-      natpis.textContent = t("Uperi kameru u bar kod ili QR kod na minđuši", "Point the camera at the barcode or QR code on the ear tag");
-      const trazi = async () => {
+      const uputstvo = t("Uperi kameru u kod, pa pritisni „Skeniraj“", "Point the camera at the code, then press „Scan“");
+      natpis.textContent = uputstvo;
+      const okidac = ov.querySelector('[data-s="skeniraj"]');
+      okidac.disabled = false;
+      let doKada = 0;
+      const trazi = async () => {                        // čita samo ~3 s posle pritiska na dugme
         if (gotovo) return;
+        if (Date.now() > doKada) {
+          okidac.disabled = false;
+          okidac.textContent = "📷 " + t("Skeniraj", "Scan");
+          natpis.textContent = t("Kod nije pročitan – približi ili udalji telefon i pritisni ponovo", "Code not read – move the phone closer or further and press again");
+          return;
+        }
         try {
           if (video.readyState >= 2 && video.videoWidth) {
             const kod = await citac(video);
             if (kod) { if (navigator.vibrate) navigator.vibrate(80); return kraj(kod); }
           }
         } catch (e) { /* sledeći pokušaj */ }
-        setTimeout(trazi, 120);
+        setTimeout(trazi, 80);
       };
-      trazi();
+      okidac.onclick = () => {
+        if (doKada > Date.now()) return;
+        doKada = Date.now() + 3000;
+        okidac.disabled = true;
+        okidac.textContent = "⏳ " + t("Čitam kod…", "Reading code…");
+        natpis.textContent = uputstvo;
+        trazi();
+      };
     })();
   });
 }

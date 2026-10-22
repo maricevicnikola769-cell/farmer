@@ -250,6 +250,9 @@ class OsnovaProzora:
         jez = tk.Label(foot, text=T("🌐 English", "🌐 Srpski"), bg=SURF, fg=BRAND, font=self.f(9, "bold"), cursor="hand2")
         jez.pack(anchor="w", pady=(6, 0))
         jez.bind("<Button-1>", lambda e: self.promeni_jezik())
+        prob = tk.Label(foot, text=T("⚠ Prijavi problem", "⚠ Report a problem"), bg=SURF, fg=INK2, font=self.f(9), cursor="hand2")
+        prob.pack(anchor="w", pady=(4, 0))
+        prob.bind("<Button-1>", lambda e: self.prijavi_problem())
         self.lbl_kopija = tk.Label(foot, text="", bg=SURF, fg=INK2, font=self.f(9), anchor="w", cursor="hand2")
         self.lbl_kopija.pack(anchor="w", pady=(8, 0))
         self.lbl_kopija.bind("<Button-1>", lambda e: self.prikazi("pregled"))
@@ -381,6 +384,7 @@ class OsnovaProzora:
 
     # ------------------------------------------------------------ podaci
     def promena(self, poruka=None):
+        self._ver_podataka = getattr(self, "_ver_podataka", 0) + 1     # brišu se zapamćeni proračuni
         try:
             self.ist.sacuvaj()
             self.pods.sacuvaj()
@@ -396,6 +400,8 @@ class OsnovaProzora:
             self.tab.ucitaj()
         self.model = Model(self.tab.redovi)
         self.prikazi(self.strana)
+        if hasattr(self, "sinh_uskoro"):
+            self.sinh_uskoro()                       # telefoni dobijaju promenu za par sekundi
         if self.karton_win and self.karton_win.winfo_exists():
             self.karton(self.karton_win.grlo)
         if poruka:

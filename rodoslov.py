@@ -11,7 +11,7 @@ from izgled import BAD, OK, WARN
 class Model:
     def __init__(self, redovi):
         self.A, self.P, self.by_mark, self.warn = {}, {}, {}, []
-        self._gen, self._kin = {}, {}
+        self._gen, self._kin, self._inbr, self._norm = {}, {}, {}, (0, {})
         for rb, r in enumerate(redovi):
             jid = r["id"].strip()
             if jid in self.A:
@@ -54,7 +54,7 @@ class Model:
             if jid in (o, m):
                 self.warn.append((f"{jid} is entered as its own parent." if EN else f"{jid} je upisan kao sopstveni roditelj."))
                 self.P[jid] = (None, None)
-        for jid in list(self.P):
+        for jid in (list(self.P) if self._ima_krug() else ()):   # brza provera; sporo traženje samo kad krug postoji
             if jid in self.preci(jid):
                 self.warn.append((f"{jid} is its own ancestor – check the parents "
                                  "(this animal's pedigree is temporarily ignored)." if EN else f"{jid} je sam sebi predak – proveri roditelje "
@@ -75,6 +75,27 @@ class Model:
             if m and self.A[m]["pol"] == "m":
                 self.warn.append((f"{m} is entered as dam of {jid}, but is marked as male." if EN else f"{m} je upisana kao majka grla {jid}, a označena je kao muško."))
 
+    def _ima_krug(self):
+        """Da li je neko grlo (preko roditelja) samo sebi predak – jedan prolaz kroz celo stado."""
+        stanje = {}                                   # 1 = u obradi, 2 = gotovo
+        for start in self.P:
+            if start in stanje:
+                continue
+            stek = [(start, iter([r for r in self.P.get(start, ()) if r]))]
+            stanje[start] = 1
+            while stek:
+                x, dalje = stek[-1]
+                r = next(dalje, None)
+                if r is None:
+                    stanje[x] = 2
+                    stek.pop()
+                elif stanje.get(r) == 1:
+                    return True
+                elif r not in stanje:
+                    stanje[r] = 1
+                    stek.append((r, iter([q for q in self.P.get(r, ()) if q])))
+        return False
+
     def nadji(self, t):
         t = str(t or "").strip()
         if not t:
@@ -84,10 +105,12 @@ class Model:
         n = norm(t)
         if n in self.by_mark:
             return self.by_mark[n]
-        for k in self.A:
-            if norm(k) == n:
-                return k
-        return None
+        if self._norm[0] != len(self.A):              # indeks oznaka bez razmaka i velikih slova (pravi se jednom)
+            ix = {}
+            for k in self.A:
+                ix.setdefault(norm(k), k)
+            self._norm = (len(self.A), ix)
+        return self._norm[1].get(n)
 
     def grla(self, samo_aktivna=False, redosled="Poslednje upisana prvo"):
         """Grla za liste i pretragu (obrisana se ne prikazuju, ali ostaju u rodoslovu).
@@ -187,8 +210,10 @@ class Model:
         return sorted(((self.doprinos(x, p), p) for p in self.preci(x)), key=lambda t: (-t[0], sort_key(t[1])))
 
     def inbr(self, x):
-        o, m = self.P.get(x, (None, None))
-        return self.kinship(o, m)
+        if x not in self._inbr:
+            o, m = self.P.get(x, (None, None))
+            self._inbr[x] = self.kinship(o, m)
+        return self._inbr[x]
 
     def r(self, a, b):
         return 2 * self.kinship(a, b) / ((1 + self.inbr(a)) * (1 + self.inbr(b))) ** 0.5

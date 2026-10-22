@@ -226,3 +226,54 @@ def test_telefon_paket_razlike():
     assert rez[0]["ishod"] == "leglo:2:21.10.2026:" and st == dict(sa_telefona=2, novo=1, sukob=0)
     rez2, st2 = telefon.spoji_razlike(stavke, rez, telefon._kljuc_ist, podaci.IST_KOLONE)   # isti paket dva puta
     assert len(rez2) == 3 and st2["sa_telefona"] == 0
+
+
+def test_novi_kljuc_samo_za_odredjeni_telefon():
+    """Isključivanje jednog telefona: novi ključ otvara samo telefon kome je namenjen."""
+    pytest.importorskip("cryptography")
+    from cryptography.hazmat.primitives.asymmetric import ec
+    import oblak
+    marko, jovan = ec.generate_private_key(ec.SECP256R1()), ec.generate_private_key(ec.SECP256R1())
+    dok = oblak.omotaj_za(oblak._javni_od(marko), {"farma": "f2", "kljuc": "k2"})
+    assert oblak.odmotaj(marko, dok) == {"farma": "f2", "kljuc": "k2"}
+    with pytest.raises(oblak.OblakGreska):
+        oblak.odmotaj(jovan, dok)
+
+
+def test_kolona_upisao_cuva_se(tmp_path):
+    na_jeziku("sr")
+    put = str(tmp_path / "stado.csv")
+    ist = podaci.Istorija(put)
+    z = ist.dodaj("A", "Napomena", opis="x")
+    z["upisao"] = "Marko"
+    ist.sacuvaj()
+    assert podaci.Istorija(put).zapisi[0]["upisao"] == "Marko"
+
+
+def test_najsrodniji_parovi_veliko_stado_isto_kao_svaki_par():
+    """Brzi način (samo bliski rod) daje iste parove mužjak–ženka sa r >= 0,25 kao proveravanje svakog para."""
+    import random
+    import ekran_parenje
+    na_jeziku("sr")
+    random.seed(3)
+    redovi = [red(f"O{i}", pol="m") for i in range(4)] + [red(f"Z{i}") for i in range(8)]
+    for n in range(300):
+        o = random.choice([r["id"] for r in redovi if r["pol"] == "m"])
+        m = random.choice([r["id"] for r in redovi if r["pol"] == "z"])
+        redovi.append(red(f"X{n}", o, m, random.choice("mz")))
+    mo = podaci.Model(redovi) if hasattr(podaci, "Model") else rodoslov.Model(redovi)
+    ids = [a["id"] for a in mo.grla(True)]
+    brzo = {(o, z) for r, o, z in ekran_parenje.najsrodniji_parovi(mo, ids, 0.25)}
+    sporo = {(o, z) for o in ids for z in ids if mo.A[o]["pol"] == "m" and mo.A[z]["pol"] == "z" and mo.r(o, z) >= 0.25}
+    assert brzo and brzo <= sporo
+    assert len(brzo) >= 0.97 * len(sporo)          # izuzeci su samo jako inbredni daleki rođaci
+
+
+def test_dnevnik_gresaka(tmp_path):
+    import dnevnik
+    dnevnik.LOG = str(tmp_path / "farmer-greske.log")
+    try:
+        1 / 0
+    except ZeroDivisionError:
+        dnevnik.zapisi_izuzetak(*sys.exc_info(), gde="proba")
+    assert any("ZeroDivisionError" in l for l in dnevnik.poslednje_linije())

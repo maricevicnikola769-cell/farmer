@@ -18,6 +18,7 @@ const oblakPodesen = () => { const k = oblakKonfig(); return !!(k.apiKey && k.pr
 const b64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
 const izB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const izB64u = s => izB64(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4));
+const uB64u = u8 => b64(u8).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 async function protok(podaci, vrsta, napred) {
   const s = new Blob([podaci]).stream().pipeThrough(napred ? new CompressionStream(vrsta) : new DecompressionStream(vrsta));
   return new Uint8Array(await new Response(s).arrayBuffer());
@@ -42,6 +43,29 @@ async function otkljucaj(tekst, kljuc) {
   } catch (e) { throw new Error(t("Podaci ne mogu da se otključaju – telefon je uparen sa drugim računarom?", "Data cannot be unlocked – is the phone paired with another computer?")); }
   if (s[0] === 1) podaci = await protok(podaci, "gzip", false);
   return JSON.parse(new TextDecoder().decode(podaci));
+}
+
+// ---------------------------------------------------------------- identitet telefona (za isključivanje jednog telefona)
+// Svaki telefon ima svoj par ključeva (ECDH P-256). Kad računar isključi neki DRUGI telefon, novi ključ gazdinstva
+// šalje ovom telefonu zaključan njegovim javnim ključem – isključeni telefon ne može da ga pročita.
+const EC = { name: "ECDH", namedCurve: "P-256" };
+async function osigurajIdentitet() {
+  if (S.sinh.tid && S.sinh.ec) return;
+  const par = await crypto.subtle.generateKey(EC, true, ["deriveBits"]);
+  const pub = await crypto.subtle.exportKey("jwk", par.publicKey), priv = await crypto.subtle.exportKey("jwk", par.privateKey);
+  S.sinh.tid = S.sinh.tid || uB64u(crypto.getRandomValues(new Uint8Array(12)));
+  S.sinh.ec = { x: pub.x, y: pub.y, priv };
+  S.sinh.predstavi = true;
+  await sacuvaj();
+}
+async function odmotaj(dok) {
+  const priv = await crypto.subtle.importKey("jwk", S.sinh.ec.priv, EC, false, ["deriveBits"]);
+  const e = JSON.parse(dok.epub);
+  const pub = await crypto.subtle.importKey("jwk", { kty: "EC", crv: "P-256", x: e.x, y: e.y, ext: true }, EC, false, []);
+  const tajna = await crypto.subtle.deriveBits({ name: "ECDH", public: pub }, priv, 256);
+  const hk = await crypto.subtle.importKey("raw", tajna, "HKDF", false, ["deriveBits"]);
+  const k = await crypto.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: new TextEncoder().encode("farmer-rotacija") }, hk, 256);
+  return otkljucaj(dok.podaci, uB64u(new Uint8Array(k)));
 }
 
 // ---------------------------------------------------------------- Firestore preko REST-a
@@ -158,6 +182,7 @@ function primeniSnimak(snap) {
   S.prag = +snap.prag || S.prag;
   S.grav = snap.gravidnost || S.grav;
   S.izvoz = { id: snap.id, datum: snap.izvezeno, stada: snap.stada || [] };
+  if (S.sinh) S.sinh.spisak = snap.telefoni || null;   // računar zna za ove telefone
   osveziModel();
 }
 // šta je telefon promenio u odnosu na poslednje sa računara: [{n, b, t}]
@@ -186,27 +211,48 @@ function sinhStatus(tekst, vrsta) {
   const el2 = document.getElementById("sinhTekst");
   if (el2) { el2.textContent = tekst; el2.className = "sinh-tekst " + vrsta; }
 }
-async function usaglasi(rucno) {
+async function usaglasi(rucno, dubina = 0) {
   if (!S.sinh || !oblakPodesen()) return;
+  if (S.sinh.iskljucen) return sinhStatus(t("Računar je isključio ovaj telefon", "The computer disconnected this phone"), "greska");
   if (sinhRadi) return;
   if (!navigator.onLine && !rucno) return sinhStatus(S.promene.length ? t(`${S.promene.length} promena čeka internet`, `${S.promene.length} changes waiting for internet`) : t("Nema interneta", "No internet"), "ceka");
   sinhRadi = true;
   sinhStatus(t("Usklađujem…", "Syncing…"), "radi");
-  let novo = false;
+  let novo = false, ponovo = false, poslato = false;
+  if (rucno) sinhMirno = 0;
   try {
+    await osigurajIdentitet();
+    const sp = S.sinh.spisak;                     // računar još ne zna ovaj telefon (ili mu je promenjeno ime) -> predstavi se
+    if (sp && sp[S.sinh.tid] !== imeTelefona() && S.sinh.predstavljenNa !== S.sinh.verzija) S.sinh.predstavi = true;
     const o = new Oblak(S.sinh.farma, S.sinh.kljuc, S.sinh.token);
-    if (S.promene.length) {                       // 1) pošalji šta je urađeno na telefonu
+    if (S.promene.length || S.sinh.predstavi) {   // 1) pošalji šta je urađeno na telefonu
       const n = S.promene.length;
       const paket = { format: "farmer-paket", verzija: 1, napravljeno: sada(), jezik: S.jezik, osnova_verzija: S.sinh.verzija || null,
+        tel: { tid: S.sinh.tid, ime: imeTelefona(), javni: { x: S.sinh.ec.x, y: S.sinh.ec.y } },
         razlike: razlike(), promene: S.promene.slice(0, n) };
       const pid = `${Date.now()}${Math.random().toString(16).slice(2, 8)}`;
       await o.upisiVeliko("paketi", pid, await zakljucaj(paket, S.sinh.kljuc));
       S.poslato = (S.poslato || []).concat(S.promene.slice(0, n)).slice(-100);
       S.promene.splice(0, n);
+      S.sinh.predstavi = false;
+      poslato = true;
+      S.sinh.predstavljenNa = S.sinh.verzija;
       await sacuvaj();
     }
     const pz = await o.citaj("stanje", "poslednji");  // 2) preuzmi novo sa računara
-    if (pz && pz.verzija && pz.verzija !== S.sinh.verzija) {
+    if (pz && pz.premesteno) {                     // računar je promenio ključ (isključio neki telefon)
+      const r = S.sinh.tid ? await o.citaj("rotacija", S.sinh.tid) : null;
+      if (!r) {
+        S.sinh.iskljucen = true;
+        await sacuvaj();
+        throw new Error(t("Računar je isključio ovaj telefon. Podaci ostaju na telefonu; za ponovno povezivanje skeniraj novi QR kod.",
+          "The computer disconnected this phone. Data stays on the phone; scan a new QR code to reconnect."));
+      }
+      const nova = await odmotaj(r);
+      Object.assign(S.sinh, { farma: nova.farma, kljuc: nova.kljuc, naziv: nova.naziv || S.sinh.naziv, verzija: null, predstavi: true });
+      await sacuvaj();                              // ono što je bilo poslato na staru adresu, šalje se ponovo (spajanje to podnosi)
+      ponovo = true;
+    } else if (pz && pz.verzija && pz.verzija !== S.sinh.verzija) {
       const snap = await otkljucaj(await o.procitajVeliko("snimci", pz.verzija, +pz.ukupno || 1), S.sinh.kljuc);
       primeniSnimak(snap);
       S.sinh.verzija = pz.verzija;
@@ -220,11 +266,14 @@ async function usaglasi(rucno) {
     sinhStatus(S.promene.length ? t(`${S.promene.length} promena čeka slanje`, `${S.promene.length} changes waiting`) :
       t(`Usklađeno u ${pad(sad.getHours())}:${pad(sad.getMinutes())}`, `Synced at ${pad(sad.getHours())}:${pad(sad.getMinutes())}`), S.promene.length ? "ceka" : "ok");
   } catch (e) {
+    if (!(e instanceof GreskaMreze) && typeof zapisiGresku === "function") zapisiGresku("usklađivanje", e.message);
     sinhStatus(e instanceof GreskaMreze ? (S.promene.length ? t(`${S.promene.length} promena čeka internet`, `${S.promene.length} changes waiting for internet`) : t("Nema interneta – pokušaću ponovo", "No internet – will retry"))
       : t("Greška: ", "Error: ") + e.message, e instanceof GreskaMreze ? "ceka" : "greska");
   } finally {
     sinhRadi = false;
   }
+  sinhMirno = (novo || poslato || ponovo) ? 0 : sinhMirno + 1;
+  if (ponovo && dubina < 2) return usaglasi(rucno, dubina + 1);
   if (novo) osveziPosleSinh();
 }
 function osveziPosleSinh() {
@@ -236,15 +285,26 @@ function usaglasiUskoro() {                          // posle promene: sačekaj 
   if (!S.sinh) return;
   clearTimeout(sinhOdlozeno);
   sinhOdlozeno = setTimeout(() => usaglasi(), 4000);
+  sinhBudi();
 }
 function pokreniUsaglasavanje() {
   if (!S.sinh) return;
   sinhStatus(S.promene.length ? t(`${S.promene.length} promena čeka slanje`, `${S.promene.length} changes waiting`) : "", S.promene.length ? "ceka" : "ok");
   usaglasi();
 }
-window.addEventListener("online", () => usaglasi());
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") usaglasi(); });
-setInterval(() => { if (document.visibilityState === "visible") usaglasi(); }, 60000);
+// koliko često: na minut dok se nešto dešava, a kad je mirno ređe (do 5 min) – štedi bateriju, internet i kvotu servera
+let sinhMirno = 0, sinhTajmer = null;
+function zakaziSinh() {
+  clearTimeout(sinhTajmer);
+  sinhTajmer = setTimeout(async () => {
+    if (document.visibilityState === "visible") await usaglasi();
+    zakaziSinh();
+  }, sinhMirno < 5 ? 60000 : sinhMirno < 15 ? 180000 : 300000);
+}
+function sinhBudi() { sinhMirno = 0; zakaziSinh(); }
+window.addEventListener("online", () => { sinhBudi(); usaglasi(); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { sinhBudi(); usaglasi(); } });
+zakaziSinh();
 
 // ---------------------------------------------------------------- uparivanje
 function procitajLink(tekst) {
@@ -252,6 +312,10 @@ function procitajLink(tekst) {
   return m ? { farma: m[1], kljuc: m[2], naziv: decodeURIComponent(m[3] || "") } : null;
 }
 async function upari(p) {
+  if (S.sinh && S.sinh.iskljucen) {                // isključen telefon se ponovo uparuje – podaci ostaju
+    S.imeTelefona = S.sinh.ime || S.imeTelefona;
+    S.sinh = null;
+  }
   if (S.sinh && S.sinh.farma === p.farma) { poruka(t("Telefon je već uparen sa ovim računarom.", "This phone is already paired with this computer.")); usaglasi(true); return true; }
   const ima = S.grla.length || S.istorija.length;
   if (S.sinh && S.sinh.farma !== p.farma) {
@@ -262,7 +326,10 @@ async function upari(p) {
     "There is already data on the phone. Is it from the SAME computer you are pairing with?\n\nOK = yes, keep and merge\nCancel = no, delete it from the phone"))) {
     Object.assign(S, { grla: [], istorija: [], podsetnici: [], osnova: null, izvoz: null, promene: [] });
   }
-  S.sinh = { farma: p.farma, kljuc: p.kljuc, naziv: p.naziv, verzija: null, token: null };
+  const ime = (prompt(t("Ime ovog telefona – da se na računaru vidi ko je šta upisao (npr. Marko):",
+    "Name of this phone – so the computer shows who entered what (e.g. Mark):"), S.imeTelefona || "") || "").trim().slice(0, 40);
+  if (ime) S.imeTelefona = ime;
+  S.sinh = { farma: p.farma, kljuc: p.kljuc, naziv: p.naziv, verzija: null, token: null, ime: S.imeTelefona || "" };
   S.pocetak = true;
   osveziModel();
   await sacuvaj();
@@ -287,15 +354,36 @@ function ekranSinh(_, upit) {
       <a class="dug puno" href="#prenos">⇅ ${t("Prenos fajlom", "File transfer")}</a></div>`;
     return;
   }
+  if (S.sinh && S.sinh.iskljucen) {
+    ekran.innerHTML = `<div class="kart"><h2>⛔ ${t("Telefon je isključen", "Phone disconnected")}</h2>
+      <p>${t("Računar je isključio ovaj telefon", "The computer disconnected this phone")}${S.sinh.naziv ? ` (${h(S.sinh.naziv)})` : ""}.
+      ${t("Podaci koji su na telefonu ostaju, ali se više ne usklađuju.", "Data on the phone stays, but no longer syncs.")}</p>
+      <button class="dug glavno puno" id="sken">📷 ${t("Skeniraj novi QR kod sa računara", "Scan a new QR code from the computer")}</button></div>
+      <div class="kart"><button class="dug opasno puno" id="prekini">${t("Prekini uparivanje", "Unpair")}</button></div>`;
+    $("#sken").onclick = skenirajIUpari;
+    $("#prekini").onclick = prekiniUparivanje;
+    return;
+  }
   if (S.sinh) {
     ekran.innerHTML = `<div class="kart"><h2>☁ ${t("Upareno sa računarom", "Paired with computer")}</h2>
       <dl class="polja"><dt>${t("Gazdinstvo", "Farm")}</dt><dd>${h(S.sinh.naziv || "–")}</dd>
+      <dt>${t("Ovaj telefon", "This phone")}</dt><dd>📱 ${h(imeTelefona())} <a href="#" id="ime">${t("promeni", "change")}</a></dd>
       <dt>${t("Poslednje", "Last")}</dt><dd>${h(S.sinh.poslednje || "–")}</dd><dt>${t("Čeka slanje", "Waiting")}</dt><dd>${S.promene.length}</dd></dl>
       <p id="sinhTekst" class="sinh-tekst ${sinhStanje.vrsta}">${h(sinhStanje.tekst)}</p>
       <button class="dug glavno puno" id="sad">🔄 ${t("Usaglasi sada", "Sync now")}</button>
       <p class="mali">${t("Telefon se sam usklađuje kad ima internet – dugme ti ne treba, osim ako žuriš.", "The phone syncs by itself when online – the button is only if you are in a hurry.")}</p></div>
       <div class="kart"><button class="dug opasno puno" id="prekini">${t("Prekini uparivanje", "Unpair")}</button></div>`;
     $("#sad").onclick = () => usaglasi(true);
+    $("#ime").onclick = async ev => {
+      ev.preventDefault();
+      const ime = (prompt(t("Ime ovog telefona (npr. Marko):", "Name of this phone (e.g. Mark):"), imeTelefona()) || "").trim().slice(0, 40);
+      if (!ime) return;
+      S.sinh.ime = S.imeTelefona = ime;
+      S.sinh.predstavi = true;
+      await sacuvaj();
+      prikazi();
+      usaglasi(true);
+    };
     $("#prekini").onclick = prekiniUparivanje;
     return;
   }
@@ -304,11 +392,12 @@ function ekranSinh(_, upit) {
       <li>${t("Klikni dugme ispod i uperi kameru u QR kod na ekranu računara.", "Tap the button below and point the camera at the QR code on the computer screen.")}</li></ol>
       <button class="dug glavno puno" id="sken">📷 ${t("Skeniraj QR kod sa računara", "Scan QR code from computer")}</button>
       <p class="mali">${t("Uparuje se samo jednom. Posle se telefon i računar sami usklađuju, i kad su daleko.", "You pair only once. After that they sync by themselves, even far apart.")}</p></div>`;
-  $("#sken").onclick = async () => {
-    const kod = await skeniraj(t("Skeniraj QR kod sa računara", "Scan the QR code on the computer"));
-    if (!kod) return;
-    const p = procitajLink(kod);
-    if (!p) return poruka(t("Ovo nije Farmer QR kod za uparivanje.", "This is not a Farmer pairing QR code."));
-    if (await upari(p)) idi("grla");
-  };
+  $("#sken").onclick = skenirajIUpari;
+}
+async function skenirajIUpari() {
+  const kod = await skeniraj(t("Skeniraj QR kod sa računara", "Scan the QR code on the computer"));
+  if (!kod) return;
+  const p = procitajLink(kod);
+  if (!p) return poruka(t("Ovo nije Farmer QR kod za uparivanje.", "This is not a Farmer pairing QR code."));
+  if (await upari(p)) idi("grla");
 }

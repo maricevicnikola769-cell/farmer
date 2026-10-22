@@ -26,6 +26,8 @@ class IstorijaDeo:
         kar = [(f"{n} {z.get(k)} days" if EN else f"{n} {z.get(k)} d.") for k, n in (("karenca_meso", ("meat" if EN else "meso")), ("karenca_mleko", ("milk" if EN else "mleko"))) if z.get(k)]
         if kar:
             dod.append(("withdrawal: " if EN else "karenca: ") + ", ".join(kar))
+        if z.get("upisao"):
+            dod.append("📱 " + z["upisao"])
         return " · ".join(v for v in [z["opis"]] + dod if v)
 
 
@@ -35,11 +37,12 @@ class IstorijaDeo:
         wrap, tv = self.tabela(parent, kol, visina=visina, tree=False)
         tv.tag_configure("auto", foreground=INK2)
         tv.tag_configure("ceka", foreground=BRAND)
+        mesto = {id(z): i for i, z in enumerate(self.ist.zapisi)}      # brže od .index() za svaki red
         for i, z in enumerate(zapisi):
             vals = [z["datum"]] + ([z["grlo"]] if sa_grlom else []) + \
                    [z["dogadjaj"] if z["dogadjaj"] != AUTO else ("· record" if EN else "· evidencija"), self.opis_zapisa(z),
                     self.opis_ishoda(z)]
-            tv.insert("", "end", iid=str(self.ist.zapisi.index(z)), values=vals,
+            tv.insert("", "end", iid=str(mesto[id(z)]), values=vals,
                       tags=(["odd"] if i % 2 else []) + (["auto"] if z["automatski"] else []) +
                            (["ceka"] if self.ceka_porodjaj(z) else []))
         return wrap, tv
@@ -132,7 +135,8 @@ class IstorijaDeo:
             self.lbl(lc, (f"Waiting for ear tag – entry in animal list ({len(legla)})" if EN else f"Čekaju minđušu – upis u listu grla ({len(legla)})"), 11, "bold").pack(anchor="w")
             self.lbl(lc, ("Young born without tag and sex. When they get their ear tags, click \"Enter in list\"." if EN else "Rođeni mladi bez oznake i pola. Kad dobiju minđušu, klikni „Upiši u listu“."), 9,
                      fg=INK2).pack(anchor="w", pady=(0, 6))
-            for z in legla:
+            lim = len(legla) if self.ui.get("legla_sva") else 12
+            for z in legla[:lim]:
                 uk, dd, vec = self.leglo(z)
                 majka, otac = self.roditelji_parenja(z)
                 dr = parsiraj_datum(dd)
@@ -147,6 +151,10 @@ class IstorijaDeo:
                          fg=BRAND).pack(side="left", padx=12)
                 self.lbl(r, (f"born {dd}" if EN else f"rođeno {dd}") + ((f" · {star} d. old" if EN else f" · staro {star} d.") if star is not None else ""), 9,
                          fg=INK2).pack(side="left")
+            if len(legla) > lim:
+                lv = self.lbl(lc, (f"Show all ({len(legla) - lim} more)" if EN else f"Prikaži sve (još {len(legla) - lim})"), 9, "bold", fg=BRAND, cursor="hand2")
+                lv.pack(anchor="w", pady=(6, 0))
+                lv.bind("<Button-1>", lambda e: (self.ui.update(legla_sva=True), self.prikazi(self.strana)))
         dugmad = tk.Frame(body, bg=BG)
         dugmad.pack(fill="x", pady=(0, 10))
         holder = tk.Frame(body, bg=BG)

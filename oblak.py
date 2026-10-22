@@ -44,6 +44,38 @@ def link_za_uparivanje(farma, kljuc, naziv=""):
     return f"{TELEFON_URL}#upari={farma}.{kljuc}.{urllib.parse.quote(naziv or '', safe='')}"
 
 
+# ---------------------------------------------------------------- novi ključ samo za određeni telefon
+INFO_ROTACIJA = b"farmer-rotacija"
+
+
+def _kljuc_za(privatni, javni):
+    """Zajednički ključ (ECDH P-256 + HKDF-SHA256) – isti kao na telefonu (WebCrypto)."""
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    pub = ec.EllipticCurvePublicNumbers(int.from_bytes(iz_b64u(javni["x"]), "big"), int.from_bytes(iz_b64u(javni["y"]), "big"),
+                                        ec.SECP256R1()).public_key()
+    tajna = privatni.exchange(ec.ECDH(), pub)
+    return b64u(HKDF(algorithm=hashes.SHA256(), length=32, salt=b"", info=INFO_ROTACIJA).derive(tajna))
+
+
+def _javni_od(privatni):
+    n = privatni.public_key().public_numbers()
+    return {"x": b64u(n.x.to_bytes(32, "big")), "y": b64u(n.y.to_bytes(32, "big"))}
+
+
+def omotaj_za(javni, obj):
+    """Zaključa obj tako da ga otvori SAMO telefon sa ovim javnim ključem (ni ostali upareni telefoni)."""
+    from cryptography.hazmat.primitives.asymmetric import ec
+    e = ec.generate_private_key(ec.SECP256R1())
+    return {"epub": json.dumps(_javni_od(e)), "podaci": zakljucaj(obj, _kljuc_za(e, javni))}
+
+
+def odmotaj(privatni, dok):
+    """Suprotno od omotaj_za (koristi se u testovima umesto telefona)."""
+    return otkljucaj(dok["podaci"], _kljuc_za(privatni, json.loads(dok["epub"])))
+
+
 # ---------------------------------------------------------------- zaključavanje
 def zakljucaj(obj, kljuc):
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM

@@ -20,9 +20,12 @@ from obavestenja import ObavestenjaDeo
 from stampa import StampaDeo
 from telefon_prenos import TelefonDeo
 from sinhronizacija import SinhronizacijaDeo
+import dnevnik
+from dnevnik import DnevnikDeo
 
 
-class App(OsnovaProzora, GrlaEkran, ParenjeEkran, KartonEkran, GravidnostDeo, IstorijaDeo, KopijeDeo, ObavestenjaDeo, StampaDeo, TelefonDeo, SinhronizacijaDeo):
+class App(OsnovaProzora, GrlaEkran, ParenjeEkran, KartonEkran, GravidnostDeo, IstorijaDeo, KopijeDeo, ObavestenjaDeo, StampaDeo, TelefonDeo,
+          SinhronizacijaDeo, DnevnikDeo):
     """Glavni prozor programa, sklopljen iz delova (svaki deo je u svom fajlu)."""
 
 
@@ -88,12 +91,15 @@ def main():
         except Exception:
             pass
     sys.setrecursionlimit(20000)
+    dnevnik.postavi()
     root = tk.Tk()
 
     def greska(exc, val, tb):
+        dnevnik.zapisi_izuzetak(exc, val, tb, "greška pri pokretanju")
         messagebox.showerror(("Error" if EN else "Greška"), ("An error occurred:\n\n" if EN else "Došlo je do greške:\n\n") + "".join(traceback.format_exception_only(exc, val)))
     root.report_callback_exception = greska
     if prvo_pokretanje():
         izbor_jezika_na_startu(root)
-    App(root)
+    app = App(root)
+    root.report_callback_exception = app.greska_u_prozoru      # greška -> dnevnik + ponuda izveštaja
     root.mainloop()

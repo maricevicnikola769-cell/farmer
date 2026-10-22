@@ -240,7 +240,7 @@ class KartonEkran:
                 tekst = (z["dogadjaj"] if z["dogadjaj"] != AUTO else "") + \
                         (" – " if z["dogadjaj"] != AUTO and (z["opis"] or z["partner"] or z["vrednost"]) else "") + \
                         ", ".join(v for v in (z["opis"], (f"partner {z['partner']}" if z["partner"] else ""),
-                                              z["vrednost"]) if v)
+                                              z["vrednost"], ("📱 " + z["upisao"]) if z.get("upisao") else "") if v)
                 self.lbl(r, tekst, 9, fg=INK2 if z["automatski"] else INK, wraplength=330,
                          justify="left").pack(side="left", anchor="w")
             lr = tk.Frame(b, bg=SURF)

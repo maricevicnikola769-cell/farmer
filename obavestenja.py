@@ -105,10 +105,19 @@ class ObavestenjaDeo:
     # ================================================================ KARENCA
     def karenca(self, x):
         """{'meso': (do_datum, zapis), 'mleko': (...)} – samo karence koje još traju."""
+        return self.karence_sve().get(x, {})
+
+    def karence_sve(self):
+        """Karence koje traju, za sva grla odjednom (jedan prolaz kroz istoriju umesto jednog po grlu)."""
+        z_ = self.ist.zapisi
+        kljuc = (id(z_), len(z_), date.today(), getattr(self, "_ver_podataka", 0))
+        kes = getattr(self, "_kes_karenca", None)
+        if kes and kes[0] == kljuc:
+            return kes[1]
         danas = date.today()
-        rez = {}
-        for z in self.ist.zapisi:
-            if z["grlo"] != x:
+        sve = {}
+        for z in z_:
+            if not (z.get("karenca_meso") or z.get("karenca_mleko")):
                 continue
             d = parsiraj_datum(z["datum"])
             if not d:
@@ -120,9 +129,12 @@ class ObavestenjaDeo:
                     n = 0
                 if n > 0:
                     do = d + timedelta(days=n)
+                    rez = sve.setdefault(z["grlo"], {})
                     if do >= danas and (vrsta not in rez or do > rez[vrsta][0]):
                         rez[vrsta] = (do, z)
-        return rez
+        sve = {g: r for g, r in sve.items() if r}
+        self._kes_karenca = (kljuc, sve)
+        return sve
 
 
     def opis_karence(self, x, kratko=False):
@@ -140,8 +152,9 @@ class ObavestenjaDeo:
 
     def obavestenja_karenca(self, x=None):
         rez = []
+        sve = self.karence_sve()
         for a in self.model.grla(True):
-            if x is not None and a["id"] != x:
+            if (x is not None and a["id"] != x) or a["id"] not in sve:
                 continue
             k = self.karenca(a["id"])
             if not k:
@@ -175,10 +188,32 @@ class ObavestenjaDeo:
 
 
     # ================================================================ PLODNOST
+    def _ix_plodnosti(self):
+        """Porođaji po grlu, parenja po majci i broj potomaka – jednom za celo stado."""
+        z_ = self.ist.zapisi
+        kljuc = (id(z_), len(z_), id(self.model), getattr(self, "_ver_podataka", 0))
+        kes = getattr(self, "_kes_plodnost", None)
+        if kes and kes[0] == kljuc:
+            return kes[1]
+        por, par, pot = {}, {}, {}
+        por_naziv = ("Birth" if EN else "Porođaj")
+        for z in z_:
+            if z["dogadjaj"] == por_naziv:
+                por.setdefault(z["grlo"], []).append(z)
+            elif z["dogadjaj"] == PARENJE and not z["automatski"]:
+                par.setdefault(self.roditelji_parenja(z)[0], []).append(z)
+        for pr in self.model.P.values():
+            for r in set(pr):
+                if r:
+                    pot[r] = pot.get(r, 0) + 1
+        ix = dict(por=por, par=par, pot=pot)
+        self._kes_plodnost = (kljuc, ix)
+        return ix
+
     def plodnost(self, x):
         import re
-        por = sorted((z for z in self.ist.zapisi if z["grlo"] == x and z["dogadjaj"] == ("Birth" if EN else "Porođaj")),
-                     key=lambda z: parsiraj_datum(z["datum"]) or date.min)
+        ix = self._ix_plodnosti()
+        por = sorted(ix["por"].get(x, []), key=lambda z: parsiraj_datum(z["datum"]) or date.min)
         zivih = mrtvih = 0
         for z in por:
             v = "".join(ch for ch in z.get("vrednost", "") if ch.isdigit())
@@ -187,14 +222,13 @@ class ObavestenjaDeo:
             mrtvih += int(mm.group(1)) if mm else 0
         datumi = [parsiraj_datum(z["datum"]) for z in por if parsiraj_datum(z["datum"])]
         razmaci = [(b - a).days for a, b in zip(datumi, datumi[1:]) if (b - a).days > 20]
-        parenja = [z for z in self.ist.zapisi if z["dogadjaj"] == PARENJE and not z["automatski"]
-                   and self.roditelji_parenja(z)[0] == x]
+        parenja = ix["par"].get(x, [])
         neuspela = sum(1 for z in parenja if z.get("ishod") == "neuspelo")
         a = self.model.A.get(x, {})
         prvi = None
         if datumi and a.get("datum"):
             prvi = (datumi[0].year - a["datum"].year) * 12 + datumi[0].month - a["datum"].month
-        potomaka = sum(1 for pr in self.model.P.values() if x in pr)
+        potomaka = ix["pot"].get(x, 0)
         return dict(porodjaja=len(por), zivih=zivih, mrtvih=mrtvih,
                     prosek=(zivih / len(por)) if por else 0,
                     razmak=(sum(razmaci) / len(razmaci)) if razmaci else None,
@@ -391,15 +425,24 @@ class ObavestenjaDeo:
             o_, c_ = self.card(body, 18, 12)
             o_.pack(fill="x", pady=(0, 14))
             self.lbl(c_, f"{naslov} ({len(grupa)})", 12, "bold", fg=BAD if nivo == 0 else INK).pack(anchor="w", pady=(0, 4))
-            for o in grupa:
-                self.red_obavestenja(c_, o)
+            self._redovi_sa_vise(c_, grupa, nivo)
         if zakazano:
             o_, c_ = self.card(body, 18, 12)
             o_.pack(fill="x", pady=(0, 14))
             self.lbl(c_, (f"Scheduled reminders ({len(zakazano)})" if EN else f"Zakazani podsetnici ({len(zakazano)})"), 12, "bold").pack(anchor="w", pady=(0, 4))
-            for o in zakazano:
-                self.red_obavestenja(c_, o)
+            self._redovi_sa_vise(c_, zakazano, 3)
 
+
+    def _redovi_sa_vise(self, c_, grupa, kljuc, korak=60):
+        """Veliko stado ima i hiljadu obaveštenja – prikazuje se deo, ostalo na dugme (strana ostaje brza)."""
+        lim = self.ui.setdefault("ob_lim", {}).get(kljuc, korak)
+        for o in grupa[:lim]:
+            self.red_obavestenja(c_, o)
+        if len(grupa) > lim:
+            def jos():
+                self.ui["ob_lim"][kljuc] = lim + 200
+                self.prikazi("obavestenja")
+            self.btn(c_, (f"Show more ({len(grupa) - lim})" if EN else f"Prikaži još ({len(grupa) - lim})"), jos).pack(anchor="w", pady=(8, 0))
 
     def obavestenja_na_startu(self):
         sva = [o for o in self.obavestenja() if o["nivo"] <= 1]

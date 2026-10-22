@@ -422,18 +422,32 @@ class ParenjeEkran:
         self.lbl(c, ("Most related pairs in the herd" if EN else "Najsrodniji parovi u zapatu"), 13, "bold").pack(anchor="w")
         self.lbl(c, ("Animals that should be kept apart when mating." if EN else "Grla koja treba držati odvojeno pri parenju."), 9, fg=INK2).pack(anchor="w", pady=(0, 10))
         akt = m.grla(True)
-        min_r = 0.25 if len(akt) > 300 else 1e-9
-        po_v = {}
-        for x in akt:
-            po_v.setdefault(x["vrsta"], []).append(x["id"])
-        parovi = []
-        for ids in po_v.values():
-            for i in range(len(ids)):
-                for j in range(i + 1, len(ids)):
-                    r = m.r(ids[i], ids[j])
-                    if r >= min_r:
-                        parovi.append((r, ids[i], ids[j]))
-        parovi.sort(reverse=True)
+        kes = getattr(self, "_kes_parovi", None)
+        if kes and kes[0] is m:                      # isti podaci – ne računa se ponovo
+            parovi = list(kes[1])
+        elif len(akt) > 1500:                        # veliko stado: računa se u pozadini, strana odmah radi
+            self.lbl(c, ("⏳ Calculating… (large herd, a few seconds)" if EN else "⏳ Računam… (veliko stado, par sekundi)"), 10, fg=INK2).pack(anchor="w")
+            if getattr(self, "_parovi_racuna", None) is not m:
+                self._parovi_racuna = m
+
+                def racunaj():
+                    try:
+                        rez = izracunaj_parove(m, akt)
+                    except Exception:
+                        rez = []
+                    self._kes_parovi = (m, rez[:200])
+
+                    def gotovo():
+                        self._parovi_racuna = None
+                        if self.strana == "srodstvo" and self.model is m:
+                            self.prikazi("srodstvo")
+                    self._sinh_red.put((gotovo, ()))     # glavni deo programa ga preuzima (Tk ne sme iz pozadine)
+                import threading
+                threading.Thread(target=racunaj, daemon=True).start()
+            return
+        else:
+            parovi = izracunaj_parove(m, akt)
+            self._kes_parovi = (m, parovi[:200])
         if not parovi:
             self.lbl(c, ("No related pairs according to the recorded pedigree." if EN else "Nema srodnih parova prema upisanom rodoslovu."), 10, fg=INK2).pack(anchor="w")
             return
@@ -564,3 +578,52 @@ class ParenjeEkran:
         self.lbl(lev, ("Delete all animals from the records. Done in 5 steps, with an automatic backup." if EN else "Brisanje svih grla iz evidencije. Radi se u 5 koraka, uz automatsku rezervnu kopiju."),
                  9, fg=INK2).pack(anchor="w")
         self.btn(red_, ("Delete all animals…" if EN else "Obriši sva grla…"), self.brisanje_svih, "Danger").pack(side="right")
+
+
+def izracunaj_parove(m, akt):
+    """Najsrodniji parovi u zapatu, od najsrodnijeg."""
+    min_r = 0.25 if len(akt) > 300 else 1e-9
+    po_v = {}
+    for x in akt:
+        po_v.setdefault(x["vrsta"], []).append(x["id"])
+    parovi = []
+    for ids in po_v.values():
+        if len(akt) <= 300:                          # malo stado: svaki par
+            for i in range(len(ids)):
+                for j in range(i + 1, len(ids)):
+                    r = m.r(ids[i], ids[j])
+                    if r >= min_r:
+                        parovi.append((r, ids[i], ids[j]))
+        else:                                        # veliko stado: samo mužjak × ženka sa zajedničkim roditeljem ili dedom/babom
+            parovi += najsrodniji_parovi(m, ids, min_r)
+    parovi.sort(reverse=True)
+    return parovi
+
+
+def najsrodniji_parovi(m, ids, min_r):
+    """Parovi mužjak–ženka sa r >= min_r (0,25 = polubraća, deda–unuka, stric–sinovica i bliže).
+    Takvi skoro uvek imaju zajedničkog pretka najviše tri generacije unazad, pa se ostali parovi ni ne računaju –
+    kod 10.000 grla to je razlika između nekoliko minuta i delića sekunde."""
+    dubina = 3 if len(ids) <= 3000 else 2            # vrlo veliko stado: do baba/deda (inače traje predugo)
+
+    def blizu(x):                                    # grlo, roditelji, babe/dede (i prababe/pradede)
+        s_, nivo = {x}, [x]
+        for _ in range(dubina):
+            nivo = [p for y in nivo for p in m.P.get(y, ()) if p]
+            s_.update(nivo)
+        return s_
+    zenke, muski = [x for x in ids if m.A[x]["pol"] == "z"], [x for x in ids if m.A[x]["pol"] == "m"]
+    ix = {}
+    for z in zenke:
+        for p in blizu(z):
+            ix.setdefault(p, []).append(z)
+    rez = []
+    for o in muski:
+        kand = set()
+        for p in blizu(o):
+            kand.update(ix.get(p, ()))
+        for z in kand:
+            r = m.r(o, z)
+            if r >= min_r:
+                rez.append((r, o, z))
+    return rez

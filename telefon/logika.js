@@ -3,7 +3,7 @@
 "use strict";
 
 const IST_KOLONE = ["grlo", "datum", "dogadjaj", "opis", "partner", "vrednost", "automatski", "uneto", "ishod",
-  "ter", "karenca_meso", "karenca_mleko"];
+  "ter", "karenca_meso", "karenca_mleko", "upisao"];
 const POD_KOLONE = ["grlo", "datum", "tip", "tekst", "ponavljanje", "gotovo", "uneto"];
 
 // ---------------------------------------------------------------- stanje
@@ -33,7 +33,20 @@ function fmtD(d) { return d ? (EN() ? `${pad(d.getDate())}/${pad(d.getMonth() + 
 function fmtKratko(d) { return d ? (EN() ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` : `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`) : ""; }
 function uIso(d) { return d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : ""; }
 
+// isti datumi se čitaju hiljade puta (veliko stado) – pamti se rezultat
+const _datumi = new Map();
 function parsirajDatum(t) {
+  const s = String(t || "");
+  let v = _datumi.get(s);
+  if (v === undefined) {
+    const d = _parsirajDatum(s);
+    v = d ? d.getTime() : null;
+    if (_datumi.size > 50000) _datumi.clear();
+    _datumi.set(s, v);
+  }
+  return v === null ? null : new Date(v);
+}
+function _parsirajDatum(t) {
   t = String(t || "").trim().replace(/\.+$/, "");
   if (!t) return null;
   t = t.split(" ")[0];
@@ -153,8 +166,24 @@ class Model {
     }
     for (const [jid, [o, m]] of Object.entries(this.P))
       if (jid === o || jid === m) { this.warn.push(en ? `${jid} is entered as its own parent.` : `${jid} je upisan kao sopstveni roditelj.`); this.P[jid] = [null, null]; }
-    for (const jid of Object.keys(this.P))
+    for (const jid of (this.imaKrug() ? Object.keys(this.P) : []))   // sporo traženje samo kad krug stvarno postoji
       if (this.preci(jid).has(jid)) { this.warn.push(en ? `${jid} is its own ancestor – check the parents.` : `${jid} je sam sebi predak – proveri roditelje.`); this.P[jid] = [null, null]; }
+  }
+  imaKrug() {                                    // da li je neko grlo samo sebi predak – jedan prolaz kroz stado
+    const st = new Map();
+    for (const start of Object.keys(this.P)) {
+      if (st.has(start)) continue;
+      const stek = [[start, (this.P[start] || []).filter(Boolean), 0]];
+      st.set(start, 1);
+      while (stek.length) {
+        const vrh = stek[stek.length - 1];
+        if (vrh[2] >= vrh[1].length) { st.set(vrh[0], 2); stek.pop(); continue; }
+        const r = vrh[1][vrh[2]++];
+        if (st.get(r) === 1) return true;
+        if (!st.has(r)) { st.set(r, 1); stek.push([r, (this.P[r] || []).filter(Boolean), 0]); }
+      }
+    }
+    return false;
   }
   nadji(t) {
     t = String(t || "").trim();
@@ -162,8 +191,13 @@ class Model {
     if (this.A[t]) return t;
     const n = norm(t);
     if (this.byMark[n]) return this.byMark[n];
-    for (const k of Object.keys(this.A)) if (norm(k) === n) return k;
-    return null;
+    const broj = Object.keys(this.A).length;
+    if (!this._norm || this._norm.n !== broj) {
+      const ix = new Map();
+      for (const k of Object.keys(this.A)) if (!ix.has(norm(k))) ix.set(norm(k), k);
+      this._norm = { n: broj, ix };
+    }
+    return this._norm.ix.get(n) || null;
   }
   grla(samoAktivna = false) {
     return Object.values(this.A).filter(a => !a.osnivac && !a.obrisano && (a.aktivno || !samoAktivna))
@@ -195,7 +229,11 @@ class Model {
     if (!this._dop.has(k)) { const [o, m] = this.P[x] || [null, null]; this._dop.set(k, 0.5 * (this.doprinos(o, predak) + this.doprinos(m, predak))); }
     return this._dop.get(k);
   }
-  inbr(x) { const [o, m] = this.P[x] || [null, null]; return this.kinship(o, m); }
+  inbr(x) {
+    if (!this._inbr) this._inbr = new Map();
+    if (!this._inbr.has(x)) { const [o, m] = this.P[x] || [null, null]; this._inbr.set(x, this.kinship(o, m)); }
+    return this._inbr.get(x);
+  }
   r(a, b) { return 2 * this.kinship(a, b) / Math.sqrt((1 + this.inbr(a)) * (1 + this.inbr(b))); }
   odnos(a, b) {
     const [oa, ma] = this.P[a] || [null, null], [ob, mb] = this.P[b] || [null, null], en = EN();
@@ -227,9 +265,11 @@ function procena(f, prag) {
 let M = new Model([]);
 function osveziModel() { M = new Model(S.grla); }
 
+// ko je upisao: ime ovog telefona (podešava se pri uparivanju), da se na računaru vidi koji radnik je šta uneo
+function imeTelefona() { return (S.sinh && S.sinh.ime) || S.imeTelefona || (S.jezik === "en" ? "Phone" : "Telefon"); }
 function dodaj(grlo, dogadjaj, o = {}) {
   const z = { grlo, datum: o.datum || fmtD(danas()), dogadjaj, opis: o.opis || "", partner: o.partner || "", vrednost: o.vrednost || "",
-    automatski: o.automatski ? "1" : "", uneto: sada(), ishod: "", ter: "", karenca_meso: o.karenca_meso || "", karenca_mleko: o.karenca_mleko || "" };
+    automatski: o.automatski ? "1" : "", uneto: sada(), ishod: "", ter: "", karenca_meso: o.karenca_meso || "", karenca_mleko: o.karenca_mleko || "", upisao: imeTelefona() };
   S.istorija.push(z);
   return z;
 }
@@ -279,12 +319,18 @@ function granicePorodjaja(z) {
   return [dodajDane(d, p.mn), dodajDane(d, p.pr), dodajDane(d, p.mx)];
 }
 const cekaPorodjaj = z => z.dogadjaj === K().PARENJE && !z.ishod && !z.automatski;
+const _legla = new Map();
 function leglo(z) {
   const ish = z.ishod || "";
   if (!ish.startsWith("leglo:")) return null;
-  const d = (ish.split(":").slice(0, 3).concat([ish.split(":").slice(3).join(":")])).concat(["", "", "", ""]).slice(0, 4);
-  const n = parseInt(d[1], 10) || 0;
-  return [n, d[2], d[3].split(",").filter(Boolean)];
+  let v = _legla.get(ish);
+  if (!v) {
+    const d = (ish.split(":").slice(0, 3).concat([ish.split(":").slice(3).join(":")])).concat(["", "", "", ""]).slice(0, 4);
+    v = [parseInt(d[1], 10) || 0, d[2], d[3].split(",").filter(Boolean)];
+    if (_legla.size > 20000) _legla.clear();
+    _legla.set(ish, v);
+  }
+  return [v[0], v[1], v[2].slice()];
 }
 function opisIshoda(z) {
   if (z.dogadjaj !== K().PARENJE || z.automatski) return "";

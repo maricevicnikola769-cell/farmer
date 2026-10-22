@@ -149,7 +149,7 @@ EN_KOL = {"id": "id", "markica": "ear_tag", "vrsta": "species", "rasa": "breed",
 
 EN_IST = {"grlo": "animal", "datum": "date", "dogadjaj": "event", "opis": "description", "partner": "partner",
           "vrednost": "value", "automatski": "automatic", "uneto": "added", "ishod": "outcome", "ter": "heat",
-          "karenca_meso": "withdrawal_meat_days", "karenca_mleko": "withdrawal_milk_days"}
+          "karenca_meso": "withdrawal_meat_days", "karenca_mleko": "withdrawal_milk_days", "upisao": "entered_by"}
 
 
 EN_POD = {"grlo": "animal", "datum": "date", "tip": "type", "tekst": "text", "ponavljanje": "repeat_days",
@@ -265,7 +265,7 @@ def procitaj_csv(putanja):
 # =============================================================== istorija grla
 
 IST_KOLONE = ["grlo", "datum", "dogadjaj", "opis", "partner", "vrednost", "automatski", "uneto", "ishod",
-              "ter", "karenca_meso", "karenca_mleko"]
+              "ter", "karenca_meso", "karenca_mleko", "upisao"]
 
 
 class Istorija:
@@ -285,9 +285,12 @@ class Istorija:
                     prvi = f.readline()
                     f.seek(0)
                     sep = ";" if prvi.count(";") >= prvi.count(",") else ","
+                    nazad, imena = {v_: k_ for k_, v_ in EN_IST.items()}, {}
                     for r in csv.DictReader(f, delimiter=sep):
-                        r = {({v_: k_ for k_, v_ in EN_IST.items()}.get(kolona(k), kolona(k))): (v or "").strip()
-                             for k, v in r.items() if k}
+                        for k in r:                      # naziv kolone se prevodi jednom, ne za svaki red
+                            if k and k not in imena:
+                                imena[k] = nazad.get(kolona(k), kolona(k))
+                        r = {imena[k]: (v or "").strip() for k, v in r.items() if k}
                         for p in ("dogadjaj", "ishod", "ter"):
                             if r.get(p):
                                 r[p] = prevedi_vrednost(r[p])
@@ -316,7 +319,7 @@ class Istorija:
               karenca_meso="", karenca_mleko=""):
         z = dict(grlo=grlo, datum=datum or date.today().strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), dogadjaj=dogadjaj, opis=opis,
                  partner=partner, vrednost=vrednost, automatski="1" if automatski else "", uneto=sada(),
-                 ishod="", ter="", karenca_meso=karenca_meso, karenca_mleko=karenca_mleko)
+                 ishod="", ter="", karenca_meso=karenca_meso, karenca_mleko=karenca_mleko, upisao="")
         self.zapisi.append(z)
         return z
 
