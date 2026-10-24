@@ -26,7 +26,7 @@ class GrlaEkran:
         self.zaglavlje(body, ("Animals" if EN else "Grla"), (f"{akt} in herd, {len(sva)} recorded in total." if EN else f"{akt} u zapatu, ukupno {len(sva)} upisanih.")
                        if sva else ("Records of all animals with their parents." if EN else "Evidencija svih grla sa roditeljima."),
                        [(("Partner search" if EN else "Pretraga partnera"), self.idi_na_pretragu, "Secondary"),
-                        (("Import" if EN else "Uvezi"), self.uvezi, "Secondary"), (("Open in Excel" if EN else "Otvori u Excelu"), self.otvori_excel, "Secondary"),
+                        (("Import" if EN else "Uvezi"), self.uvezi, "Secondary"), (("Export" if EN else "Izvezi"), self.izvezi, "Secondary"), (("Open in Excel" if EN else "Otvori u Excelu"), self.otvori_excel, "Secondary"),
                         (("+  New animal" if EN else "+  Novo grlo"), lambda: self.forma(), "Primary")])
         if not sva:
             self.prazno(body)

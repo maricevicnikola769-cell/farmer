@@ -58,7 +58,7 @@ _jezicke_konstante()
 
 # imena koja zavise od jezika; posle promene jezika svaki fajl programa dobija nove vrednosti
 JEZICKA_IMENA = ("JEZIK", "EN", 'REDOSLEDI', 'POREKLA', 'VRSTE', 'NAZIVI', 'TER', 'TER_CIKLUS', 'PARENJE', 'STADO_PODMLADAK', 'GRAVIDNOST_PROFILI', 'DOGADJAJI', 'AUTO', 'GRUPE')
-MODULI = ('osnova', 'jezik', 'podaci', 'izgled', 'rodoslov', 'ekran_osnova', 'ekran_grla', 'ekran_parenje', 'karton', 'gravidnost', 'istorija', 'kopije', 'obavestenja', 'stampa', 'telefon_prenos', 'sinhronizacija', 'app')
+MODULI = ('osnova', 'jezik', 'podaci', 'izgled', 'rodoslov', 'ekran_osnova', 'ekran_grla', 'ekran_parenje', 'karton', 'gravidnost', 'istorija', 'kopije', 'obavestenja', 'stampa', 'izvoz', 'telefon_prenos', 'sinhronizacija', 'app')
 
 
 def postavi_jezik(novi):

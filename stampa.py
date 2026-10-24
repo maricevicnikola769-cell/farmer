@@ -363,6 +363,10 @@ def _app_s_stampa(self):
            T("Sva grla u zapatu po stadima, sa markicama, roditeljima i inbridingom. Za veterinara ili inspekciju.",
              "All animals in the herd by herd group, with ear tags, parents and inbreeding. For the vet or inspection."),
            T("🖨 Napravi", "🖨 Create"), self.stampaj_spisak)
+    stavka(T("Izvoz podataka (Excel / CSV)", "Export data (Excel / CSV)"),
+           T("Grla, rodovnik u 3 kolena, istorija i podsetnici u Excel ili CSV fajl. Za udruženje odgajivača, laboratoriju, veterinara ili drugi program.",
+             "Animals, 3-generation pedigree, history and reminders to an Excel or CSV file. For a breed association, laboratory, vet or another program."),
+           T("⇩ Izvezi", "⇩ Export"), self.izvezi)
 
 
 class StampaDeo:

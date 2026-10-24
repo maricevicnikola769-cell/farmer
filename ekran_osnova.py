@@ -509,7 +509,10 @@ class OsnovaProzora:
         desno = tk.Frame(h, bg=BG)
         desno.pack(side="right", anchor="s")
         for txt, cmd, kind in reversed(akcije):
-            self.btn(desno, txt, cmd, kind).pack(side="right", padx=(8, 0))
+            b = self.btn(desno, txt, cmd, kind)
+            if len(akcije) > 4:            # mnogo dugmadi: širina po tekstu, da podnaslov ostane vidljiv
+                b.configure(width=0)
+            b.pack(side="right", padx=(8, 0))
         levo = tk.Frame(h, bg=BG)
         levo.pack(side="left", fill="x", expand=True)
         self.lbl(levo, naslov, 24, "bold").pack(anchor="w")

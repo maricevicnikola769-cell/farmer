@@ -277,3 +277,42 @@ def test_dnevnik_gresaka(tmp_path):
     except ZeroDivisionError:
         dnevnik.zapisi_izuzetak(*sys.exc_info(), gde="proba")
     assert any("ZeroDivisionError" in l for l in dnevnik.poslednje_linije())
+
+
+def test_izvoz_excel_i_csv(F, tmp_path):
+    """Izvoz: Excel sa listovima (grla, rodovnik, istorija, podsetnici) i CSV fajlovi; obrisana grla se ne izvoze."""
+    import zipfile
+    import xml.dom.minidom
+    import izvoz
+    stado = [dict(r) for r in STADO] + [dict(red("P", "O", "M"), status="neaktivno"), dict(red("D"), status="obrisano")]
+    stado[0]["markica"] = "RS 1234-5678"
+    m = F.Model(stado)
+    ist = F.Istorija(str(tmp_path / "stado.csv"))
+    ist.dodaj("X", "Lečenje", "šćžđč <&> \"test\"")
+    ist.dodaj("D", "Napomena", "obrisano grlo")
+    pods = F.Podsetnici(str(tmp_path / "stado.csv"))
+    pods.dodaj("X", "01.01.2027", "Vakcinacija")
+    sve = izvoz.tabele_za_izvoz(stado, m, ist, pods)
+    zapat = izvoz.tabele_za_izvoz(stado, m, ist, pods, samo_zapat=True)
+    assert len(sve[0][1]) - 1 == 11 and len(zapat[0][1]) - 1 == 10      # P je van zapata, D je obrisano
+    assert [len(l[1]) for l in sve[2:]] == [2, 2]                          # istorija obrisanog grla se ne izvozi
+    rod = {r[0]: r for r in sve[1][1][1:]}
+    assert rod["X"][2:4] == ["B", "S"] and rod["X"][4:8] == ["O (RS 1234-5678)", "M", "O (RS 1234-5678)", "M"]
+    inb = {r[0]: r[-1] for r in sve[0][1][1:]}
+    assert inb["X"] == 25.0 and inb["O"] == 0.0
+
+    p = str(tmp_path / "izvoz.xlsx")
+    assert izvoz.izvezi_u_fajl(p, sve, "xlsx") == [p]
+    with zipfile.ZipFile(p) as z:
+        assert z.testzip() is None
+        for ime in z.namelist():
+            if ime.endswith((".xml", ".rels")):
+                xml.dom.minidom.parseString(z.read(ime))                   # svaki deo je ispravan XML
+        assert len([n for n in z.namelist() if n.startswith("xl/worksheets/")]) == 4
+        assert "šćžđč &lt;&amp;&gt;" in z.read("xl/worksheets/sheet3.xml").decode("utf-8")
+
+    c = str(tmp_path / "izvoz.csv")
+    fajlovi = izvoz.izvezi_u_fajl(c, sve, "csv")
+    assert len(fajlovi) == 4 and all(os.path.isfile(f) for f in fajlovi)
+    procitano, _ = F.procitaj_csv(c)                                       # izvezeni CSV program može ponovo da uveze
+    assert {r["id"] for r in procitano} == {r["id"] for r in stado} - {"D"}
