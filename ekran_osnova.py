@@ -445,7 +445,9 @@ class OsnovaProzora:
 
     def uvezi(self):
         p = filedialog.askopenfilename(title=("Import table from Excel (CSV)" if EN else "Uvezi tablicu iz Excela (CSV)"),
-                                       filetypes=[(("CSV table" if EN else "CSV tablica"), "*.csv"), (("All files" if EN else "Svi fajlovi"), "*.*")])
+                                       filetypes=[(("Excel or CSV table" if EN else "Excel ili CSV tablica"), "*.xlsx *.csv"),
+                                                  (("Excel workbook" if EN else "Excel tabela"), "*.xlsx"),
+                                                  (("CSV table" if EN else "CSV tablica"), "*.csv"), (("All files" if EN else "Svi fajlovi"), "*.*")])
         if not p:
             return
         try:
@@ -468,7 +470,22 @@ class OsnovaProzora:
                 self.ist.dodaj(r["id"], AUTO, (f"Added by import from table {os.path.basename(p)}" if EN else f"Upisano uvozom iz tablice {os.path.basename(p)}"), automatski=True)
                 po_id[r["id"]] = r
                 nov += 1
-        self.promena((f"Imported: {nov} new" if EN else f"Uvezeno: {nov} novih") + ((f", {izm} changed" if EN else f", {izm} izmenjenih") if izm else "") + (" animals." if EN else " grla."))
+        dod = ""
+        if p.lower().endswith((".xlsx", ".xlsm")):   # Farmerov Excel izvoz: i preci, istorija i podsetnici
+            try:
+                from izvoz import dopuni_iz_excela
+                from podaci import procitaj_xlsx
+                n_pr, n_ist, n_pod = dopuni_iz_excela(procitaj_xlsx(p), self.tab.redovi, self.ist, self.pods, p)
+                dod = "".join(t for t in (
+                    (f", {n_pr} ancestors" if EN else f", {n_pr} predaka") if n_pr else "",
+                    (f", {n_ist} history entries" if EN else f", {n_ist} zapisa istorije") if n_ist else "",
+                    (f", {n_pod} reminders" if EN else f", {n_pod} podsetnika") if n_pod else ""))
+                if n_pod:
+                    self.pods.sacuvaj()
+            except Exception as e:
+                messagebox.showwarning(("Import" if EN else "Uvoz"), (("Animals were imported, but the other sheets could not be read:\n" if EN
+                                       else "Grla su uvezena, ali ostali listovi nisu mogli da se pročitaju:\n") + str(e)))
+        self.promena((f"Imported: {nov} new" if EN else f"Uvezeno: {nov} novih") + ((f", {izm} changed" if EN else f", {izm} izmenjenih") if izm else "") + (" animals" if EN else " grla") + dod + ".")
 
 
     def otvori_excel(self):

@@ -11,7 +11,9 @@ from xml.sax.saxutils import escape
 
 from osnova import EN
 from jezik import T
-from podaci import EN_IST, EN_KOL, EN_POD, IST_KOLONE, KOLONE, STATUS_EN, Podsetnici
+from osnova import prevedi_vrednost
+from podaci import (EN_IST, EN_KOL, EN_POD, IST_KOLONE, KOLONE, STATUS_EN, Podsetnici, _excel_datum, kolona, sada,
+                    tabela_u_recnike)
 from izgled import BAD, INK2, SURF
 
 
@@ -153,12 +155,15 @@ def _naziv_kol(k, mapa):
 
 
 def tabele_za_izvoz(redovi_tablice, model, istorija=None, podsetnici=None, samo_zapat=False,
-                    sa_rodovnikom=True, sa_istorijom=True, sa_podsetnicima=True, dodatne=()):
+                    sa_rodovnikom=True, sa_istorijom=True, sa_podsetnicima=True, dodatne=(), samo_ids=None):
     """Vraća [(naziv lista, [zaglavlje, redovi...])]. Ne zavisi od prozora, pa se može testirati."""
     ukljuceno = []
     for r in redovi_tablice:
         st = r.get("status", "aktivno") or "aktivno"
-        if st == "obrisano" or (samo_zapat and st != "aktivno"):
+        if samo_ids is not None:                 # samo označena grla (bez obzira da li su u zapatu)
+            if (model.nadji(r["id"]) or r["id"]) not in samo_ids:
+                continue
+        elif st == "obrisano" or (samo_zapat and st != "aktivno"):
             continue
         ukljuceno.append(r)
     ids = {r["id"] for r in ukljuceno}
@@ -234,12 +239,104 @@ def izvezi_u_fajl(putanja, listovi, format_):
     return fajlovi
 
 
+# =============================================================== uvoz Farmerovog Excel izvoza (drugi listovi)
+
+def _ozn_markica(t):
+    """'K12 (RS 1234)' -> ('K12', 'RS 1234')."""
+    t = (t or "").strip()
+    if t.endswith(")") and " (" in t:
+        i = t.rindex(" (")
+        return t[:i].strip(), t[i + 2:-1].strip()
+    return t, ""
+
+
+def _datum_txt(v):
+    v = (v or "").strip()
+    return _excel_datum(v) if v.replace(".", "", 1).isdigit() and 1000 < float(v) < 80000 else v
+
+
+def dopuni_iz_excela(listovi, redovi_tablice, istorija, podsetnici, ime_fajla=""):
+    """Posle uvoza grla iz Farmerovog Excel fajla: preci iz lista Rodovnik, istorija i podsetnici.
+    Postojeći podaci se ne menjaju (samo se popunjava ono što nedostaje), a isti zapis se ne dodaje dvaput.
+    Vraća (novih predaka, novih zapisa istorije, novih podsetnika)."""
+    po_id = {r["id"]: r for r in redovi_tablice}
+    vrsta_za = {}
+    n_pr = n_ist = n_pod = 0
+    for naziv, sirovo in listovi[1:]:
+        if not sirovo:
+            continue
+        zagl = [kolona(k) for k in sirovo[0]]
+        if "otac_oca" in zagl or "sire_of_sire" in zagl:                     # ---- rodovnik
+            for red in sirovo[1:]:
+                red = list(red) + [""] * (16 - len(red))
+                grlo = (red[0] or "").strip()
+                if not grlo:
+                    continue
+                cvorovi = [grlo] + [_ozn_markica(x) for x in red[2:16]]
+                ids = [grlo] + [c[0] for c in cvorovi[1:]]
+                vrsta = (po_id.get(grlo) or {}).get("vrsta", "")
+                # položaj i: roditelji su na 2i+1 (otac) i 2i+2 (majka) – kao u listu Rodovnik
+                for i in range(len(ids)):
+                    x = ids[i]
+                    if not x:
+                        continue
+                    if i > 0 and x not in po_id:
+                        mark = cvorovi[i][1]
+                        po_id[x] = dict({k: "" for k in KOLONE}, id=x, markica=mark, vrsta=vrsta,
+                                        pol="m" if i % 2 == 1 else "z", status="neaktivno", uneto=sada(),
+                                        poreklo_od=os.path.basename(ime_fajla))
+                        redovi_tablice.append(po_id[x])
+                        n_pr += 1
+                    r = po_id.get(x)
+                    for j, kljuc in ((2 * i + 1, "otac"), (2 * i + 2, "majka")):
+                        if r is not None and j < len(ids) and ids[j] and not r.get(kljuc):
+                            r[kljuc] = ids[j]
+        elif ("dogadjaj" in zagl or "event" in zagl) and istorija is not None:  # ---- istorija
+            zapisi, _ = tabela_u_recnike(sirovo, EN_IST)
+            postoji = {(z["grlo"], z["datum"], z["dogadjaj"], z["opis"], z["uneto"]) for z in istorija.zapisi}
+            for z in zapisi:
+                z = {k: z.get(k, "") for k in IST_KOLONE}
+                if not z["grlo"]:
+                    continue
+                z["datum"] = _datum_txt(z["datum"])
+                for k in ("dogadjaj", "ishod", "ter"):
+                    if z[k]:
+                        z[k] = prevedi_vrednost(z[k])
+                kljuc = (z["grlo"], z["datum"], z["dogadjaj"], z["opis"], z["uneto"])
+                if kljuc in postoji:
+                    continue
+                postoji.add(kljuc)
+                istorija.zapisi.append(z)
+                n_ist += 1
+        elif ("tekst" in zagl or "text" in zagl) and podsetnici is not None:   # ---- podsetnici
+            zapisi, _ = tabela_u_recnike(sirovo, EN_POD)
+            postoji = {(z["grlo"], z["datum"], z["tip"], z["tekst"]) for z in podsetnici.zapisi}
+            for z in zapisi:
+                z = {k: z.get(k, "") for k in Podsetnici.KOLONE}
+                z["datum"] = _datum_txt(z["datum"])
+                if z["tip"]:
+                    z["tip"] = prevedi_vrednost(z["tip"])
+                kljuc = (z["grlo"], z["datum"], z["tip"], z["tekst"])
+                if not z["datum"] or kljuc in postoji:
+                    continue
+                postoji.add(kljuc)
+                podsetnici.zapisi.append(z)
+                n_pod += 1
+    return n_pr, n_ist, n_pod
+
+
 # =============================================================== prozor
 
 class IzvozDeo:
     """Dugme 'Izvezi' na strani Grla i u Štampi: izbor formata i sadržaja, pa čuvanje fajla."""
 
-    def izvezi(self, parent=None):
+    def izvezi(self, parent=None, oznacena=None):
+        if oznacena is None:                     # dugme "Izvezi": grla označena u listi, ako ih ima
+            tv = getattr(self, "tv_grla", None)
+            try:
+                oznacena = [i for i in tv.selection() if i in self.model.A] if tv is not None and tv.winfo_exists() else []
+            except tk.TclError:
+                oznacena = []
         if not self.tab.redovi:
             messagebox.showinfo("Farmer", T("U evidenciji još nema grla za izvoz.", "There are no animals to export yet."))
             return
@@ -265,7 +362,11 @@ class IzvozDeo:
                         value="csv", variable=fv, style="Card.TRadiobutton").pack(anchor="w", pady=(4, 0))
 
         self.lbl(b, T("Grla", "Animals"), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 2))
-        gv = tk.StringVar(value="zapat")
+        gv = tk.StringVar(value="oznacena" if oznacena else "zapat")
+        if oznacena:
+            prikaz = ", ".join(oznacena[:5]) + (T(f" i još {len(oznacena) - 5}", f" and {len(oznacena) - 5} more") if len(oznacena) > 5 else "")
+            ttk.Radiobutton(b, text=T(f"Samo označena grla ({len(oznacena)}): {prikaz}", f"Only selected animals ({len(oznacena)}): {prikaz}"),
+                            value="oznacena", variable=gv, style="Card.TRadiobutton").pack(anchor="w", pady=(4, 0))
         ttk.Radiobutton(b, text=T("Samo grla u zapatu", "Only animals in the herd"), value="zapat", variable=gv,
                         style="Card.TRadiobutton").pack(anchor="w", pady=(4, 0))
         ttk.Radiobutton(b, text=T("Sva upisana grla (i prodata, uginula…)", "All recorded animals (also sold, dead…)"),
@@ -295,7 +396,8 @@ class IzvozDeo:
                 listovi = tabele_za_izvoz(self.tab.redovi, self.model, self.ist, self.pods,
                                           samo_zapat=gv.get() == "zapat", sa_rodovnikom=rv.get(),
                                           sa_istorijom=iv.get(), sa_podsetnicima=pv.get(),
-                                          dodatne=getattr(self.tab, "dodatne", ()))
+                                          dodatne=getattr(self.tab, "dodatne", ()),
+                                          samo_ids=set(oznacena) if gv.get() == "oznacena" else None)
                 fajlovi = izvezi_u_fajl(put, listovi, fmt)
             except OSError as e:
                 err.config(text=T("Fajl nije sačuvan: ", "The file was not saved: ") + str(e)

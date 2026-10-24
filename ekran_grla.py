@@ -76,7 +76,7 @@ class GrlaEkran:
         tv.bind("<Button-2>", lambda ev: self.meni_grla(tv, ev))
         dno = tk.Frame(body, bg=BG)
         dno.pack(fill="x", pady=(8, 0))
-        self.lbl(dno, ("Double-click opens the card, right-click gives more options. To delete, select an animal (or several with Ctrl) and press Delete." if EN else "Dvoklik otvara karton, desni klik daje više opcija. Za brisanje označi grlo (ili više uz Ctrl) i pritisni Delete."),
+        self.lbl(dno, ("Double-click opens the card, right-click gives more options. Select animals (several with Ctrl): Delete removes them, Export exports only them." if EN else "Dvoklik otvara karton, desni klik daje više opcija. Označi grla (više uz Ctrl): Delete ih briše, Izvezi izvozi samo njih."),
                  9, fg=INK2).pack(side="left")
         n_obr = len(self.model.obrisana())
         if n_obr:
@@ -663,6 +663,8 @@ class GrlaEkran:
         st_ = self.model.A[iid]["stado"]
         if st_:
             mn.add_command(label=(f"Rename herd \"{st_}\"…" if EN else f"Preimenuj stado „{st_}“…"), command=lambda: self.preimenuj_stado(st_))
+        mn.add_command(label=(f"Export{'' if len(sel) == 1 else f' ({len(sel)} animals)'}…" if EN else f"Izvezi{'' if len(sel) == 1 else f' ({len(sel)} grla)'}…"),
+                       command=lambda: self.izvezi(oznacena=sel))
         mn.add_separator()
         mn.add_command(label=(f"Delete{'' if len(sel) == 1 else f' ({len(sel)} animals)'}" if EN else f"Obriši{'' if len(sel) == 1 else f' ({len(sel)} grla)'}"),
                        foreground=BAD, command=lambda: self.obrisi_grla(sel))

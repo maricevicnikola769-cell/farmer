@@ -215,7 +215,91 @@ def vrsta_norm(v):
             "svi": "pigs", "hor": "horses", "mar": "horses", "kon": "horses"}.get(v[:3], v)
 
 
+def _excel_datum(v):
+    """Excel čuva izmenjene datume kao broj dana od 30.12.1899."""
+    try:
+        d = date.fromordinal(date(1899, 12, 30).toordinal() + int(float(v)))
+        return d.strftime("%d/%m/%Y" if EN else "%d.%m.%Y")
+    except (ValueError, OverflowError):
+        return v
+
+
+def procitaj_xlsx(putanja):
+    """Excel (.xlsx) bez dodatnih biblioteka -> [(naziv lista, [[ćelije reda kao tekst], ...]), ...].
+    Čita i fajlove koje je Farmer izvezao i one koje je Excel ponovo sačuvao (deljeni tekstovi, brojevi)."""
+    import re
+    import zipfile
+    from xml.etree import ElementTree as ET
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+          "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
+    def tekst(el):
+        return "".join(t.text or "" for t in el.iter("{%s}t" % ns["m"]))
+    with zipfile.ZipFile(putanja) as z:
+        imena = set(z.namelist())
+        deljeni = []
+        if "xl/sharedStrings.xml" in imena:
+            deljeni = [tekst(si) for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall("m:si", ns)]
+        veze = {}
+        if "xl/_rels/workbook.xml.rels" in imena:
+            for v in ET.fromstring(z.read("xl/_rels/workbook.xml.rels")):
+                veze[v.get("Id")] = v.get("Target", "").lstrip("/")
+        listovi = []
+        for sh in ET.fromstring(z.read("xl/workbook.xml")).find("m:sheets", ns):
+            cilj = veze.get(sh.get("{%s}id" % ns["r"]), "")
+            cilj = cilj if cilj.startswith("xl/") else "xl/" + cilj
+            if cilj not in imena:
+                continue
+            redovi = []
+            for row in ET.fromstring(z.read(cilj)).iter("{%s}row" % ns["m"]):
+                red = []
+                for c in row.findall("m:c", ns):
+                    ref = re.match(r"([A-Z]+)", c.get("r", "")) if c.get("r") else None
+                    if ref:                                    # prazne ćelije Excel preskače -> pozicija iz adrese
+                        kol = 0
+                        for ch in ref.group(1):
+                            kol = kol * 26 + ord(ch) - 64
+                        while len(red) < kol - 1:
+                            red.append("")
+                    t, v = c.get("t"), c.find("m:v", ns)
+                    if t == "inlineStr":
+                        val = tekst(c)
+                    elif t == "s" and v is not None:
+                        val = deljeni[int(v.text)] if v.text and int(v.text) < len(deljeni) else ""
+                    elif v is not None and v.text is not None:
+                        val = v.text
+                        if t not in ("str", "e", "b"):
+                            try:                                 # 123.0 -> 123
+                                f = float(val)
+                                val = str(int(f)) if f == int(f) and abs(f) < 1e15 else str(f)
+                            except ValueError:
+                                pass
+                    else:
+                        val = ""
+                    red.append(val.strip())
+                redovi.append(red)
+            listovi.append((sh.get("name", ""), redovi))
+    return listovi
+
+
+def tabela_u_recnike(redovi, mapa_naziva=None):
+    """Prvi red je zaglavlje -> lista dict-ova (nazivi kolona normalizovani, prevod sa engleskog)."""
+    if not redovi:
+        return [], []
+    nazad = {v: k for k, v in (mapa_naziva or {}).items()}
+    zagl = [nazad.get(kolona(k), kolona(k)) for k in redovi[0]]
+    rez = []
+    for red in redovi[1:]:
+        if not any((x or "").strip() for x in red):
+            continue
+        rez.append({k: ((red[i] or "").strip() if i < len(red) else "") for i, k in enumerate(zagl) if k})
+    return rez, zagl
+
+
 def procitaj_csv(putanja):
+    """Tablica grla iz CSV-a ili Excela (.xlsx: prvi list)."""
+    if putanja.lower().endswith((".xlsx", ".xlsm")):
+        listovi = procitaj_xlsx(putanja)
+        return _obradi_tablicu(listovi[0][1] if listovi else [], excel=True)
     kod = "latin-1"
     for k in ("utf-8-sig", "cp1250"):
         try:
@@ -229,37 +313,43 @@ def procitaj_csv(putanja):
         prvi = f.readline()
         f.seek(0)
         sep = ";" if prvi.count(";") >= prvi.count(",") else ","
-        citac = csv.reader(f, delimiter=sep)
-        try:
-            zaglavlje = [kolona(k) for k in next(citac)]
-        except StopIteration:
-            return [], []
-        zaglavlje = [ALIAS.get(k, k) if ALIAS.get(k, k) not in zaglavlje else k for k in zaglavlje]
-        if "id" not in zaglavlje and "markica" not in zaglavlje:
-            raise ValueError(("The table must have an 'id' (tag) or 'ear_tag' column.\n" if EN else
-                              "Tablica mora imati kolonu 'id' (oznaka) ili 'markica'.\n") +
-                             (f"Columns found: {', '.join(zaglavlje)}" if EN else f"Pronađene kolone: {', '.join(zaglavlje)}"))
-        redovi = []
-        for red in citac:
-            if not any(x.strip() for x in red):
-                continue
-            r = {k: (red[i].strip() if i < len(red) else "") for i, k in enumerate(zaglavlje)}
-            r["id"] = r.get("id") or r.get("markica", "")
-            if not r["id"]:
-                continue
-            r["pol"] = POL_MAP.get(r.get("pol", "").lower()[:1], "")
-            r["vrsta"] = vrsta_norm(r.get("vrsta", ""))
-            r["rasa"] = norm_rasa(r.get("rasa", ""))
-            for p in ("otac", "majka"):
-                if r.get(p, "") == "0":
-                    r[p] = ""
-            st = r.get("status", "").lower()
-            r["status"] = ("aktivno" if st == "" or st.startswith(("akt", "act")) else
-                           "obrisano" if st.startswith(("obr", "del")) else "neaktivno")
-            for p in ("poreklo", "rasa"):
-                r[p] = prevedi_vrednost(r.get(p, ""))
-            redovi.append(r)
-        return redovi, zaglavlje
+        return _obradi_tablicu(list(csv.reader(f, delimiter=sep)))
+
+
+def _obradi_tablicu(sirovo, excel=False):
+    citac = iter(sirovo)
+    try:
+        zaglavlje = [kolona(k) for k in next(citac)]
+    except StopIteration:
+        return [], []
+    zaglavlje = [ALIAS.get(k, k) if ALIAS.get(k, k) not in zaglavlje else k for k in zaglavlje]
+    if "id" not in zaglavlje and "markica" not in zaglavlje:
+        raise ValueError(("The table must have an 'id' (tag) or 'ear_tag' column.\n" if EN else
+                          "Tablica mora imati kolonu 'id' (oznaka) ili 'markica'.\n") +
+                         (f"Columns found: {', '.join(zaglavlje)}" if EN else f"Pronađene kolone: {', '.join(zaglavlje)}"))
+    redovi = []
+    for red in citac:
+        if not any((x or "").strip() for x in red):
+            continue
+        r = {k: ((red[i] or "").strip() if i < len(red) else "") for i, k in enumerate(zaglavlje)}
+        if excel and r.get("datum_rodjenja", "").replace(".", "", 1).isdigit() and 1000 < float(r["datum_rodjenja"]) < 80000:
+            r["datum_rodjenja"] = _excel_datum(r["datum_rodjenja"])
+        r["id"] = r.get("id") or r.get("markica", "")
+        if not r["id"]:
+            continue
+        r["pol"] = POL_MAP.get(r.get("pol", "").lower()[:1], "")
+        r["vrsta"] = vrsta_norm(r.get("vrsta", ""))
+        r["rasa"] = norm_rasa(r.get("rasa", ""))
+        for p in ("otac", "majka"):
+            if r.get(p, "") == "0":
+                r[p] = ""
+        st = r.get("status", "").lower()
+        r["status"] = ("aktivno" if st == "" or st.startswith(("akt", "act")) else
+                       "obrisano" if st.startswith(("obr", "del")) else "neaktivno")
+        for p in ("poreklo", "rasa"):
+            r[p] = prevedi_vrednost(r.get(p, ""))
+        redovi.append(r)
+    return redovi, zaglavlje
 
 
 # =============================================================== istorija grla

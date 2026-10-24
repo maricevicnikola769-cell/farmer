@@ -316,3 +316,43 @@ def test_izvoz_excel_i_csv(F, tmp_path):
     assert len(fajlovi) == 4 and all(os.path.isfile(f) for f in fajlovi)
     procitano, _ = F.procitaj_csv(c)                                       # izvezeni CSV program može ponovo da uveze
     assert {r["id"] for r in procitano} == {r["id"] for r in stado} - {"D"}
+
+
+def test_uvoz_farmerovog_excela(F, tmp_path):
+    """Kupac grla uvozi Farmerov Excel: grla, preci iz lista Rodovnik (i kad nisu u listi grla), istorija i podsetnici."""
+    import izvoz
+    stado = [dict(r) for r in STADO]
+    for r in stado:
+        if r["id"] not in ("Z", "N"):
+            r["status"] = "neaktivno"                    # u zapatu samo Z i N -> preci su samo u listu Rodovnik
+    stado[0]["markica"] = "RS 1"
+    m = F.Model(stado)
+    ist = F.Istorija(str(tmp_path / "a.csv"))
+    ist.dodaj("Z", "Lečenje", "test")
+    pods = F.Podsetnici(str(tmp_path / "a.csv"))
+    pods.dodaj("N", "01.01.2027", "Vakcinacija")
+    p = str(tmp_path / "prodaja.xlsx")
+    izvoz.izvezi_u_fajl(p, izvoz.tabele_za_izvoz(stado, m, ist, pods, samo_zapat=True), "xlsx")
+
+    redovi, _ = F.procitaj_csv(p)
+    assert sorted(r["id"] for r in redovi) == ["N", "Z"]
+    tab = [{k: r.get(k, "") for k in F.KOLONE} for r in redovi]
+    ist2 = F.Istorija(str(tmp_path / "b.csv"))
+    pods2 = F.Podsetnici(str(tmp_path / "b.csv"))
+    n_pr, n_ist, n_pod = izvoz.dopuni_iz_excela(F.procitaj_xlsx(p), tab, ist2, pods2, p)
+    assert (n_ist, n_pod) == (1, 1) and n_pr >= 6
+    m2 = F.Model(tab)
+    assert m2.inbr("Z") == pytest.approx(m.inbr("Z")) and m2.inbr("N") == pytest.approx(m.inbr("N"))
+    assert m2.A["O"]["markica"] == "RS 1" and m2.A["O"]["pol"] == "m"
+    assert izvoz.dopuni_iz_excela(F.procitaj_xlsx(p), tab, ist2, pods2, p) == (0, 0, 0)   # drugi uvoz ne duplira
+
+
+def test_izvoz_samo_oznacenih(F):
+    """Izvoz samo označenih grla: i van zapata; istorija samo za njih; preci su u listu Rodovnik."""
+    import izvoz
+    stado = [dict(r) for r in STADO]
+    stado[2]["status"] = "neaktivno"                      # B je van zapata, ali je označen
+    m = F.Model(stado)
+    l = izvoz.tabele_za_izvoz(stado, m, None, None, samo_ids={"B", "Z"})
+    assert sorted(r[0] for r in l[0][1][1:]) == ["B", "Z"]
+    assert {r[0]: r[2:4] for r in l[1][1][1:]}["Z"] == ["B", "X"]
