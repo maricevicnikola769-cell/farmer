@@ -1,6 +1,6 @@
 {
-  "name": "Farmer – rodoslov stada",
-  "short_name": "Farmer",
+  "name": "HerdDoc – rodoslov stada",
+  "short_name": "HerdDoc",
   "description": "Rodoslov stada, srodstvo, inbriding i plan parenja – na telefonu, i bez interneta.",
   "start_url": "./#danas",
   "scope": "./",

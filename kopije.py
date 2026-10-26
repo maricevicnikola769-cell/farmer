@@ -21,7 +21,7 @@ class KopijeDeo:
     # Imena foldera postoje na oba jezika: kopije napravljene na jednom jeziku vide se i na drugom.
     _KOREN = ("rezervne_kopije", "backups")
 
-    _KOREN2 = ("Farmer – kopije", "Farmer – backups")
+    _KOREN2 = ("HerdDoc – kopije", "HerdDoc – backups", "Farmer – kopije", "Farmer – backups")   # stari nazivi se i dalje nalaze
 
     _AUTO = ("automatske", "automatic")
 
@@ -429,7 +429,7 @@ class KopijeDeo:
             if d:
                 popuni(os.path.normpath(d))
                 if not st["kopije"]:
-                    prazno.config(text=T(f"U folderu {d} nema kopija Farmera.", f"No Farmer backups in {d}."))
+                    prazno.config(text=T(f"U folderu {d} nema kopija programa HerdDoc.", f"No HerdDoc backups in {d}."))
 
         def vrati():
             sel = tv.selection()

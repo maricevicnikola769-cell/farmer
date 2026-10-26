@@ -226,7 +226,7 @@ def _excel_datum(v):
 
 def procitaj_xlsx(putanja):
     """Excel (.xlsx) bez dodatnih biblioteka -> [(naziv lista, [[ćelije reda kao tekst], ...]), ...].
-    Čita i fajlove koje je Farmer izvezao i one koje je Excel ponovo sačuvao (deljeni tekstovi, brojevi)."""
+    Čita i fajlove koje je HerdDoc izvezao i one koje je Excel ponovo sačuvao (deljeni tekstovi, brojevi)."""
     import re
     import zipfile
     from xml.etree import ElementTree as ET

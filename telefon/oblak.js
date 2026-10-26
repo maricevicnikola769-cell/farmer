@@ -1,4 +1,4 @@
-// Farmer za telefon – automatsko usklađivanje sa računarom preko interneta (Firebase), uparivanje QR kodom.
+// HerdDoc za telefon – automatsko usklađivanje sa računarom preko interneta (Firebase), uparivanje QR kodom.
 // Podaci se pre slanja zaključavaju (AES-256-GCM) ključem iz QR koda – server vidi samo nečitljiv tekst.
 "use strict";
 const DEO = 900000;
@@ -388,7 +388,7 @@ function ekranSinh(_, upit) {
     return;
   }
   ekran.innerHTML = `<div class="kart"><h2>📱 ${t("Upari sa računarom", "Pair with computer")}</h2><ol class="koraci">
-      <li>${t("Na računaru otvori Farmer → <b>Telefon</b> → <b>Upari telefon</b>. Pojaviće se QR kod.", "On the computer open Farmer → <b>Phone</b> → <b>Pair phone</b>. A QR code appears.")}</li>
+      <li>${t("Na računaru otvori HerdDoc → <b>Telefon</b> → <b>Upari telefon</b>. Pojaviće se QR kod.", "On the computer open HerdDoc → <b>Phone</b> → <b>Pair phone</b>. A QR code appears.")}</li>
       <li>${t("Klikni dugme ispod i uperi kameru u QR kod na ekranu računara.", "Tap the button below and point the camera at the QR code on the computer screen.")}</li></ol>
       <button class="dug glavno puno" id="sken">📷 ${t("Skeniraj QR kod sa računara", "Scan QR code from computer")}</button>
       <p class="mali">${t("Uparuje se samo jednom. Posle se telefon i računar sami usklađuju, i kad su daleko.", "You pair only once. After that they sync by themselves, even far apart.")}</p></div>`;
@@ -398,6 +398,6 @@ async function skenirajIUpari() {
   const kod = await skeniraj(t("Skeniraj QR kod sa računara", "Scan the QR code on the computer"));
   if (!kod) return;
   const p = procitajLink(kod);
-  if (!p) return poruka(t("Ovo nije Farmer QR kod za uparivanje.", "This is not a Farmer pairing QR code."));
+  if (!p) return poruka(t("Ovo nije HerdDoc QR kod za uparivanje.", "This is not a HerdDoc pairing QR code."));
   if (await upari(p)) idi("grla");
 }

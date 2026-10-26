@@ -1,4 +1,4 @@
-"""Automatski testovi za Farmer: račun srodstva, čitanje i čuvanje tablica, oba jezika.
+"""Automatski testovi za HerdDoc (ranije Farmer): račun srodstva, čitanje i čuvanje tablica, oba jezika.
 GitHub ih pokreće pre svake izgradnje; ako neki padne, nova verzija se ne objavljuje."""
 import os
 import sys
@@ -319,7 +319,7 @@ def test_izvoz_excel_i_csv(F, tmp_path):
 
 
 def test_uvoz_farmerovog_excela(F, tmp_path):
-    """Kupac grla uvozi Farmerov Excel: grla, preci iz lista Rodovnik (i kad nisu u listi grla), istorija i podsetnici."""
+    """Kupac grla uvozi HerdDoc Excel: grla, preci iz lista Rodovnik (i kad nisu u listi grla), istorija i podsetnici."""
     import izvoz
     stado = [dict(r) for r in STADO]
     for r in stado:

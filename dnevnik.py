@@ -13,7 +13,7 @@ from jezik import T
 
 LOG = os.path.join(APP_DIR, "farmer-greske.log")
 NAJVISE = 512 * 1024                      # posle toga stari dnevnik ide u .1 (čuva se jedan prethodni)
-PODRSKA = ""                              # e-pošta za prijavu problema (upisati pre prodaje)
+PODRSKA = "herddoc1@gmail.com"            # e-pošta za prijavu problema
 
 
 def zapisi(naslov, tekst=""):
@@ -21,7 +21,7 @@ def zapisi(naslov, tekst=""):
         if os.path.isfile(LOG) and os.path.getsize(LOG) > NAJVISE:
             os.replace(LOG, LOG + ".1")
         with open(LOG, "a", encoding="utf-8") as f:
-            f.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} · Farmer {VERZIJA} · {naslov}\n{str(tekst).rstrip()}\n")
+            f.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} · HerdDoc {VERZIJA} · {naslov}\n{str(tekst).rstrip()}\n")
     except OSError:
         pass
 
@@ -66,7 +66,7 @@ class DnevnikDeo:
             self.prijavi_problem()
 
     def izvestaj(self):
-        info = [T("Farmer – izveštaj o problemu", "Farmer – problem report"),
+        info = [T("HerdDoc – izveštaj o problemu", "HerdDoc – problem report"),
                 f"{T('Verzija', 'Version')}: {VERZIJA}  ·  {T('vreme', 'time')}: {time.strftime('%Y-%m-%d %H:%M:%S')}",
                 f"{T('Sistem', 'System')}: {platform.platform()}  ·  Python {platform.python_version()}"]
         try:
@@ -86,7 +86,7 @@ class DnevnikDeo:
         put = filedialog.asksaveasfilename(
             title=T("Sačuvaj izveštaj o problemu", "Save problem report"),
             initialdir=desktop if os.path.isdir(desktop) else APP_DIR,
-            initialfile=f"Farmer-izvestaj-{time.strftime('%Y%m%d-%H%M')}.txt", defaultextension=".txt",
+            initialfile=f"HerdDoc-izvestaj-{time.strftime('%Y%m%d-%H%M')}.txt", defaultextension=".txt",
             filetypes=[(T("Tekst", "Text"), "*.txt")])
         if not put:
             return
@@ -94,12 +94,30 @@ class DnevnikDeo:
             with open(put, "w", encoding="utf-8") as f:
                 f.write(self.izvestaj())
         except OSError as e:
-            messagebox.showerror("Farmer", str(e))
+            messagebox.showerror("HerdDoc", str(e))
             return
-        messagebox.showinfo(T("Izveštaj je napravljen", "Report saved"),
-                            T(f"Sačuvano:\n{put}\n\nPošalji ovaj fajl" + (f" na {PODRSKA}" if PODRSKA else " proizvođaču programa") +
-                              " (mejlom ili Viberom) i napiši ukratko šta si radio kad se problem pojavio.\n\n"
-                              "U izveštaju nisu tvoje tablice – samo zapisane greške i brojevi.",
-                              f"Saved:\n{put}\n\nSend this file" + (f" to {PODRSKA}" if PODRSKA else " to the program's maker") +
-                              " and briefly describe what you were doing when the problem appeared.\n\n"
-                              "The report does not contain your tables – only recorded errors and counts."))
+        if messagebox.askyesno(T("Izveštaj je napravljen", "Report saved"),
+                               T(f"Sačuvano:\n{put}\n\nPošalji ovaj fajl" + (f" na {PODRSKA}" if PODRSKA else " proizvođaču programa") +
+                                 " (mejlom ili Viberom) i napiši ukratko šta si radio kad se problem pojavio.\n\n"
+                                 "U izveštaju nisu tvoje tablice – samo zapisane greške i brojevi.\n\n"
+                                 "Da otvorim novi mejl sa izveštajem?",
+                                 f"Saved:\n{put}\n\nSend this file" + (f" to {PODRSKA}" if PODRSKA else " to the program's maker") +
+                                 " and briefly describe what you were doing when the problem appeared.\n\n"
+                                 "The report does not contain your tables – only recorded errors and counts.\n\n"
+                                 "Open a new e-mail with the report?")):
+            self.otvori_mejl()
+
+    def otvori_mejl(self, tekst=None):
+        """Novi mejl podršci (podrazumevani program za poštu) sa izveštajem u tekstu poruke."""
+        import webbrowser
+        from urllib.parse import quote
+        telo = tekst if tekst is not None else self.izvestaj()
+        if len(telo) > 900:                      # Windows ne podnosi dugačke mailto adrese – ostatak je u sačuvanom fajlu
+            telo = telo[:900] + T("\n…(ceo izveštaj je u priloženom fajlu)", "\n…(the full report is in the attached file)")
+        uvod = T("Opis problema (šta si radio kad se pojavio):\n\n\n", "Problem description (what you were doing):\n\n\n")
+        adresa = (f"mailto:{PODRSKA}?subject={quote(T('HerdDoc – prijava problema', 'HerdDoc – problem report') + ' ' + VERZIJA)}"
+                  f"&body={quote(uvod + telo)}")
+        try:
+            webbrowser.open(adresa)
+        except Exception:
+            messagebox.showinfo("HerdDoc", T("Pošalji izveštaj na: ", "Send the report to: ") + PODRSKA)

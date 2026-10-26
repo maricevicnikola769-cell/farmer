@@ -1,4 +1,4 @@
-// Farmer za telefon – logika (račun srodstva, gravidnost, ter, karenca, upis događaja).
+// HerdDoc za telefon – logika (račun srodstva, gravidnost, ter, karenca, upis događaja).
 // Prenesena 1:1 iz PC programa (rodoslov.py, gravidnost.py, obavestenja.py, istorija.py), da podaci budu isti.
 "use strict";
 
@@ -648,7 +648,7 @@ function partneri(x) {
 
 // ---------------------------------------------------------------- prenos (fajl računar <-> telefon)
 function ucitajSaRacunara(obj) {
-  if (!obj || obj.format !== "farmer-telefon") throw new Error(EN() ? "This is not a Farmer file for the phone." : "Ovo nije Farmer fajl za telefon.");
+  if (!obj || obj.format !== "farmer-telefon") throw new Error(EN() ? "This is not a HerdDoc file for the phone." : "Ovo nije HerdDoc fajl za telefon.");
   S.jezik = obj.jezik === "en" ? "en" : "sr";
   S.prag = +obj.prag || 0.0625;
   S.grav = obj.gravidnost || null;

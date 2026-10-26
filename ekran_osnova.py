@@ -60,7 +60,7 @@ class OsnovaProzora:
         self.pod = self.ucitaj_podesavanja()
         self.prag = self.pod.get("prag", 0.0625)
         self.F = izaberi_font()
-        root.title("Farmer")
+        root.title("HerdDoc")
         self.logo = {}
         try:
             self.logo = {k: tk.PhotoImage(data=v) for k, v in LOGO.items()}
@@ -218,7 +218,7 @@ class OsnovaProzora:
             self.crtaj_markicu(c, 2, 2, 30, 34)
         t = tk.Frame(brand, bg=SURF)
         t.pack(side="left", padx=10)
-        tk.Label(t, text="Farmer", bg=SURF, fg=INK, font=self.f(12, "bold")).pack(anchor="w")
+        tk.Label(t, text="HerdDoc", bg=SURF, fg=INK, font=self.f(12, "bold")).pack(anchor="w")
         tk.Label(t, text=("kinship & mating" if EN else "srodstvo i parenje"), bg=SURF, fg=INK2, font=self.f(9)).pack(anchor="w")
 
         self.nav = {}
@@ -471,7 +471,7 @@ class OsnovaProzora:
                 po_id[r["id"]] = r
                 nov += 1
         dod = ""
-        if p.lower().endswith((".xlsx", ".xlsm")):   # Farmerov Excel izvoz: i preci, istorija i podsetnici
+        if p.lower().endswith((".xlsx", ".xlsm")):   # Excel izvoz iz HerdDoc-a: i preci, istorija i podsetnici
             try:
                 from izvoz import dopuni_iz_excela
                 from podaci import procitaj_xlsx

@@ -52,10 +52,10 @@ def _otvori_html(naziv, naslov, podnaslov, telo):
             f"<button class='dugme' onclick='window.print()'>{T('🖨 Štampaj / Sačuvaj kao PDF', '🖨 Print / Save as PDF')}</button>"
             f"<div class='list'><div class='zag'><img src='data:image/png;base64,{logo}' alt=''>"
             f"<div><h1>{_html_esc(naslov)}</h1><div class='pod'>{_html_esc(podnaslov)}</div></div>"
-            f"<div class='desno'>Farmer {VERZIJA}<br>{fmt_datum(date.today())}</div></div>{telo}"
-            f"<div class='dno'><span>{T('Napravljeno u programu Farmer', 'Made with Farmer')}</span>"
+            f"<div class='desno'>HerdDoc {VERZIJA}<br>{fmt_datum(date.today())}</div></div>{telo}"
+            f"<div class='dno'><span>{T('Napravljeno u programu HerdDoc', 'Made with HerdDoc')}</span>"
             f"<span>{_html_esc(os.path.basename(getattr(_html_esc, 'tablica', '') or ''))}</span></div></div></body></html>")
-    folder = os.path.join(tempfile.gettempdir(), "Farmer-stampa")
+    folder = os.path.join(tempfile.gettempdir(), "HerdDoc-stampa")
     os.makedirs(folder, exist_ok=True)
     put = os.path.join(folder, naziv + ".html")
     with open(put, "w", encoding="utf-8") as f:
@@ -67,7 +67,7 @@ def _otvori_html(naziv, naslov, podnaslov, telo):
             import webbrowser
             webbrowser.open("file://" + put)
     except Exception:
-        messagebox.showinfo("Farmer", T("Dokument je sačuvan ovde:\n", "The document was saved here:\n") + put)
+        messagebox.showinfo("HerdDoc", T("Dokument je sačuvan ovde:\n", "The document was saved here:\n") + put)
     return put
 
 
@@ -348,7 +348,7 @@ def _app_s_stampa(self):
     def rodoslov():
         x = self.model.nadji(izbor.get()) if izbor.get() else None
         if not x:
-            messagebox.showwarning("Farmer", T("Izaberi ili upiši oznaku grla.", "Choose or type an animal ID."))
+            messagebox.showwarning("HerdDoc", T("Izaberi ili upiši oznaku grla.", "Choose or type an animal ID."))
             return
         self.stampaj_rodoslov(x)
     stavka(T("Rodoslovni list grla", "Pedigree certificate"),

@@ -239,7 +239,7 @@ def izvezi_u_fajl(putanja, listovi, format_):
     return fajlovi
 
 
-# =============================================================== uvoz Farmerovog Excel izvoza (drugi listovi)
+# =============================================================== uvoz HerdDoc Excel izvoza (drugi listovi)
 
 def _ozn_markica(t):
     """'K12 (RS 1234)' -> ('K12', 'RS 1234')."""
@@ -256,7 +256,7 @@ def _datum_txt(v):
 
 
 def dopuni_iz_excela(listovi, redovi_tablice, istorija, podsetnici, ime_fajla=""):
-    """Posle uvoza grla iz Farmerovog Excel fajla: preci iz lista Rodovnik, istorija i podsetnici.
+    """Posle uvoza grla iz HerdDoc Excel fajla: preci iz lista Rodovnik, istorija i podsetnici.
     Postojeći podaci se ne menjaju (samo se popunjava ono što nedostaje), a isti zapis se ne dodaje dvaput.
     Vraća (novih predaka, novih zapisa istorije, novih podsetnika)."""
     po_id = {r["id"]: r for r in redovi_tablice}
@@ -338,7 +338,7 @@ class IzvozDeo:
             except tk.TclError:
                 oznacena = []
         if not self.tab.redovi:
-            messagebox.showinfo("Farmer", T("U evidenciji još nema grla za izvoz.", "There are no animals to export yet."))
+            messagebox.showinfo("HerdDoc", T("U evidenciji još nema grla za izvoz.", "There are no animals to export yet."))
             return
         win = tk.Toplevel(parent or self.root, bg=SURF)
         win.title(T("Izvoz podataka", "Export data"))
@@ -385,7 +385,7 @@ class IzvozDeo:
 
         def izvezi_sad(ev=None):
             fmt = fv.get()
-            ime = T("farmer_izvoz", "farmer_export") + "_" + date.today().strftime("%Y-%m-%d") + "." + fmt
+            ime = T("herddoc_izvoz", "herddoc_export") + "_" + date.today().strftime("%Y-%m-%d") + "." + fmt
             put = filedialog.asksaveasfilename(
                 parent=win, title=T("Sačuvaj izvoz", "Save export"), initialfile=ime, defaultextension="." + fmt,
                 filetypes=[(T("Excel tabela", "Excel workbook"), "*.xlsx")] if fmt == "xlsx"
@@ -409,7 +409,7 @@ class IzvozDeo:
             n = len(listovi[0][1]) - 1
             self.toast(T(f"Izvezeno {n} grla u {os.path.basename(fajlovi[0])}", f"Exported {n} animals to {os.path.basename(fajlovi[0])}")
                        + (T(f" (+{len(fajlovi) - 1} fajla)", f" (+{len(fajlovi) - 1} files)") if len(fajlovi) > 1 else ""))
-            if messagebox.askyesno("Farmer", T("Izvoz je gotov. Da otvorim folder sa fajlom?",
+            if messagebox.askyesno("HerdDoc", T("Izvoz je gotov. Da otvorim folder sa fajlom?",
                                                "Export finished. Open the folder with the file?")):
                 folder = os.path.dirname(fajlovi[0])
                 try:

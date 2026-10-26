@@ -11,7 +11,7 @@ _IMENA_PODATAKA = ("stado.csv", "herd.csv", "rodoslov_podesavanja.json", "herd_p
 
 
 def _engleski_exe():
-    """Instalacija 'Farmer English' (FarmerEnglish.exe) podrazumevano radi na engleskom."""
+    """Instalacija 'HerdDoc English' (HerdDocEnglish.exe; ranije FarmerEnglish.exe) podrazumevano radi na engleskom."""
     return getattr(sys, "frozen", False) and "english" in os.path.basename(sys.executable).lower()
 
 
@@ -19,7 +19,8 @@ def _folder_za_podatke():
     """Gde program čuva stado, podešavanja i rezervne kopije.
     - pokrenut kao .py: pored samog fajla;
     - prenosni .exe koji pored sebe već ima podatke: tu;
-    - instaliran program: Dokumenti\\Farmer (engleska instalacija: Dokumenti\\Farmer English)."""
+    - instaliran program: Dokumenti\\HerdDoc (engleska instalacija: Dokumenti\\HerdDoc English).
+      Ko je koristio program dok se zvao Farmer, nastavlja sa svojim folderom Dokumenti\\Farmer."""
     if not getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(__file__))
     exe_dir = os.path.dirname(os.path.abspath(sys.executable))
@@ -36,7 +37,10 @@ def _folder_za_podatke():
         pass
     if not dok:
         dok = os.path.join(os.path.expanduser("~"), "Documents")
-    folder = os.path.join(dok, "Farmer English" if _engleski_exe() else "Farmer")
+    imena = ("HerdDoc English", "Farmer English") if _engleski_exe() else ("HerdDoc", "Farmer")
+    kandidati = [os.path.join(dok, i) for i in imena]
+    folder = (next((f for f in kandidati if any(os.path.exists(os.path.join(f, x)) for x in _IMENA_PODATAKA)), None)
+              or next((f for f in kandidati if os.path.isdir(f)), None) or kandidati[0])
     try:
         os.makedirs(folder, exist_ok=True)
         return folder
@@ -81,7 +85,7 @@ def _izaberi_jezik():
         return "sr"
     if os.path.exists(os.path.join(APP_DIR, "herd.csv")) or os.path.exists(os.path.join(APP_DIR, "herd_pedigree_settings.json")):
         return "en"
-    if getattr(sys, "frozen", False):      # instalacija: Farmer = srpski, Farmer English = engleski
+    if getattr(sys, "frozen", False):      # instalacija: HerdDoc = srpski, HerdDoc English = engleski
         return "en" if _engleski_exe() else "sr"
     return _jezik_sistema()
 

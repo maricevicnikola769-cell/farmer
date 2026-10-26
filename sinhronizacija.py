@@ -96,7 +96,7 @@ class SinhronizacijaDeo:
     def usaglasi(self, rucno=False):
         if not self.sinh_podeseno() or not self.sinh_upareno():
             if rucno:
-                messagebox.showinfo("Farmer", T("Prvo upari telefon (strana Telefon → Upari telefon).", "Pair a phone first (Phone page → Pair phone)."))
+                messagebox.showinfo("HerdDoc", T("Prvo upari telefon (strana Telefon → Upari telefon).", "Pair a phone first (Phone page → Pair phone)."))
             return
         if rucno:
             self._sinh_mirno = 0
@@ -224,7 +224,7 @@ class SinhronizacijaDeo:
         self.toast(T(f"Telefon „{ime}“ je isključen. Ostali telefoni sami prelaze na novi ključ.",
                      f"Phone „{ime}“ disconnected. Other phones switch to the new key by themselves."))
         if bez_kljuca:
-            messagebox.showinfo("Farmer", T("Ovi telefoni imaju stariju aplikaciju i moraju ponovo da se upare: ",
+            messagebox.showinfo("HerdDoc", T("Ovi telefoni imaju stariju aplikaciju i moraju ponovo da se upare: ",
                                             "These phones have an older app and must be paired again: ") + ", ".join(bez_kljuca))
         if self.strana == "telefon":
             self.prikazi("telefon")
@@ -239,7 +239,7 @@ class SinhronizacijaDeo:
                                      "Other listed phones switch to the new key by themselves.\n\n(A phone not on the list must be paired again.)")):
             return
         if self._sinh_radi:
-            messagebox.showinfo("Farmer", T("Usklađivanje je u toku – pokušaj ponovo za par sekundi.", "Sync in progress – try again in a few seconds."))
+            messagebox.showinfo("HerdDoc", T("Usklađivanje je u toku – pokušaj ponovo za par sekundi.", "Sync in progress – try again in a few seconds."))
             return
         self._sinh_iskljuci = tid
         self.usaglasi()
@@ -265,7 +265,7 @@ class SinhronizacijaDeo:
     # ---------------------------------------------------------- uparivanje
     def upari_telefon(self):
         if not self.sinh_podeseno():
-            messagebox.showinfo("Farmer", T("Usklađivanje preko interneta još nije podešeno u ovoj verziji programa.",
+            messagebox.showinfo("HerdDoc", T("Usklađivanje preko interneta još nije podešeno u ovoj verziji programa.",
                                             "Internet sync is not configured in this version of the program."))
             return
         sinh = self.pod.setdefault("sinh", {})
@@ -283,10 +283,10 @@ class SinhronizacijaDeo:
         b = tk.Frame(win, bg=SURF)
         b.pack(fill="both", expand=True, padx=26, pady=22)
         self.lbl(b, T("Upari telefon", "Pair phone"), 16, "bold").pack(anchor="w")
-        self.lbl(b, T("Na telefonu otvori Farmer → Više → Upari sa računarom i skeniraj ovaj kod.\n"
-                      "(Može i običnom kamerom telefona – otvoriće se Farmer.) Uparuje se samo jednom.",
-                      "On the phone open Farmer → More → Pair with computer and scan this code.\n"
-                      "(The normal phone camera works too – Farmer opens.) You pair only once."),
+        self.lbl(b, T("Na telefonu otvori HerdDoc → Više → Upari sa računarom i skeniraj ovaj kod.\n"
+                      "(Može i običnom kamerom telefona – otvoriće se HerdDoc.) Uparuje se samo jednom.",
+                      "On the phone open HerdDoc → More → Pair with computer and scan this code.\n"
+                      "(The normal phone camera works too – HerdDoc opens.) You pair only once."),
                  9, fg=INK2, justify="left", wraplength=440).pack(anchor="w", pady=(4, 10))
         red = tk.Frame(b, bg=SURF)
         red.pack(fill="x", pady=(0, 8))

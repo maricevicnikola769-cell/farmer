@@ -31,7 +31,7 @@ class App(OsnovaProzora, GrlaEkran, ParenjeEkran, KartonEkran, GravidnostDeo, Is
 
 
 def prvo_pokretanje():
-    """Prvi put: nema podešavanja ni tablice sa grlima (instalacija 'Farmer English' odmah radi na engleskom)."""
+    """Prvi put: nema podešavanja ni tablice sa grlima (instalacija 'HerdDoc English' odmah radi na engleskom)."""
     return not (os.path.exists(PODESAVANJA) or _prvi_postojeci("stado.csv", "herd.csv") or _engleski_exe())
 
 
@@ -39,7 +39,7 @@ def izbor_jezika_na_startu(root):
     """Mali prozor pri prvom pokretanju: Srpski / English. Izbor se pamti; kasnije se menja dole levo (🌐)."""
     predlog = _jezik_sistema()
     izbor = tk.StringVar(value="")
-    root.title("Farmer")
+    root.title("HerdDoc")
     root.configure(bg="#FFFFFF")
     root.geometry("460x300")
     okvir = tk.Frame(root, bg="#FFFFFF")
@@ -51,7 +51,7 @@ def izbor_jezika_na_startu(root):
     if slika:
         root._logo_izbor = slika
         tk.Label(okvir, image=slika, bg="#FFFFFF").pack(pady=(0, 10))
-    tk.Label(okvir, text="Farmer", font=("Segoe UI", 20, "bold"), bg="#FFFFFF", fg=INK).pack()
+    tk.Label(okvir, text="HerdDoc", font=("Segoe UI", 20, "bold"), bg="#FFFFFF", fg=INK).pack()
     tk.Label(okvir, text="Izaberi jezik  ·  Choose language", font=("Segoe UI", 11), bg="#FFFFFF", fg=INK2).pack(pady=(4, 18))
     dugmad = tk.Frame(okvir, bg="#FFFFFF")
     dugmad.pack()
@@ -88,7 +88,7 @@ def main():
             pass
         try:   # da Windows na traci zadataka prikaže logo programa, a ne Python
             import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(("Farmer.English" if EN else "Farmer.Program"))
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(("HerdDoc.English" if EN else "HerdDoc.Program"))
         except Exception:
             pass
     sys.setrecursionlimit(20000)

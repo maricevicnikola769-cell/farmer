@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logo/farmer-znak.png" alt="Farmer" width="120">
+  <img src="assets/logo/herddoc-znak.png" alt="HerdDoc" width="120">
 </p>
 
-<h1 align="center">Farmer</h1>
+<h1 align="center">HerdDoc</h1>
 
 <p align="center">
   <b>Rodoslov stada · srodstvo · inbriding · plan parenja</b><br>
@@ -11,7 +11,7 @@
 
 ---
 
-![Farmer – spisak grla](docs/slike/sr-1-grla.png)
+![HerdDoc – spisak grla](docs/slike/sr-1-grla.png)
 
 ## Šta program radi
 

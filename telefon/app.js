@@ -1,6 +1,7 @@
-// Farmer za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
+// HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "2.4";
+const VERZIJA_TEL = "2.5";
+const PODRSKA = "herddoc1@gmail.com";   // e-pošta za prijavu problema
 const t = (sr, en) => (EN() ? en : sr);
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -89,7 +90,7 @@ function postaviVrh(naslov, nazad) {
   $("#naslov").textContent = naslov;
   $("#nazad").classList.toggle("skriveno", !nazad);
   $("#logo").classList.toggle("skriveno", !!nazad);
-  document.title = naslov === "Farmer" ? "Farmer" : `${naslov} – Farmer`;
+  document.title = naslov === "HerdDoc" ? "HerdDoc" : `${naslov} – HerdDoc`;
 }
 function meni(akt) {
   const n = imaPodatke() ? obavestenja().filter(o => o.nivo <= 1).length : 0;
@@ -166,21 +167,55 @@ function izvrsi([vrsta, x, y]) {
   prikazi();
 }
 
+// ---------------------------------------------------------------- instalacija na telefon
+let ponudaInstalacije = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); ponudaInstalacije = e; osveziInstalaciju(); });
+window.addEventListener("appinstalled", () => { ponudaInstalacije = null; osveziInstalaciju(); poruka(t("HerdDoc je instaliran – ikonica je na početnom ekranu.", "HerdDoc is installed – the icon is on your home screen.")); });
+function instalirana() {
+  return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+}
+function dugmeInstalacije() {
+  if (instalirana()) return "";
+  return `<button class="dug glavno puno" id="instaliraj">📲 ${t("Instaliraj HerdDoc na telefon", "Install HerdDoc on this phone")}</button><div style="height:10px"></div>`;
+}
+function osveziInstalaciju() {
+  const d = $("#instaliraj");
+  if (!d) return;
+  if (instalirana()) { d.nextElementSibling && d.nextElementSibling.remove(); d.remove(); return; }
+  d.onclick = instaliraj;
+}
+async function instaliraj() {
+  if (ponudaInstalacije) {
+    ponudaInstalacije.prompt();
+    try { await ponudaInstalacije.userChoice; } catch (e) { /* */ }
+    ponudaInstalacije = null;
+    return;
+  }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  alert(ios
+    ? t("Na iPhone-u: u Safariju dodirni dugme Deli (kvadrat sa strelicom) → „Dodaj na početni ekran“ → Dodaj.",
+        "On iPhone: in Safari tap Share (square with arrow) → “Add to Home Screen” → Add.")
+    : t("U Chrome-u dodirni ⋮ (gore desno) → „Instaliraj aplikaciju“ ili „Dodaj na početni ekran“ → Instaliraj.\n\nAko te opcije nema, aplikacija je možda već instalirana – potraži ikonicu HerdDoc.",
+        "In Chrome tap ⋮ (top right) → “Install app” or “Add to Home screen” → Install.\n\nIf the option is missing, the app may already be installed – look for the HerdDoc icon."));
+}
+
 // ---------------------------------------------------------------- dobrodošlica
 function dobrodoslica() {
-  postaviVrh("Farmer", false); meni("");
-  ekran.innerHTML = `<div class="dobrodoslica"><img src="ikone/ikona-192.png" alt=""><h2>Farmer</h2>
+  postaviVrh("HerdDoc", false); meni("");
+  ekran.innerHTML = `<div class="dobrodoslica"><img src="ikone/ikona-192.png" alt=""><h2>HerdDoc</h2>
     <p class="mali">${t("Rodoslov stada, srodstvo i parenje – u štali, i bez interneta.", "Herd pedigree, relationship and mating – in the barn, even offline.")}</p></div>
     <div class="kart"><h2>${t("Kako počinješ", "How to start")}</h2><ol class="koraci">
-      <li>${t("U programu Farmer na računaru otvori <b>Telefon</b> i klikni <b>Pošalji na telefon</b>.", "In Farmer on the computer open <b>Phone</b> and click <b>Send to phone</b>.")}</li>
+      <li>${t("U programu HerdDoc na računaru otvori <b>Telefon</b> i klikni <b>Pošalji na telefon</b>.", "In HerdDoc on the computer open <b>Phone</b> and click <b>Send to phone</b>.")}</li>
       <li>${t("Fajl prebaci na telefon (Google Drive, Viber, kabl…).", "Move the file to the phone (Google Drive, Viber, cable…).")}</li>
       <li>${t("Ovde klikni <b>Učitaj sa računara</b> i izaberi taj fajl.", "Here, tap <b>Load from computer</b> and choose that file.")}</li></ol></div>
+    ${dugmeInstalacije()}
     ${oblakPodesen() ? `<a class="dug glavno puno" href="#sinh">📱 ${t("Upari sa računarom (QR kod)", "Pair with computer (QR code)")}</a><div style="height:10px"></div>` : ""}
     <button class="dug ${oblakPodesen() ? "" : "glavno"} puno" id="ucitaj">📂 ${t("Učitaj sa računara (fajl)", "Load from computer (file)")}</button>
     <div style="height:10px"></div>
     <div class="dugmad"><button class="dug" id="pocni">${t("Počni bez računara", "Start without computer")}</button>
       <button class="dug" id="jezik">🌐 ${S.jezik === "en" ? "Srpski" : "English"}</button></div>`;
   $("#ucitaj").onclick = izaberiFajl;
+  osveziInstalaciju();
   $("#pocni").onclick = () => { S.pocetak = true; sacuvaj(); idi("grla"); prikazi(); };
   $("#jezik").onclick = () => { S.jezik = S.jezik === "en" ? "sr" : "en"; sacuvaj(); dobrodoslica(); };
 }
@@ -188,7 +223,7 @@ function dobrodoslica() {
 // ---------------------------------------------------------------- Grla
 const filt = { q: "", pol: "", van: false };
 function ekranGrla() {
-  postaviVrh("Farmer", false); meni("grla");
+  postaviVrh("HerdDoc", false); meni("grla");
   const sva = M.grla(false);
   ekran.innerHTML = `<div class="sakam"><input class="pretraga" id="q" type="search" placeholder="🔍 ${t("Traži oznaku, markicu, rasu…", "Search tag, ear tag, breed…")}" value="${h(filt.q)}"><button type="button" class="kam" id="skenGrla" aria-label="${t("Skeniraj minđušu", "Scan ear tag")}">📷</button></div>
     <div class="filteri">${[["", t("Sva", "All")], ["z", t("Ženska", "Females")], ["m", t("Muška", "Males")]].map(([k, n]) =>
@@ -505,7 +540,7 @@ function ekranPodsetnik() {
 function ekranVise() {
   postaviVrh(t("Više", "More"), false); meni("vise");
   const n = S.promene.length;
-  ekran.innerHTML = `<div class="lista">
+  ekran.innerHTML = `${dugmeInstalacije()}<div class="lista">
     ${oblakPodesen() ? `<a class="red" href="#sinh"><span style="font-size:24px">☁</span><div class="sred"><b>${S.sinh ? t("Povezano sa računarom", "Connected to computer") : t("Upari sa računarom (QR kod)", "Pair with computer (QR code)")}</b><span>${h(S.sinh ? (sinhStanje.tekst || S.sinh.naziv || "") : t("jednom skeniraš i sve se samo usklađuje", "scan once and everything syncs"))}</span></div></a>` : ""}
     <a class="red" href="#prenos"><span style="font-size:24px">⇅</span><div class="sred"><b>${t("Prenos sa računarom", "Transfer with computer")}</b><span>${n ? t(`${n} promena čeka slanje računaru`, `${n} changes waiting to be sent`) : t("sve je poslato", "everything sent")}</span></div>${n ? `<span class="znak warn">${n}</span>` : ""}</a>
     <a class="red" href="#srodstvo"><span style="font-size:24px">⚯</span><div class="sred"><b>${t("Srodstvo dva grla", "Relationship of two animals")}</b><span>${t("koliko su srodni, zajednički preci", "how related they are, common ancestors")}</span></div></a>
@@ -513,21 +548,29 @@ function ekranVise() {
     <a class="red" href="#podsetnik"><span style="font-size:24px">⏰</span><div class="sred"><b>${t("Novi podsetnik", "New reminder")}</b><span>${t("vakcinacija, lečenje…", "vaccination, treatment…")}</span></div></a>
     <a class="red" href="#" id="problem"><span style="font-size:24px">⚠</span><div class="sred"><b>${t("Prijavi problem", "Report a problem")}</b><span>${t("pošalji izveštaj o greškama (bez podataka o grlima)", "send an error report (no animal data)")}</span></div></a>
     </div>
-    <div class="kart mali">Farmer ${t("za telefon", "for phone")} ${VERZIJA_TEL} · ${t("jezik podataka", "data language")}: ${S.jezik === "en" ? "English" : "srpski"}<br>
+    <div class="kart mali">HerdDoc ${t("za telefon", "for phone")} ${VERZIJA_TEL} · ${t("jezik podataka", "data language")}: ${S.jezik === "en" ? "English" : "srpski"}<br>
     ${S.izvoz ? t(`Podaci sa računara od ${h(S.izvoz.datum || "")}`, `Data from computer of ${h(S.izvoz.datum || "")}`) : t("Podaci su upisani samo na telefonu.", "Data entered on the phone only.")}<br>
-    ${t("Jezik se menja na računaru – telefon preuzima jezik iz fajla.", "Language is changed on the computer – the phone uses the file's language.")}</div>`;
+    ${t("Jezik se menja na računaru – telefon preuzima jezik iz fajla.", "Language is changed on the computer – the phone uses the file's language.")}<br>
+    ${t("Podrška", "Support")}: <a href="mailto:${PODRSKA}">${PODRSKA}</a></div>`;
   $("#problem").onclick = ev => { ev.preventDefault(); prijaviProblem(); };
+  osveziInstalaciju();
 }
 
 async function prijaviProblem() {
   let greske = [];
   try { greske = JSON.parse(localStorage.getItem("farmer-greske") || "[]"); } catch (e) { /* */ }
-  const tekst = [`Farmer ${t("za telefon", "for phone")} ${VERZIJA_TEL} – ${t("izveštaj o problemu", "problem report")}`, navigator.userAgent,
+  const tekst = [`HerdDoc ${t("za telefon", "for phone")} ${VERZIJA_TEL} – ${t("izveštaj o problemu", "problem report")}`, navigator.userAgent,
     `${t("Grla", "Animals")}: ${S.grla.length} · ${t("istorija", "history")}: ${S.istorija.length} · ${t("čeka slanje", "waiting")}: ${S.promene.length}`,
     `${t("Upareno", "Paired")}: ${!!S.sinh}${S.sinh ? " · " + (S.sinh.iskljucen ? t("isključen", "disconnected") : sinhStanje.tekst) : ""}`, "",
     t("--- poslednje greške ---", "--- last errors ---")].concat(greske.length ? greske.map(g => `${g.v} [${g.g}] ${g.p}`) : [t("(nema zapisanih grešaka)", "(no recorded errors)")]).join("\n");
+  if (confirm(t(`Poslati izveštaj mejlom na ${PODRSKA}?\n\nOK = mejl · Otkaži = Viber / druga aplikacija`,
+                `Send the report by e-mail to ${PODRSKA}?\n\nOK = e-mail · Cancel = Viber / other app`))) {
+    const telo = t("Opis problema (šta si radio kad se pojavio):\n\n\n", "Problem description (what you were doing):\n\n\n") + tekst.slice(0, 1500);
+    location.href = `mailto:${PODRSKA}?subject=${encodeURIComponent("HerdDoc – " + t("prijava problema", "problem report") + " " + VERZIJA_TEL)}&body=${encodeURIComponent(telo)}`;
+    return;
+  }
   try {
-    if (navigator.share) { await navigator.share({ title: "Farmer – " + t("izveštaj o problemu", "problem report"), text: tekst }); return; }
+    if (navigator.share) { await navigator.share({ title: "HerdDoc – " + t("izveštaj o problemu", "problem report"), text: tekst + "\n\n" + t("Za", "To") + ": " + PODRSKA }); return; }
   } catch (e) { if (e && e.name === "AbortError") return; }
   try { await navigator.clipboard.writeText(tekst); poruka(t("Izveštaj je kopiran – nalepi ga u poruku (Viber, mejl).", "Report copied – paste it into a message.")); }
   catch (e) { prompt(t("Kopiraj izveštaj:", "Copy the report:"), tekst); }
@@ -559,7 +602,7 @@ async function posaljiRacunaru() {
   const fajl = new File([tekst], ime, { type: "text/plain" });
   try {
     if (navigator.canShare && navigator.canShare({ files: [fajl] })) {
-      await navigator.share({ files: [fajl], title: "Farmer", text: t("Podaci sa telefona za Farmer na računaru", "Phone data for Farmer on the computer") });
+      await navigator.share({ files: [fajl], title: "HerdDoc", text: t("Podaci sa telefona za HerdDoc na računaru", "Phone data for HerdDoc on the computer") });
       return poruka(t("Poslato. Na računaru: Telefon → Učitaj sa telefona.", "Sent. On the computer: Phone → Load from phone."));
     }
   } catch (e) { if (e.name === "AbortError") return; }
@@ -571,14 +614,14 @@ function ekranPrenos() {
   postaviVrh(t("Prenos sa računarom", "Transfer with computer"), true); meni("vise");
   const n = S.promene.length;
   ekran.innerHTML = `<div class="kart"><h2>📲 ${t("Sa računara na telefon", "From computer to phone")}</h2>
-    <p class="mali">${t("Na računaru: Farmer → Telefon → <b>Pošalji na telefon</b>. Zatim ga otvori ovde.", "On the computer: Farmer → Phone → <b>Send to phone</b>. Then open it here.")}</p>
+    <p class="mali">${t("Na računaru: HerdDoc → Telefon → <b>Pošalji na telefon</b>. Zatim ga otvori ovde.", "On the computer: HerdDoc → Phone → <b>Send to phone</b>. Then open it here.")}</p>
     <button class="dug glavno puno" id="uc">📂 ${t("Učitaj sa računara", "Load from computer")}</button></div>
     <div class="kart"><h2>💻 ${t("Sa telefona na računar", "From phone to computer")} ${n ? `<span class="znak warn">${n}</span>` : ""}</h2>
     ${n ? `<p class="mali">${t("Šta je urađeno na telefonu:", "Done on the phone:")}</p><div style="max-height:220px;overflow:auto;margin-bottom:12px">${S.promene.slice().reverse().map(p =>
       `<div class="ist"><div class="d">${h(p.vreme)}</div>${h(p.tekst)}</div>`).join("")}</div>` : `<p class="mali">${t("Nema novih promena na telefonu.", "No new changes on the phone.")}</p>`}
     <button class="dug ${n ? "glavno" : ""} puno" id="sl">📤 ${t("Pošalji računaru", "Send to computer")}</button>
-    <p class="mali">${t("Pošalji fajl sebi (Google Drive, Viber, Gmail…). Na računaru: Farmer → Telefon → <b>Učitaj sa telefona</b>. Posle toga pošalji telefonu novi fajl sa računara.",
-      "Send the file to yourself (Google Drive, Viber, Gmail…). On the computer: Farmer → Phone → <b>Load from phone</b>. Then send a fresh file from the computer to the phone.")}</p></div>
+    <p class="mali">${t("Pošalji fajl sebi (Google Drive, Viber, Gmail…). Na računaru: HerdDoc → Telefon → <b>Učitaj sa telefona</b>. Posle toga pošalji telefonu novi fajl sa računara.",
+      "Send the file to yourself (Google Drive, Viber, Gmail…). On the computer: HerdDoc → Phone → <b>Load from phone</b>. Then send a fresh file from the computer to the phone.")}</p></div>
     <div class="kart"><button class="dug opasno puno" id="br">${t("Obriši sve podatke sa telefona", "Delete all data from the phone")}</button></div>`;
   $("#uc").onclick = izaberiFajl;
   $("#sl").onclick = posaljiRacunaru;

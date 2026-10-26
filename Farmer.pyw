@@ -1,5 +1,5 @@
-"""Farmer – rodoslov stada, srodstvo, inbriding i plan parenja.
-Farmer – herd pedigree, relationship, inbreeding and mating plan.
+"""HerdDoc – rodoslov stada, srodstvo, inbriding i plan parenja.
+HerdDoc – herd pedigree, relationship, inbreeding and mating plan.
 
 Jedan program na dva jezika (srpski / English). Jezik se bira u programu (dole levo).
 Pokretanje: dupli klik na ovaj fajl (potreban je Python 3.8+ sa python.org).
@@ -24,6 +24,6 @@ if __name__ == "__main__":
             from tkinter import messagebox
             r = tk.Tk()
             r.withdraw()
-            messagebox.showerror("Farmer", traceback.format_exc())
+            messagebox.showerror("HerdDoc", traceback.format_exc())
         except Exception:
             print(traceback.format_exc())

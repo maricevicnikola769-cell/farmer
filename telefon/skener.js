@@ -1,4 +1,4 @@
-// Farmer za telefon – skeniranje minđuše (bar kod / QR kod) kamerom telefona.
+// HerdDoc za telefon – skeniranje minđuše (bar kod / QR kod) kamerom telefona.
 // Kamera se uključuje samo dok je skener otvoren. Čitač: ugrađeni u Chrome ili sopstveni (ZXing) – radi na svakom telefonu.
 "use strict";
 const SKENER_FORMATI = ["qr_code", "code_128", "code_39", "code_93", "ean_13", "ean_8", "upc_a", "upc_e", "itf", "codabar", "data_matrix", "pdf417", "aztec"];
@@ -35,8 +35,8 @@ function skeniraj(naslov) {
     };
     const greska = tekst => { natpis.textContent = tekst; ov.querySelector(".okvir").classList.add("skriveno"); };
     if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      greska(t("Ovaj pregledač ne dozvoljava kameru. Otvori Farmer u Chrome-u (adresa mora počinjati sa https://), ili upiši broj ručno.",
-        "This browser does not allow the camera. Open Farmer in Chrome (the address must start with https://), or type the number."));
+      greska(t("Ovaj pregledač ne dozvoljava kameru. Otvori HerdDoc u Chrome-u (adresa mora počinjati sa https://), ili upiši broj ručno.",
+        "This browser does not allow the camera. Open HerdDoc in Chrome (the address must start with https://), or type the number."));
       return;
     }
     // čeka da kamera stvarno da sliku (širina > 0 i vreme videa ide napred)
@@ -112,8 +112,8 @@ function skeniraj(naslov) {
         ok = await pokreni(zap ? { deviceId: { ideal: zap }, facingMode: { ideal: "environment" } } : { facingMode: { ideal: "environment" } });
       } catch (e) {
         if (e.name === "NotAllowedError" || e.name === "SecurityError")
-          return greska(t("Kamera nije dozvoljena. U Chrome-u klikni ikonicu levo od adrese (ili ⋮ → Podešavanja → Podešavanja sajta → Kamera) i dozvoli kameru za Farmer.",
-            "Camera is not allowed. In Chrome tap the icon left of the address (or ⋮ → Settings → Site settings → Camera) and allow the camera for Farmer."));
+          return greska(t("Kamera nije dozvoljena. U Chrome-u klikni ikonicu levo od adrese (ili ⋮ → Podešavanja → Podešavanja sajta → Kamera) i dozvoli kameru za HerdDoc.",
+            "Camera is not allowed. In Chrome tap the icon left of the address (or ⋮ → Settings → Site settings → Camera) and allow the camera for HerdDoc."));
         if (e.name === "NotReadableError" || e.name === "AbortError")
           return greska(t("Kameru trenutno koristi druga aplikacija (Viber, kamera…). Zatvori je pa probaj ponovo.", "Another app is using the camera (Viber, camera…). Close it and try again."));
         if (e.name === "NotFoundError" || e.name === "OverconstrainedError") ok = false;

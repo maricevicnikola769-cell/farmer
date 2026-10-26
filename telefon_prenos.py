@@ -1,4 +1,4 @@
-"""Telefon: slanje podataka na telefon (Farmer za Android) i vraćanje onoga što je upisano u štali.
+"""Telefon: slanje podataka na telefon (HerdDoc za Android) i vraćanje onoga što je upisano u štali.
 Spajanje radi zapis po zapis: šta je menjao samo telefon – uzima se sa telefona; šta je menjao samo računar – ostaje
 sa računara; ako su oba menjala isti zapis – uzima se verzija sa telefona i to se prijavi."""
 import json
@@ -147,21 +147,21 @@ class TelefonDeo:
         put = filedialog.asksaveasfilename(
             title=T("Sačuvaj fajl za telefon (npr. u Google Drive ili OneDrive)", "Save the file for the phone (e.g. in Google Drive or OneDrive)"),
             initialdir=pocetni, initialfile="farmer-za-telefon.json", defaultextension=".json",
-            filetypes=[(T("Farmer za telefon", "Farmer for phone"), "*.json")])
+            filetypes=[(T("HerdDoc za telefon", "HerdDoc for phone"), "*.json")])
         if not put:
             return
         try:
             with open(put, "w", encoding="utf-8") as f:
                 json.dump(self.paket_za_telefon(), f, ensure_ascii=False)
         except OSError as e:
-            messagebox.showerror("Farmer", str(e))
+            messagebox.showerror("HerdDoc", str(e))
             return
         self.pod["telefon_poslato"] = sada()
         self.sacuvaj_podesavanja()
         messagebox.showinfo(T("Fajl za telefon je napravljen", "File for the phone is ready"),
-                            T(f"Sačuvano:\n{put}\n\nPrebaci ga na telefon (Google Drive, Viber, kabl…), pa u aplikaciji Farmer "
+                            T(f"Sačuvano:\n{put}\n\nPrebaci ga na telefon (Google Drive, Viber, kabl…), pa u aplikaciji HerdDoc "
                               "na telefonu klikni „Učitaj sa računara“.",
-                              f"Saved:\n{put}\n\nMove it to the phone (Google Drive, Viber, cable…), then in the Farmer app "
+                              f"Saved:\n{put}\n\nMove it to the phone (Google Drive, Viber, cable…), then in the HerdDoc app "
                               "on the phone tap \"Load from computer\"."))
         if self.strana == "telefon":
             self.prikazi("telefon")
@@ -175,18 +175,18 @@ class TelefonDeo:
             with open(put, encoding="utf-8-sig") as f:
                 obj = json.load(f)
         except (OSError, ValueError) as e:
-            messagebox.showerror("Farmer", T("Fajl ne može da se pročita:\n", "The file cannot be read:\n") + str(e))
+            messagebox.showerror("HerdDoc", T("Fajl ne može da se pročita:\n", "The file cannot be read:\n") + str(e))
             return
         if obj.get("format") == "farmer-telefon":
-            messagebox.showwarning("Farmer", T("Ovo je fajl koji je računar napravio za telefon. Učitaj ga na telefonu.",
+            messagebox.showwarning("HerdDoc", T("Ovo je fajl koji je računar napravio za telefon. Učitaj ga na telefonu.",
                                                "This is the file the computer made for the phone. Load it on the phone."))
             return
         if obj.get("format") != "farmer-telefon-povratak":
-            messagebox.showerror("Farmer", T("Ovo nije fajl sa Farmer telefona.", "This is not a file from the Farmer phone app."))
+            messagebox.showerror("HerdDoc", T("Ovo nije fajl sa HerdDoc telefona.", "This is not a file from the HerdDoc phone app."))
             return
         promene = obj.get("promene", [])
         if not promene:
-            messagebox.showinfo("Farmer", T("Na telefonu nije bilo novih promena.", "There were no new changes on the phone."))
+            messagebox.showinfo("HerdDoc", T("Na telefonu nije bilo novih promena.", "There were no new changes on the phone."))
             return
         spisak = "\n".join("• " + p.get("tekst", "") for p in promene[:15]) + (T(f"\n… i još {len(promene) - 15}", f"\n… and {len(promene) - 15} more") if len(promene) > 15 else "")
         if not messagebox.askyesno(T("Učitaj sa telefona", "Load from phone"),
@@ -200,7 +200,7 @@ class TelefonDeo:
             g, i, p, izv = spoji_sve(obj, self.tab.redovi, self.ist.zapisi, self.pods.zapisi)
             Model(g)   # provera da se rodoslov može izračunati
         except Exception as e:
-            messagebox.showerror("Farmer", T("Spajanje nije uspelo – ništa nije promenjeno.\n\n", "Merging failed – nothing was changed.\n\n") + str(e))
+            messagebox.showerror("HerdDoc", T("Spajanje nije uspelo – ništa nije promenjeno.\n\n", "Merging failed – nothing was changed.\n\n") + str(e))
             return
         self.tab.dodatne = list(dict.fromkeys(self.tab.dodatne + [k for r in g for k in r if k not in KOLONE]))
         self.tab.redovi, self.ist.zapisi, self.pods.zapisi = g, i, p
@@ -223,8 +223,8 @@ class TelefonDeo:
         sf.pack(fill="both", expand=True)
         body = tk.Frame(sf.inner, bg=BG)
         body.pack(fill="both", expand=True, padx=32, pady=28)
-        self.zaglavlje(body, T("Telefon", "Phone"), T("Farmer na Android telefonu – gledanje i upis u štali, radi i bez interneta.",
-                                                     "Farmer on an Android phone – view and record in the barn, works offline."))
+        self.zaglavlje(body, T("Telefon", "Phone"), T("HerdDoc na Android telefonu – gledanje i upis u štali, radi i bez interneta.",
+                                                     "HerdDoc on an Android phone – view and record in the barn, works offline."))
         self.kartica_sinhronizacije(body)
         o, c = self.card(body)
         o.pack(fill="x", pady=(0, 12))
@@ -234,9 +234,9 @@ class TelefonDeo:
         lev.pack(side="left", fill="both", expand=True)
         self.lbl(lev, T("1. Instaliraj aplikaciju na telefon (samo prvi put)", "1. Install the app on the phone (first time only)"), 12, "bold").pack(anchor="w")
         self.lbl(lev, T("Skeniraj kod kamerom telefona (ili otvori adresu u Chrome-u). U Chrome-u otvori meni ⋮ i izaberi "
-                        "„Dodaj na početni ekran“ / „Instaliraj aplikaciju“. Dobićeš ikonicu Farmer.",
+                        "„Dodaj na početni ekran“ / „Instaliraj aplikaciju“. Dobićeš ikonicu HerdDoc.",
                         "Scan the code with the phone camera (or open the address in Chrome). In Chrome open the ⋮ menu and choose "
-                        "\"Add to Home screen\" / \"Install app\". You get a Farmer icon."), 9, fg=INK2, justify="left", wraplength=520).pack(anchor="w", pady=(4, 8))
+                        "\"Add to Home screen\" / \"Install app\". You get a HerdDoc icon."), 9, fg=INK2, justify="left", wraplength=520).pack(anchor="w", pady=(4, 8))
         adr = self.lbl(lev, TELEFON_URL, 10, "bold", fg=BRAND, cursor="hand2")
         adr.pack(anchor="w")
         adr.bind("<Button-1>", lambda e: (self.root.clipboard_clear(), self.root.clipboard_append(TELEFON_URL),
