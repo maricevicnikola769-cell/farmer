@@ -511,8 +511,8 @@ def test_kopija_u_oblaku(tmp_path):
         o.posalji_snimak({"grla": [{"id": "A"}], "istorija": [], "podsetnici": [], "izvezeno": "x"})
         assert ok.preuzmi_kopiju(o, kljuc)["format"] == "farmer-telefon"  # rezerva: snimak za telefone
         p = tmp_path / "stado.csv"
-        p.write_text("id;pol\nA;z\nB;m\n", encoding="utf-8")
-        (tmp_path / "stado_finansije.csv").write_text("datum;vrsta;kategorija;iznos\n01.10.2026;trosak;Hrana;100\n", encoding="utf-8")
+        p.write_bytes("id;pol\nA;z\nB;m\n".encode("utf-8"))          # bajtovi: Windows ne dodaje \r
+        (tmp_path / "stado_finansije.csv").write_bytes("datum;vrsta;kategorija;iznos\n01.10.2026;trosak;Hrana;100\n".encode("utf-8"))
         sad = ok.napravi_sadrzaj([str(p), str(tmp_path / "stado_finansije.csv")], {"tablica": str(p), "prag": 0.05})
         ok.posalji_kopiju(o, kljuc, sad)
         ok.posalji_kopiju(o, kljuc, sad)                               # druga kopija briše prvu
