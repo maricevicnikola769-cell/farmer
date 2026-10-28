@@ -26,7 +26,7 @@ class GrlaEkran:
         self.zaglavlje(body, ("Animals" if EN else "Grla"), (f"{akt} in herd, {len(sva)} recorded in total." if EN else f"{akt} u zapatu, ukupno {len(sva)} upisanih.")
                        if sva else ("Records of all animals with their parents." if EN else "Evidencija svih grla sa roditeljima."),
                        [(("Partner search" if EN else "Pretraga partnera"), self.idi_na_pretragu, "Secondary"),
-                        (("Import" if EN else "Uvezi"), self.uvezi, "Secondary"), (("Export" if EN else "Izvezi"), self.izvezi, "Secondary"), (("Open in Excel" if EN else "Otvori u Excelu"), self.otvori_excel, "Secondary"),
+                        (("Import" if EN else "Uvezi"), self.uvezi, "Secondary"), (("Export" if EN else "Izvezi"), self.izvezi, "Secondary"), (("📶 Reader" if EN else "📶 Čitač"), self.citac, "Secondary"), (("Open in Excel" if EN else "Otvori u Excelu"), self.otvori_excel, "Secondary"),
                         (("+  New animal" if EN else "+  Novo grlo"), lambda: self.forma(), "Primary")])
         if not sva:
             self.prazno(body)
@@ -84,6 +84,12 @@ class GrlaEkran:
             lnk.pack(side="right")
             lnk.bind("<Button-1>", lambda e: self.prikazi("obrisana"))
         self.q_var.trace_add("write", lambda *_: (ph_show(), self.grla_filter()))
+
+        def enter_u_pretrazi(ev=None):        # čitač minđuša u polju za pretragu: Enter otvara karton grla
+            x = self.model.nadji_citac(self.q_var.get().strip()) if self.q_var.get().strip() else None
+            if x:
+                self.karton(x)
+        e.bind("<Return>", enter_u_pretrazi)
         cb.bind("<<ComboboxSelected>>", lambda ev: self.grla_filter())
         self.grla_filter()
 
@@ -104,7 +110,7 @@ class GrlaEkran:
                 continue
             if self.ui["pol"] and a["pol"] != self.ui["pol"]:
                 continue
-            if q and not (any(q in norm(a[k]) for k in ("id", "markica", "rasa", "stado", "poreklo_od"))
+            if q and not (any(q in norm(a.get(k)) for k in ("id", "markica", "rfid", "rasa", "stado", "poreklo_od"))
                           or any(q in norm(x) for x in a["stare"])):
                 continue
             o, mj = m.P[a["id"]]

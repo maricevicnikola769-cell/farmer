@@ -13,7 +13,7 @@ def T(sr, en):
 
 def _jezicke_konstante():
     """Ponovo postavi nazive koji zavise od jezika (posle promene jezika)."""
-    global AUTO, DOGADJAJI, GRAVIDNOST_PROFILI, GRUPE, NAZIVI, PARENJE, POREKLA, REDOSLEDI, STADO_PODMLADAK, TER, TER_CIKLUS, VRSTE
+    global AUTO, DOGADJAJI, GRAVIDNOST_PROFILI, GRUPE, MUZNJA, NAMENE_MALI, NAMENE_SVINJE, NAZIVI, PARENJE, POREKLA, REDOSLEDI, STADO_PODMLADAK, TER, TER_CIKLUS, VRSTE
     REDOSLEDI = [("Last added first" if EN else "Poslednje upisana prvo"), ("First added first" if EN else "Prvo upisana prvo"), ("By tag" if EN else "Po oznaci"), ("Youngest first" if EN else "Najmlađa prvo")]
     POREKLA = [("Home bred" if EN else "Sopstveni odgoj"), ("Purchased" if EN else "Kupljeno"), ("Imported" if EN else "Uvoz")]
     VRSTE = [("cattle" if EN else "goveda"), ("sheep" if EN else "ovce"), ("goats" if EN else "koze"), ("pigs" if EN else "svinje"), ("horses" if EN else "konji")]
@@ -49,6 +49,10 @@ def _jezicke_konstante():
     DOGADJAJI = [("Mating / insemination" if EN else "Parenje / osemenjavanje"), ("In heat" if EN else "Tera se"), ("Birth" if EN else "Porođaj"), ("Vaccination" if EN else "Vakcinacija"), ("Treatment" if EN else "Lečenje"), ("Weighing" if EN else "Merenje težine"),
                  ("Move" if EN else "Premeštanje"), ("Sale" if EN else "Prodaja"), ("Death" if EN else "Uginuće"), ("Note" if EN else "Napomena")]
     AUTO = ("Record change" if EN else "Promena u evidenciji")
+    MUZNJA = ("Milking" if EN else "Mužnja")        # dnevna količina mleka (vrednost = litara), mast i proteini
+    # namena rase: goveda, ovce i koze / svinje
+    NAMENE_MALI = [("dairy" if EN else "mlečna"), ("meat breed" if EN else "tovna"), ("dual-purpose" if EN else "kombinovana")]
+    NAMENE_SVINJE = [("meat type" if EN else "mesnata"), ("lard type" if EN else "masna"), ("dual-purpose" if EN else "kombinovana")]
     GRUPE = [(("Matings" if EN else "Parenja"), (("Mating / insemination" if EN else "Parenje / osemenjavanje"), ("In heat" if EN else "Tera se"))),
              (("Treatments" if EN else "Lečenja"), (("Treatment" if EN else "Lečenje"), ("Vaccination" if EN else "Vakcinacija"))),
              (("Births" if EN else "Porođaji"), (("Birth" if EN else "Porođaj"), ("Offspring" if EN else "Potomak")))]
@@ -57,8 +61,19 @@ def _jezicke_konstante():
 _jezicke_konstante()
 
 # imena koja zavise od jezika; posle promene jezika svaki fajl programa dobija nove vrednosti
-JEZICKA_IMENA = ("JEZIK", "EN", 'REDOSLEDI', 'POREKLA', 'VRSTE', 'NAZIVI', 'TER', 'TER_CIKLUS', 'PARENJE', 'STADO_PODMLADAK', 'GRAVIDNOST_PROFILI', 'DOGADJAJI', 'AUTO', 'GRUPE')
-MODULI = ('osnova', 'jezik', 'podaci', 'izgled', 'rodoslov', 'ekran_osnova', 'ekran_grla', 'ekran_parenje', 'karton', 'gravidnost', 'istorija', 'kopije', 'obavestenja', 'stampa', 'izvoz', 'telefon_prenos', 'sinhronizacija', 'app')
+JEZICKA_IMENA = ("JEZIK", "EN", 'REDOSLEDI', 'POREKLA', 'VRSTE', 'NAZIVI', 'TER', 'TER_CIKLUS', 'PARENJE', 'STADO_PODMLADAK', 'GRAVIDNOST_PROFILI', 'DOGADJAJI', 'AUTO', 'GRUPE', 'MUZNJA', 'NAMENE_MALI', 'NAMENE_SVINJE')
+MODULI = ('osnova', 'jezik', 'podaci', 'izgled', 'rodoslov', 'ekran_osnova', 'ekran_grla', 'ekran_parenje', 'karton', 'gravidnost', 'istorija', 'kopije', 'obavestenja', 'stampa', 'izvoz', 'mlecnost', 'citac', 'finansije', 'oblak_kopija', 'telefon_prenos', 'sinhronizacija', 'app')
+
+
+def namene_za(vrsta):
+    """Izbor namene rase za vrstu: goveda, ovce i koze (mlečna/tovna/kombinovana), svinje (mesnata/masna/kombinovana);
+    ostale vrste (konji) nemaju."""
+    v = str(vrsta or "").strip().lower()[:3]
+    if v in ("gov", "bik", "kra", "cat", "cow", "bul", "ovc", "ova", "she", "ewe", "ram", "koz", "goa", "jar"):
+        return list(NAMENE_MALI)
+    if v in ("svi", "pig", "sow", "swi", "ner", "boa"):
+        return list(NAMENE_SVINJE)
+    return []
 
 
 def postavi_jezik(novi):

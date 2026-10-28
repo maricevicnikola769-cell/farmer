@@ -118,8 +118,10 @@ class OsnovaProzora:
         self.prikazi("grla")
         root.after(700, self.obavestenja_na_startu)
         root.after(1500, self.dnevna_kopija)
+        root.after(60000, self.dnevna_kopija_u_oblak)     # kopija u oblaku jednom dnevno (ako je telefon uparen)
         self.pokreni_sinhronizaciju()
         root.bind("<FocusIn>", self.proveri_promenu)
+        root.bind("<F2>", lambda e: self.citac())          # F2 = čitač minđuša
         root.protocol("WM_DELETE_WINDOW", self.zatvori)
 
 
@@ -224,6 +226,7 @@ class OsnovaProzora:
         self.nav = {}
         for key, txt, ic in (("grla", ("Animals" if EN else "Grla"), "☰"), ("parenje", ("Mating" if EN else "Parenje"), "⚭"),
                              ("srodstvo", ("Relationship" if EN else "Srodstvo"), "⑂"), ("istorija", ("History" if EN else "Istorija"), "◷"),
+                             ("mlecnost", ("Milk" if EN else "Mlečnost"), "◔"), ("finansije", ("Finances" if EN else "Finansije"), "¤"),
                              ("obavestenja", ("Notifications" if EN else "Obaveštenja"), "◉"), ("pregled", ("Overview" if EN else "Pregled"), "▥"),
                              ("statistika", T("Statistika", "Statistics"), "▤"), ("stampa", T("Štampa i PDF", "Print and PDF"), "⎙"),
                              ("telefon", T("Telefon", "Phone"), "☏")):
@@ -388,6 +391,8 @@ class OsnovaProzora:
         try:
             self.ist.sacuvaj()
             self.pods.sacuvaj()
+            if getattr(self, "_fin", None) is not None:
+                self._fin.sacuvaj()
         except OSError:
             pass
         try:
@@ -458,7 +463,10 @@ class OsnovaProzora:
         po_id = {r["id"]: r for r in self.tab.redovi}
         nov = izm = 0
         for r in redovi:
+            farma = (r.get("gazdinstvo") or "").strip()
             r = {k: r.get(k, "") for k in KOLONE}
+            if farma and r["id"] not in po_id and not r.get("poreklo_od"):
+                r["poreklo_od"] = farma          # grlo sa drugog gazdinstva: zapamti odakle je
             if r["id"] in po_id:
                 if not r["uneto"]:
                     r.pop("uneto")

@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from tkinter import messagebox, ttk
 
 from osnova import EN
-from jezik import AUTO, DOGADJAJI, GRUPE, PARENJE, POREKLA, TER
+from jezik import AUTO, DOGADJAJI, GRUPE, MUZNJA, PARENJE, POREKLA, TER
 from podaci import (fmt_starost, fmt_upis, nazivi, norm, norm_rasa, parsiraj_datum, pct, rasa_potomka,
     sort_key, starost_meseci)
 from izgled import BAD, BG, BRAND, INK, INK2, LINE, SURF, SURF2, ScrollFrame, WARN
@@ -21,7 +21,15 @@ class IstorijaDeo:
         dod = []
         if z["partner"]:
             dod.append(f"partner {z['partner']}")
-        if z["vrednost"]:
+        if z["dogadjaj"] == MUZNJA:                # mužnja: litri, mast, proteini
+            from mlecnost import fmt_broj
+            if z["vrednost"]:
+                dod.append(f"{fmt_broj(z['vrednost'])} L")
+            if z.get("mast"):
+                dod.append((f"fat {fmt_broj(z['mast'])}%" if EN else f"mast {fmt_broj(z['mast'])}%"))
+            if z.get("proteini"):
+                dod.append((f"protein {fmt_broj(z['proteini'])}%" if EN else f"proteini {fmt_broj(z['proteini'])}%"))
+        elif z["vrednost"]:
             dod.append(z["vrednost"])
         kar = [(f"{n} {z.get(k)} days" if EN else f"{n} {z.get(k)} d.") for k, n in (("karenca_meso", ("meat" if EN else "meso")), ("karenca_mleko", ("milk" if EN else "mleko"))) if z.get(k)]
         if kar:
@@ -73,7 +81,7 @@ class IstorijaDeo:
             ph_show()
             qv.trace_add("write", ph_show)
         vv = tk.StringVar(value=st["vrsta"])
-        cb = ttk.Combobox(tb, textvariable=vv, values=[("All events" if EN else "Svi događaji")] + DOGADJAJI + [("Offspring" if EN else "Potomak")],
+        cb = ttk.Combobox(tb, textvariable=vv, values=[("All events" if EN else "Svi događaji")] + DOGADJAJI + [("Offspring" if EN else "Potomak"), MUZNJA],
                           state="readonly", width=22, font=self.f(10))
         cb.pack(side="left")
         av = tk.BooleanVar(value=st["auto"])
@@ -215,7 +223,7 @@ class IstorijaDeo:
             grupa = dict(GRUPE).get(st["grupa"])
             if grupa and x is None:
                 grupa = tuple(v for v in grupa if v != ("Offspring" if EN else "Potomak"))
-            zap = self.ist.za(x, auto=av.get() or bool(grupa))
+            zap = self.ist.za(x, auto=av.get() or bool(grupa), mleko=vv.get() == MUZNJA)
             if grupa:
                 zap = [z for z in zap if z["dogadjaj"] in grupa]
             if vv.get() != ("All events" if EN else "Svi događaji"):

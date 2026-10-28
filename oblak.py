@@ -236,3 +236,61 @@ class Oblak:
     def obrisi_paket(self, dokumenti):
         for d in dokumenti:
             self.obrisi("paketi", d)
+
+
+# ---------------------------------------------------------------- uparivanje kodom (umesto QR koda)
+# Računar napravi kratak kod (npr. K7M2-9XQP) koji važi 15 minuta. Ključ gazdinstva se šifrovan ostavi u oblaku na mestu
+# koje se izračunava iz koda; telefon upiše kod, nađe to mesto i otključa ključ. Sam kod se nigde ne šalje.
+KOD_ABECEDA = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"     # bez 0/O i 1/I/L da se ne mešaju
+KOD_TRAJANJE = 15 * 60
+KOD_PBKDF2 = 150_000
+
+
+def novi_kod():
+    k = "".join(secrets.choice(KOD_ABECEDA) for _ in range(8))
+    return k[:4] + "-" + k[4:]
+
+
+def norm_kod(kod):
+    """'k7m2 9xqp' -> 'K7M29XQP' (velika slova, bez razmaka i crtica)."""
+    return "".join(c for c in str(kod or "").upper() if c.isalnum())
+
+
+def mesto_koda(kod):
+    """(oznaka mesta u oblaku, ključ) izračunati iz koda – isto na računaru i telefonu."""
+    import hashlib
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    k = norm_kod(kod)
+    h = hashlib.sha256(("herddoc-par|" + k).encode()).hexdigest()
+    kljuc = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=("herddoc-par|" + h).encode(),
+                       iterations=KOD_PBKDF2).derive(k.encode())
+    return h[:48], b64u(kljuc)
+
+
+def objavi_kod(konfig, kod, farma, kljuc, naziv=""):
+    mesto, k = mesto_koda(kod)
+    istice = int(time.time()) + KOD_TRAJANJE
+    o = Oblak(konfig, mesto, k)
+    o.upisi("uparivanje", "kod", dict(podaci=zakljucaj(dict(farma=farma, kljuc=kljuc, naziv=naziv, istice=istice), k), istice=istice))
+    return istice
+
+
+def obrisi_kod(konfig, kod):
+    mesto, k = mesto_koda(kod)
+    try:
+        Oblak(konfig, mesto, k).obrisi("uparivanje", "kod")
+    except OblakGreska:
+        pass
+
+
+def preuzmi_kod(konfig, kod):
+    """(farma, ključ, naziv) za kod, ili None ako kod ne postoji ili je istekao."""
+    mesto, k = mesto_koda(kod)
+    d = Oblak(konfig, mesto, k).citaj("uparivanje", "kod")
+    if not d or not d.get("podaci"):
+        return None
+    p = otkljucaj(d["podaci"], k)
+    if int(p.get("istice", 0)) < time.time():
+        return None
+    return p["farma"], p["kljuc"], p.get("naziv", "")

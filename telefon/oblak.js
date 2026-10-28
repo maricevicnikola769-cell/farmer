@@ -3,7 +3,7 @@
 "use strict";
 const DEO = 900000;
 const AAD = new TextEncoder().encode("farmer1");
-const KOLONE_GRLA = ["id", "markica", "vrsta", "rasa", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
+const KOLONE_GRLA = ["id", "markica", "rfid", "vrsta", "rasa", "namena", "autohtona", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
   "poreklo", "poreklo_od", "stare_markice", "uneto"];
 
 function oblakKonfig() {
@@ -307,6 +307,26 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 zakaziSinh();
 
 // ---------------------------------------------------------------- uparivanje
+// ---------------------------------------------------------------- uparivanje kodom (isto kao oblak.py na računaru)
+async function mestoKoda(kod) {
+  const k = String(kod || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), enc = new TextEncoder();
+  const hb = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode("herddoc-par|" + k)));
+  const h = [...hb].map(b => b.toString(16).padStart(2, "0")).join("");
+  const baza = await crypto.subtle.importKey("raw", enc.encode(k), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: enc.encode("herddoc-par|" + h), iterations: 150000 }, baza, 256);
+  return { mesto: h.slice(0, 48), kljuc: uB64u(new Uint8Array(bits)) };
+}
+async function preuzmiKod(kod) {
+  const { mesto, kljuc } = await mestoKoda(kod);
+  const o = new Oblak(mesto, kljuc);
+  const d = await o.citaj("uparivanje", "kod");
+  if (!d || !d.podaci) return null;
+  const p = await otkljucaj(d.podaci, kljuc);
+  if (+p.istice * 1000 < Date.now()) return null;
+  try { await o.http("DELETE", o.put("uparivanje", "kod"), undefined, await o.z()); } catch (e) { /* kod svakako ističe */ }
+  return { farma: p.farma, kljuc: p.kljuc, naziv: p.naziv || "" };
+}
+
 function procitajLink(tekst) {
   const m = String(tekst || "").match(/upari=([0-9a-f]{40,})\.([A-Za-z0-9_-]{40,})\.?([^&\s]*)/);
   return m ? { farma: m[1], kljuc: m[2], naziv: decodeURIComponent(m[3] || "") } : null;
@@ -372,7 +392,16 @@ function ekranSinh(_, upit) {
       <p id="sinhTekst" class="sinh-tekst ${sinhStanje.vrsta}">${h(sinhStanje.tekst)}</p>
       <button class="dug glavno puno" id="sad">🔄 ${t("Usaglasi sada", "Sync now")}</button>
       <p class="mali">${t("Telefon se sam usklađuje kad ima internet – dugme ti ne treba, osim ako žuriš.", "The phone syncs by itself when online – the button is only if you are in a hurry.")}</p></div>
+      <div class="kart"><h2>🔑 ${t("Ključ za vraćanje", "Recovery key")}</h2>
+        <p class="mali">${t("Ako se računar pokvari, ovim ključem na novom računaru vraćaš sve podatke (HerdDoc → Pregled → Vrati iz oblaka). Ne šalji ga drugima – ko ga ima, vidi podatke stada.",
+          "If the computer breaks, this key restores all data on a new computer (HerdDoc → Overview → Restore from cloud). Do not send it to others – whoever has it can see the herd data.")}</p>
+        <button class="dug puno" id="kljuc">${t("Prikaži i kopiraj ključ", "Show and copy key")}</button><div id="kljucTxt" class="mali" style="word-break:break-all;margin-top:8px"></div></div>
       <div class="kart"><button class="dug opasno puno" id="prekini">${t("Prekini uparivanje", "Unpair")}</button></div>`;
+    $("#kljuc").onclick = async () => {
+      const link = `${location.origin}${location.pathname}#upari=${S.sinh.farma}.${S.sinh.kljuc}.${encodeURIComponent(S.sinh.naziv || "")}`;
+      $("#kljucTxt").textContent = link;
+      try { await navigator.clipboard.writeText(link); poruka(t("Ključ je kopiran.", "Key copied.")); } catch (e) { /* prikazan je, može ručno */ }
+    };
     $("#sad").onclick = () => usaglasi(true);
     $("#ime").onclick = async ev => {
       ev.preventDefault();
@@ -391,8 +420,27 @@ function ekranSinh(_, upit) {
       <li>${t("Na računaru otvori HerdDoc → <b>Telefon</b> → <b>Upari telefon</b>. Pojaviće se QR kod.", "On the computer open HerdDoc → <b>Phone</b> → <b>Pair phone</b>. A QR code appears.")}</li>
       <li>${t("Klikni dugme ispod i uperi kameru u QR kod na ekranu računara.", "Tap the button below and point the camera at the QR code on the computer screen.")}</li></ol>
       <button class="dug glavno puno" id="sken">📷 ${t("Skeniraj QR kod sa računara", "Scan QR code from computer")}</button>
-      <p class="mali">${t("Uparuje se samo jednom. Posle se telefon i računar sami usklađuju, i kad su daleko.", "You pair only once. After that they sync by themselves, even far apart.")}</p></div>`;
+      <p class="mali">${t("Uparuje se samo jednom. Posle se telefon i računar sami usklađuju, i kad su daleko.", "You pair only once. After that they sync by themselves, even far apart.")}</p></div>
+    <div class="kart"><h2>⌨ ${t("Ili upiši kod", "Or type a code")}</h2>
+      <p class="mali">${t("Ako telefon ne može da skenira: na računaru u prozoru „Upari telefon“ klikni <b>Napravi kod</b> i upiši ga ovde.", "If the phone can't scan: on the computer, in the “Pair phone” window click <b>Make code</b> and type it here.")}</p>
+      <input class="unos" id="kod" placeholder="${t("npr. K7M2-9XQP", "e.g. K7M2-9XQP")}" autocapitalize="characters" autocomplete="off" spellcheck="false" style="text-transform:uppercase;letter-spacing:2px;font-size:20px;text-align:center">
+      <div class="greska" id="kodGr"></div>
+      <button class="dug puno" id="kodBtn" style="margin-top:8px">🔗 ${t("Upari kodom", "Pair with code")}</button></div>`;
   $("#sken").onclick = skenirajIUpari;
+  $("#kodBtn").onclick = async () => {
+    const kod = $("#kod").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (kod.length !== 8) return ($("#kodGr").textContent = t("Kod ima 8 znakova (npr. K7M2-9XQP).", "The code has 8 characters (e.g. K7M2-9XQP)."));
+    $("#kodGr").textContent = ""; $("#kodBtn").disabled = true; $("#kodBtn").textContent = t("Proveravam…", "Checking…");
+    try {
+      const p = await preuzmiKod(kod);
+      if (!p) { $("#kodGr").textContent = t("Kod ne postoji ili je istekao. Na računaru napravi novi kod.", "The code does not exist or has expired. Make a new code on the computer."); return; }
+      if (await upari(p)) idi("grla");
+    } catch (e) {
+      $("#kodGr").textContent = (e && e.message) || t("Greška pri uparivanju.", "Pairing error.");
+    } finally {
+      const b = $("#kodBtn"); if (b) { b.disabled = false; b.textContent = "🔗 " + t("Upari kodom", "Pair with code"); }
+    }
+  };
 }
 async function skenirajIUpari() {
   const kod = await skeniraj(t("Skeniraj QR kod sa računara", "Scan the QR code on the computer"));

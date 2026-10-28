@@ -13,9 +13,9 @@ from tkinter import messagebox
 from osnova import EN
 from jezik import T
 from podaci import IST_KOLONE, KOLONE, Podsetnici
-from izgled import BAD, INK2, OK, SURF, WARN
+from izgled import BRAND, BAD, INK2, OK, SURF, WARN
 from rodoslov import Model
-from oblak import Oblak, OblakGreska, link_za_uparivanje, novo_gazdinstvo, omotaj_za
+from oblak import Oblak, OblakGreska, link_za_uparivanje, novi_kod, novo_gazdinstvo, objavi_kod, obrisi_kod, omotaj_za
 from oblak_konfig import FIREBASE
 import dnevnik
 from telefon_prenos import _kljuc_ist, _kljuc_pod, spoji_razlike
@@ -321,11 +321,48 @@ class SinhronizacijaDeo:
         crtaj()
         self.lbl(b, T("Ovaj kod je ključ tvog gazdinstva – ne šalji ga drugima.", "This code is your farm's key – do not share it."),
                  8, fg=BAD).pack(anchor="w", pady=(4, 0))
+
+        # ---- bez kamere: kratak kod koji se upiše na telefonu (važi 15 minuta)
+        tk.Frame(b, bg="#E3E8E1", height=1).pack(fill="x", pady=(12, 8))
+        self.lbl(b, T("Telefon ne može da skenira? Upiši kod:", "Phone can't scan? Type a code:"), 10, "bold").pack(anchor="w")
+        self.lbl(b, T("Na telefonu: Više → Upari sa računarom → „Upiši kod“. Kod važi 15 minuta i može se iskoristiti jednom.",
+                      "On the phone: More → Pair with computer → “Type code”. The code is valid for 15 minutes and works once."),
+                 9, fg=INK2, wraplength=440, justify="left").pack(anchor="w", pady=(2, 6))
+        kr = tk.Frame(b, bg=SURF)
+        kr.pack(fill="x")
+        kod_lbl = self.lbl(kr, "", 22, "bold", fg=BRAND)
+        kod_lbl.pack(side="left")
+        kod_info = self.lbl(kr, "", 9, fg=INK2)
+        kod_info.pack(side="left", padx=12)
+        win.kod = None
+
+        def napravi_kod():
+            kod = novi_kod()
+            kod_lbl.config(text="…")
+            kod_info.config(text=T("pravim kod…", "making code…"))
+            s = dict(sinh)
+
+            def kraj(istice, greska):
+                if not win.winfo_exists():
+                    return
+                if greska is not None:
+                    kod_lbl.config(text="")
+                    kod_info.config(text=T("Kod nije napravljen (nema interneta?)", "Code not made (no internet?)"), fg=BAD)
+                    return
+                win.kod = kod
+                kod_lbl.config(text=kod)
+                kod_info.config(text=T(f"važi do {time.strftime('%H:%M', time.localtime(istice))}",
+                                       f"valid until {time.strftime('%H:%M', time.localtime(istice))}"), fg=INK2)
+            self._u_pozadini(lambda: objavi_kod(self.sinh_konfig(), kod, s["farma"], s["kljuc"], s.get("naziv", "")), kraj)
+        self.btn(kr, T("Napravi kod", "Make code"), napravi_kod).pack(side="right")
         fb = tk.Frame(b, bg=SURF)
         fb.pack(fill="x", pady=(14, 0))
 
         def gotovo():
             self.sacuvaj_podesavanja()
+            if win.kod:                              # kod više ne treba – briše se iz oblaka
+                k_ = win.kod
+                threading.Thread(target=lambda: obrisi_kod(self.sinh_konfig(), k_), daemon=True).start()
             win.destroy()
             if self.strana == "telefon":
                 self.prikazi("telefon")

@@ -12,8 +12,8 @@ from xml.sax.saxutils import escape
 from osnova import EN
 from jezik import T
 from osnova import prevedi_vrednost
-from podaci import (EN_IST, EN_KOL, EN_POD, IST_KOLONE, KOLONE, STATUS_EN, Podsetnici, _excel_datum, kolona, sada,
-                    tabela_u_recnike)
+from podaci import (EN_IST, EN_KOL, EN_POD, IST_KOLONE, KOLONE, STATUS_EN, Podsetnici, _excel_datum, kolona, parsiraj_datum,
+                    sada, tabela_u_recnike)
 from izgled import BAD, INK2, SURF
 
 
@@ -154,9 +154,18 @@ def _naziv_kol(k, mapa):
     return mapa.get(k, k) if EN else k
 
 
+def mlecnost_broj(v):
+    from finansije import broj
+    return broj(v)
+
+
 def tabele_za_izvoz(redovi_tablice, model, istorija=None, podsetnici=None, samo_zapat=False,
-                    sa_rodovnikom=True, sa_istorijom=True, sa_podsetnicima=True, dodatne=(), samo_ids=None):
-    """Vraća [(naziv lista, [zaglavlje, redovi...])]. Ne zavisi od prozora, pa se može testirati."""
+                    sa_rodovnikom=True, sa_istorijom=True, sa_podsetnicima=True, dodatne=(), samo_ids=None, gazdinstvo="", finansije=None):
+    """Vraća [(naziv lista, [zaglavlje, redovi...])]. Ne zavisi od prozora, pa se može testirati.
+    gazdinstvo: naziv farme koja izvozi – upisuje se u kolonu odmah pored oznake grla."""
+    gazdinstvo = " ".join(str(gazdinstvo or "").split())
+    kol_farma = [T("gazdinstvo", "farm")] if gazdinstvo else []
+    farma = [gazdinstvo] if gazdinstvo else []
     ukljuceno = []
     for r in redovi_tablice:
         st = r.get("status", "aktivno") or "aktivno"
@@ -169,16 +178,18 @@ def tabele_za_izvoz(redovi_tablice, model, istorija=None, podsetnici=None, samo_
     ids = {r["id"] for r in ukljuceno}
 
     kol = list(KOLONE) + [k for k in dodatne if k not in KOLONE]
-    zag = [_naziv_kol(k, EN_KOL) for k in kol] + [T("inbriding_%", "inbreeding_%")]
+    zag = [_naziv_kol(kol[0], EN_KOL)] + kol_farma + [_naziv_kol(k, EN_KOL) for k in kol[1:]] + [T("inbriding_%", "inbreeding_%")]
     grla = [zag]
     for r in ukljuceno:
         vr = dict(r)
         vr["pol"] = (POL_EN if EN else POL_SR).get(vr.get("pol", ""), vr.get("pol", ""))
+        vr["autohtona"] = T("da", "yes") if vr.get("autohtona") else ""
         if EN:
             vr["status"] = STATUS_EN.get(vr.get("status", ""), vr.get("status", ""))
         jid = model.nadji(r["id"]) or r["id"]
         f = model.inbr(jid) if jid in model.A else 0.0
-        grla.append([vr.get(k, "") for k in kol] + [round(f * 100, 2)])
+        vrednosti = [vr.get(k, "") for k in kol]
+        grla.append(vrednosti[:1] + farma + vrednosti[1:] + [round(f * 100, 2)])
     listovi = [(T("Grla", "Animals"), grla)]
 
     if sa_rodovnikom:
@@ -189,7 +200,7 @@ def tabele_za_izvoz(redovi_tablice, model, istorija=None, podsetnici=None, samo_
                    ["id", "ear_tag", "sire", "dam",
                     "sire_of_sire", "dam_of_sire", "sire_of_dam", "dam_of_dam",
                     "sss", "dss", "sds", "dds", "ssd", "dsd", "sdd", "ddd"])
-        rod = [nazivi]
+        rod = [nazivi[:1] + kol_farma + nazivi[1:]]
         for r in ukljuceno:
             jid = model.nadji(r["id"]) or r["id"]
             nivo, red = [jid], []
@@ -205,7 +216,7 @@ def tabele_za_izvoz(redovi_tablice, model, istorija=None, podsetnici=None, samo_
                     return ""
                 a = model.A.get(x) or {}
                 return x + (f" ({a['markica']})" if a.get("markica") else "")
-            rod.append([r["id"], r.get("markica", "")] + [ozn(x) for x in red])
+            rod.append([r["id"]] + farma + [r.get("markica", "")] + [ozn(x) for x in red])
         listovi.append((T("Rodovnik", "Pedigree"), rod))
 
     if sa_istorijom and istorija is not None:
@@ -222,6 +233,20 @@ def tabele_za_izvoz(redovi_tablice, model, istorija=None, podsetnici=None, samo_
             if not z.get("grlo") or z.get("grlo") in ids:
                 pod.append([z.get(k, "") for k in kp])
         listovi.append((T("Podsetnici", "Reminders"), pod))
+
+    if finansije is not None:                    # prihodi i troškovi (za izabrana grla samo njihovi upisi)
+        from finansije import EN_FIN, FIN_KOLONE, PRIHOD
+        fin = [[_naziv_kol(k, EN_FIN) for k in FIN_KOLONE]]
+        for z in sorted(finansije, key=lambda z: (parsiraj_datum(z.get("datum")) or date.min)):
+            if samo_ids is not None and z.get("grlo") not in ids:
+                continue
+            vr = dict(z)
+            vr["vrsta"] = T("prihod", "income") if z.get("vrsta") == PRIHOD else T("trošak", "cost")
+            red = [vr.get(k, "") for k in FIN_KOLONE]
+            iznos = mlecnost_broj(z.get("iznos"))
+            red[FIN_KOLONE.index("iznos")] = iznos if iznos is not None else z.get("iznos", "")
+            fin.append(red)
+        listovi.append((T("Finansije", "Finances"), fin))
     return listovi
 
 
@@ -267,12 +292,15 @@ def dopuni_iz_excela(listovi, redovi_tablice, istorija, podsetnici, ime_fajla=""
             continue
         zagl = [kolona(k) for k in sirovo[0]]
         if "otac_oca" in zagl or "sire_of_sire" in zagl:                     # ---- rodovnik
+            pi = next((zagl.index(k) for k in ("otac", "sire") if k in zagl), 2)     # prva kolona sa precima
+            fi = next((zagl.index(k) for k in ("gazdinstvo", "farm") if k in zagl), None)
             for red in sirovo[1:]:
-                red = list(red) + [""] * (16 - len(red))
+                red = list(red) + [""] * (pi + 14 - len(red))
                 grlo = (red[0] or "").strip()
                 if not grlo:
                     continue
-                cvorovi = [grlo] + [_ozn_markica(x) for x in red[2:16]]
+                farma = (red[fi] or "").strip() if fi is not None else ""
+                cvorovi = [grlo] + [_ozn_markica(x) for x in red[pi:pi + 14]]
                 ids = [grlo] + [c[0] for c in cvorovi[1:]]
                 vrsta = (po_id.get(grlo) or {}).get("vrsta", "")
                 # položaj i: roditelji su na 2i+1 (otac) i 2i+2 (majka) – kao u listu Rodovnik
@@ -284,7 +312,7 @@ def dopuni_iz_excela(listovi, redovi_tablice, istorija, podsetnici, ime_fajla=""
                         mark = cvorovi[i][1]
                         po_id[x] = dict({k: "" for k in KOLONE}, id=x, markica=mark, vrsta=vrsta,
                                         pol="m" if i % 2 == 1 else "z", status="neaktivno", uneto=sada(),
-                                        poreklo_od=os.path.basename(ime_fajla))
+                                        poreklo_od=farma or os.path.basename(ime_fajla))
                         redovi_tablice.append(po_id[x])
                         n_pr += 1
                     r = po_id.get(x)
@@ -352,6 +380,13 @@ class IzvozDeo:
                       "For your accountant, vet, breed association, laboratory or another program."),
                  9, fg=INK2, wraplength=430, justify="left").pack(anchor="w", pady=(2, 0))
 
+        self.lbl(b, T("Naziv gazdinstva (farme)", "Farm name"), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 2))
+        farma_var = tk.StringVar(value=self.pod.get("gazdinstvo", ""))
+        ttk.Entry(b, textvariable=farma_var, width=40, font=self.f(10)).pack(anchor="w", fill="x", pady=(2, 0))
+        self.lbl(b, T("Upisuje se pored oznake svakog grla, da se zna sa kog je gazdinstva.",
+                      "Written next to every animal's tag, so it is clear which farm it comes from."),
+                 8, fg="#8A968D").pack(anchor="w")
+
         self.lbl(b, T("Format", "Format"), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 2))
         fv = tk.StringVar(value="xlsx")
         ttk.Radiobutton(b, text=T("Excel (.xlsx) – sve u jednom fajlu, na posebnim listovima",
@@ -374,17 +409,26 @@ class IzvozDeo:
 
         self.lbl(b, T("Uključi", "Include"), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 2))
         rv, iv, pv = tk.BooleanVar(value=True), tk.BooleanVar(value=True), tk.BooleanVar(value=True)
+        fv_ = tk.BooleanVar(value=False)          # finansije su poverljive – podrazumevano se ne izvoze
         for tekst, var in ((T("Rodovnik u 3 kolena (roditelji, dedovi, pradedovi)",
                               "3-generation pedigree (parents, grandparents, great-grandparents)"), rv),
                            (T("Istorija događaja (parenja, porođaji, lečenja…)",
                               "Event history (matings, births, treatments…)"), iv),
-                           (T("Podsetnici", "Reminders"), pv)):
+                           (T("Podsetnici", "Reminders"), pv),
+                           (T("Finansije (prihodi i troškovi)", "Finances (income and costs)"), fv_)):
             ttk.Checkbutton(b, text=tekst, variable=var, style="Card.TCheckbutton").pack(anchor="w", pady=(4, 0))
         err = self.lbl(b, "", 10, "bold", fg=BAD)
         err.pack(anchor="w", pady=(8, 0))
 
         def izvezi_sad(ev=None):
             fmt = fv.get()
+            farma = " ".join(farma_var.get().split())
+            if farma != self.pod.get("gazdinstvo", ""):     # naziv se pamti (koristi se i pri uparivanju telefona)
+                self.pod["gazdinstvo"] = farma
+                try:
+                    self.sacuvaj_podesavanja()
+                except Exception:
+                    pass
             ime = T("herddoc_izvoz", "herddoc_export") + "_" + date.today().strftime("%Y-%m-%d") + "." + fmt
             put = filedialog.asksaveasfilename(
                 parent=win, title=T("Sačuvaj izvoz", "Save export"), initialfile=ime, defaultextension="." + fmt,
@@ -397,7 +441,8 @@ class IzvozDeo:
                                           samo_zapat=gv.get() == "zapat", sa_rodovnikom=rv.get(),
                                           sa_istorijom=iv.get(), sa_podsetnicima=pv.get(),
                                           dodatne=getattr(self.tab, "dodatne", ()),
-                                          samo_ids=set(oznacena) if gv.get() == "oznacena" else None)
+                                          samo_ids=set(oznacena) if gv.get() == "oznacena" else None, gazdinstvo=farma,
+                                          finansije=self.fin.zapisi if fv_.get() else None)
                 fajlovi = izvezi_u_fajl(put, listovi, fmt)
             except OSError as e:
                 err.config(text=T("Fajl nije sačuvan: ", "The file was not saved: ") + str(e)

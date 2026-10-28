@@ -19,6 +19,10 @@ from kopije import KopijeDeo
 from obavestenja import ObavestenjaDeo
 from stampa import StampaDeo
 from izvoz import IzvozDeo
+from mlecnost import MlecnostDeo
+from citac import CitacDeo
+from finansije import FinansijeDeo
+from oblak_kopija import OblakKopijaDeo
 from telefon_prenos import TelefonDeo
 from sinhronizacija import SinhronizacijaDeo
 import dnevnik
@@ -26,7 +30,7 @@ from dnevnik import DnevnikDeo
 
 
 class App(OsnovaProzora, GrlaEkran, ParenjeEkran, KartonEkran, GravidnostDeo, IstorijaDeo, KopijeDeo, ObavestenjaDeo, StampaDeo, TelefonDeo,
-          SinhronizacijaDeo, DnevnikDeo, IzvozDeo):
+          SinhronizacijaDeo, DnevnikDeo, IzvozDeo, MlecnostDeo, CitacDeo, FinansijeDeo, OblakKopijaDeo):
     """Glavni prozor programa, sklopljen iz delova (svaki deo je u svom fajlu)."""
 
 

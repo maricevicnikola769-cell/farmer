@@ -170,7 +170,18 @@ const KONST = {
   "NAPOMENA": "Napomena",
   "HIBRID": "hibrid",
   "DRUGO": "drugo",
-  "SOPSTVENI": "Sopstveni odgoj"
+  "SOPSTVENI": "Sopstveni odgoj",
+  "NAMENE_MALI": [
+   "mlečna",
+   "tovna",
+   "kombinovana"
+  ],
+  "NAMENE_SVINJE": [
+   "mesnata",
+   "masna",
+   "kombinovana"
+  ],
+  "MUZNJA": "Mužnja"
  },
  "en": {
   "DOGADJAJI": [
@@ -378,7 +389,18 @@ const KONST = {
   "NAPOMENA": "Note",
   "HIBRID": "hybrid",
   "DRUGO": "other",
-  "SOPSTVENI": "Home bred"
+  "SOPSTVENI": "Home bred",
+  "NAMENE_MALI": [
+   "dairy",
+   "meat breed",
+   "dual-purpose"
+  ],
+  "NAMENE_SVINJE": [
+   "meat type",
+   "lard type",
+   "dual-purpose"
+  ],
+  "MUZNJA": "Milking"
  },
  "PREVOD": {
   "se": {
@@ -902,7 +924,13 @@ const KONST = {
    "Sačuvaj i dodaj još": "Save and add another",
    "Farmer.Program": "Farmer.English",
    "Greška": "Error",
-   "Farmer – greška": "Farmer – error"
+   "Farmer – greška": "Farmer – error",
+   "mlečna": "dairy",
+   "tovna": "meat breed",
+   "kombinovana": "dual-purpose",
+   "mesnata": "meat type",
+   "masna": "lard type",
+   "Mužnja": "Milking"
   },
   "es": {
    "herd.csv": "stado.csv",
@@ -1406,7 +1434,13 @@ const KONST = {
    "Save and add another": "Sačuvaj i dodaj još",
    "Farmer.English": "Farmer.Program",
    "Error": "Greška",
-   "Farmer – error": "Farmer – greška"
+   "Farmer – error": "Farmer – greška",
+   "dairy": "mlečna",
+   "meat breed": "tovna",
+   "dual-purpose": "kombinovana",
+   "meat type": "mesnata",
+   "lard type": "masna",
+   "Milking": "Mužnja"
   }
  }
 };

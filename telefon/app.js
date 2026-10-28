@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "2.5";
+const VERZIJA_TEL = "3.1";
 const PODRSKA = "herddoc1@gmail.com";   // e-pošta za prijavu problema
 const t = (sr, en) => (EN() ? en : sr);
 const $ = s => document.querySelector(s);
@@ -112,7 +112,7 @@ function prikazi() {
   window.scrollTo(0, 0);
   if (!imaPodatke() && e !== "prenos" && e !== "sinh") return dobrodoslica();
   const ekrani = { grla: ekranGrla, karton: ekranKarton, danas: ekranDanas, dogadjaj: ekranDogadjaj, parenje: ekranParenje, srodstvo: ekranSrodstvo,
-    vise: ekranVise, prenos: ekranPrenos, sinh: ekranSinh, novo: ekranNovoGrlo, rodjenje: ekranRodjenje, mindjuse: ekranMindjuse, podsetnik: ekranPodsetnik };
+    vise: ekranVise, prenos: ekranPrenos, sinh: ekranSinh, novo: ekranNovoGrlo, rodjenje: ekranRodjenje, mindjuse: ekranMindjuse, podsetnik: ekranPodsetnik, muznja: ekranMuznja };
   (ekrani[e] || ekranGrla)(arg, upit);
 }
 
@@ -209,7 +209,7 @@ function dobrodoslica() {
       <li>${t("Fajl prebaci na telefon (Google Drive, Viber, kabl…).", "Move the file to the phone (Google Drive, Viber, cable…).")}</li>
       <li>${t("Ovde klikni <b>Učitaj sa računara</b> i izaberi taj fajl.", "Here, tap <b>Load from computer</b> and choose that file.")}</li></ol></div>
     ${dugmeInstalacije()}
-    ${oblakPodesen() ? `<a class="dug glavno puno" href="#sinh">📱 ${t("Upari sa računarom (QR kod)", "Pair with computer (QR code)")}</a><div style="height:10px"></div>` : ""}
+    ${oblakPodesen() ? `<a class="dug glavno puno" href="#sinh">📱 ${t("Upari sa računarom (QR kod ili kod)", "Pair with computer (QR or code)")}</a><div style="height:10px"></div>` : ""}
     <button class="dug ${oblakPodesen() ? "" : "glavno"} puno" id="ucitaj">📂 ${t("Učitaj sa računara (fajl)", "Load from computer (file)")}</button>
     <div style="height:10px"></div>
     <div class="dugmad"><button class="dug" id="pocni">${t("Počni bez računara", "Start without computer")}</button>
@@ -233,13 +233,15 @@ function ekranGrla() {
   const crtaj = (koliko = NA_STRANI) => {
     const q = norm(filt.q), ql = filt.q.trim().toLowerCase();
     const sp = sva.filter(a => (filt.van || a.aktivno) && (!filt.pol || a.pol === filt.pol) &&
-      (!q || norm(a.id).includes(q) || norm(a.markica).includes(q) || a.stare.some(s => norm(s).includes(q)) || (ql && (a.rasa || "").includes(ql))));
+      (!q || norm(a.id).includes(q) || norm(a.markica).includes(q) || norm(a.rfid).includes(q) || a.stare.some(s => norm(s).includes(q)) || (ql && (a.rasa || "").includes(ql))));
     $("#sp").innerHTML = `<div class="mali" style="margin:0 4px 8px">${t(`${sp.length} grla`, `${sp.length} animals`)}</div>` +
       listaGrla(sp, sva.length ? t("Nema grla za ovu pretragu.", "No animals match.") : t("Stado je još prazno. Učitaj podatke sa računara ili dodaj grlo.", "The herd is empty. Load data from the computer or add an animal."), koliko);
     const jos = $("#sp [data-jos]");
     if (jos) jos.onclick = () => crtaj(+jos.dataset.jos);
   };
   $("#q").oninput = e => { filt.q = e.target.value; crtaj(); };
+  // Bluetooth čitač minđuša (radi kao tastatura) upiše broj u pretragu i pritisne Enter -> karton grla
+  $("#q").onkeydown = e => { if (e.key === "Enter") { const x = M.nadjiCitac(e.target.value.trim()); if (x) idi(`karton/${encodeURIComponent(x)}`); } };
   ekran.querySelectorAll("[data-pol]").forEach(b => b.onclick = () => { filt.pol = b.dataset.pol; ekranGrla(); });
   $("#van").onclick = () => { filt.van = !filt.van; ekranGrla(); };
   $("#novo").onclick = () => idi("novo");
@@ -259,9 +261,10 @@ function ekranKarton(id) {
   const posl = cekajuPorodjaj(id).filter(z => roditeljiParenja(z)[0] === id || roditeljiParenja(z)[1] === id);
   const ist = istorijaZa(id);
   ekran.innerHTML = `<div class="kart"><div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">${cip(id, false).replace("cip", "cip veliki")}
-      <div><b>${h(M.polNaziv(id))}</b><div class="mali">${h([a.vrsta, a.rasa].filter(Boolean).join(" · "))}</div></div></div>
+      <div><b>${h(M.polNaziv(id))}</b><div class="mali">${h([a.vrsta, a.rasa, a.namena, a.autohtona ? t("autohtona rasa", "native breed") : ""].filter(Boolean).join(" · "))}</div></div></div>
     <dl class="polja">
       ${a.markica ? `<dt>${t("Markica", "Ear tag")}</dt><dd>${h(a.markica)}</dd>` : ""}
+      ${a.rfid ? `<dt>RFID</dt><dd>${h(a.rfid)}</dd>` : ""}
       <dt>${t("Rođen", "Born")}</dt><dd>${a.datum ? `${fmtD(a.datum)} (${h(fmtStarost(starostMeseci(a.datum)))})` : "–"}</dd>
       ${a.stado ? `<dt>${t("Stado", "Herd")}</dt><dd>${h(a.stado)}</dd>` : ""}
       ${a.poreklo ? `<dt>${t("Poreklo", "Origin")}</dt><dd>${h(a.poreklo + (a.poreklo_od ? " – " + a.poreklo_od : ""))}</dd>` : ""}
@@ -279,11 +282,88 @@ function ekranKarton(id) {
   <div class="kart"><h2>${t("Roditelji", "Parents")}</h2><div class="cipovi">${o ? cip(o) : `<span class="mali">${t("otac nepoznat", "sire unknown")}</span>`} ${m ? cip(m) : `<span class="mali">${t("majka nepoznata", "dam unknown")}</span>`}</div>
     ${preci2.some(Boolean) ? `<h2 style="margin-top:14px">${t("Babe i dede", "Grandparents")}</h2><div class="cipovi">${preci2.map(p => (p ? cip(p) : `<span class="cip siv">?</span>`)).join("")}</div>` : ""}
   </div>
+  ${kartMleka(id, a)}
   <div class="kart"><h2>${t("Potomci", "Offspring")} <small>(${deca.length})</small></h2>${deca.length ? `<div class="cipovi">${deca.map(d => cip(d)).join("")}</div>` : `<span class="mali">${t("nema upisanih", "none recorded")}</span>`}</div>
   <div class="kart"><h2>${t("Istorija", "History")} <small>(${ist.length})</small></h2>${ist.length ? ist.slice(0, 60).map(z =>
     `<div class="ist ${z.automatski ? "auto" : ""}"><div class="d">${h(z.datum)}${z.partner ? " · " + cip(z.partner) : ""}${z.upisao ? ` · 📱 ${h(z.upisao)}` : ""}</div><b>${h(z.dogadjaj)}</b>${z.vrednost ? ` – ${h(z.vrednost)}` : ""}
       ${z.opis ? `<div class="mali">${h(z.opis)}</div>` : ""}${opisIshoda(z) ? `<div class="mali">${h(opisIshoda(z))}</div>` : ""}</div>`).join("") : `<span class="mali">${t("još nema zapisa", "no records yet")}</span>`}</div>`;
   if (ob.length) vezAkcije($("#ob"), ob);
+}
+
+// ---------------------------------------------------------------- Mlečnost
+function kartMleka(id, a) {
+  const mz = muznjeZa(id);
+  if (!mlecnoGrlo(a) && !Object.keys(mz).length) return "";
+  const s = statMleka(id);
+  return `<div class="kart"><h2>${t("Mlečnost", "Milk")}</h2><dl class="polja">
+    <dt>${t("Laktacija", "Lactation")}</dt><dd>${s.br ? `${s.br}.${s.dan ? ` · ${t("dan", "day")} ${s.dan}` : ""}` : t("telenje nije upisano", "no calving recorded")}</dd>
+    ${s.poslednje ? `<dt>${t("Poslednja mužnja", "Last milking")}</dt><dd>${fmtBroj(s.poslednje[1])} L (${fmtKratko(s.poslednje[0])})</dd>` : ""}
+    ${s.prosek7 ? `<dt>${t("Prosek 7 dana", "7-day average")}</dt><dd>${fmtBroj(s.prosek7)} L</dd>` : ""}
+    ${s.n ? `<dt>${t("Izmereno u laktaciji", "Recorded this lactation")}</dt><dd>${fmtBroj(s.ukupno, 0)} L</dd>` : ""}</dl>
+    <a class="dug puno" href="#muznja" style="margin-top:10px">🥛 ${t("Upiši mužnju", "Record milking")}</a></div>`;
+}
+
+function ekranMuznja(_, upit) {
+  postaviVrh(t("Mužnja", "Milking"), true); meni("vise");
+  const d = (upit && parsirajDatum(upit.get("d"))) || danas(), sve = upit && upit.get("sve") === "1";
+  let saMast = false;                    // mast i proteini se ne upisuju svaki dan – polja samo kad se uključe
+  try { saMast = localStorage.getItem("herddoc-mleko-mast") === "1"; } catch (e) { /* */ }
+  const muzne = M.grla(true).filter(muznaVrsta);
+  const grla = (sve ? muzne : muzne.filter(a => (mlecnoGrlo(a) && telenja(a.id).length) || Object.keys(muznjeZa(a.id)).length))
+    .sort((a, b) => sortKey(a.id, b.id));
+  const iso = uIso(d), juce = uIso(dodajDane(d, -1));
+  const adresa = (nd, ns) => `#muznja?d=${uIso(nd)}${ns ? "&sve=1" : ""}`;
+  let ukupno = 0, n = 0;
+  const redovi = grla.map(a => {
+    const mz = muznjeZa(a.id), z = mz[iso] || {}, zj = mz[juce], s = statMleka(a.id, d);
+    if (broj(z.vrednost) !== null) { ukupno += broj(z.vrednost); n++; }
+    return `<div class="kart" style="padding:12px 14px" data-g="${h(a.id)}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">${cip(a.id)}
+        <span class="mali">${s.br ? `${s.br}. ${t("lakt.", "lact.")}${s.dan ? ` · ${t("dan", "day")} ${s.dan}` : ""}` : ""}${zj && zj.vrednost ? ` · ${t("juče", "yesterday")} ${fmtBroj(zj.vrednost)} L` : ""}</span></div>
+      <div class="mlekopolja" style="display:grid;grid-template-columns:${saMast ? "1.3fr 1fr 1fr" : "1fr"};gap:8px;margin-top:8px">
+        <input class="unos" inputmode="decimal" placeholder="${t("Litara", "Litres")}" data-k="l" value="${z.vrednost ? h(fmtBroj(z.vrednost, 2)) : ""}">
+        <input class="unos ${saMast ? "" : "skriveno"}" inputmode="decimal" placeholder="${t("Mast %", "Fat %")}" data-k="m" value="${z.mast ? h(fmtBroj(z.mast, 2)) : ""}">
+        <input class="unos ${saMast ? "" : "skriveno"}" inputmode="decimal" placeholder="${t("Prot. %", "Prot. %")}" data-k="p" value="${z.proteini ? h(fmtBroj(z.proteini, 2)) : ""}"></div></div>`;
+  }).join("");
+  ekran.innerHTML = `<div class="kart"><div style="display:flex;gap:8px;align-items:center">
+      <a class="dug" href="${adresa(dodajDane(d, -1), sve)}" style="flex:0 0 52px">◀</a>
+      <input class="unos" type="date" id="dat" value="${iso}" style="flex:1">
+      <a class="dug" href="${adresa(dodajDane(d, 1), sve)}" style="flex:0 0 52px">▶</a></div>
+    <p class="mali" style="margin:10px 2px 0">${t(`Pomuženo ${n} od ${grla.length} grla · ukupno ${fmtBroj(ukupno)} L`, `Milked ${n} of ${grla.length} animals · total ${fmtBroj(ukupno)} L`)}</p>
+    <label class="mali" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="sve" ${sve ? "checked" : ""}> ${t("Prikaži sve ženke", "Show all females")}</label>
+    <label class="mali" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="mp" ${saMast ? "checked" : ""}> ${t("Upisujem i mast i proteine", "Also enter fat and protein")}</label></div>
+    ${grla.length ? redovi : `<div class="kart mali">${t("Nema muznih grla. Na listi su ženke goveda, ovaca i koza mlečne ili kombinovane namene koje su se telile. Uključi „Prikaži sve ženke“ ili upiši namenu na računaru.", "No animals to milk. The list shows dairy or dual-purpose female cattle, sheep and goats that have given birth. Tick “Show all females” or set the purpose on the computer.")}</div>`}
+    <div class="greska" id="gr"></div>
+    ${grla.length ? `<button class="dug glavno puno" id="sac">${t("Sačuvaj mužnju", "Save milking")}</button>
+    <p class="mali" style="margin:8px 4px">${t("Prazno polje = nije muženo tog dana.", "Empty field = not milked that day.")}</p>` : ""}`;
+  $("#dat").onchange = () => { const nd = parsirajDatum($("#dat").value); if (nd) location.hash = adresa(nd, sve); };
+  $("#sve").onchange = () => { location.hash = adresa(d, $("#sve").checked); };
+  $("#mp").onchange = () => { try { localStorage.setItem("herddoc-mleko-mast", $("#mp").checked ? "1" : ""); } catch (e) { /* */ } ekranMuznja(_, upit); };
+  if (!grla.length) return;
+  $("#sac").onclick = () => {
+    const greske = [], plan = [];
+    ekran.querySelectorAll("[data-g]").forEach(k => {
+      const x = k.dataset.g, v = q => k.querySelector(`[data-k="${q}"]`).value.trim();
+      const [l, m, p] = [v("l"), v("m"), v("p")];
+      if (!l) return plan.push([x, null]);            // bez litara = nije muženo tog dana
+      const lit = broj(l), mas = broj(m), pro = broj(p);
+      if (lit === null || !(lit > 0 && lit < 150)) return greske.push(t(`${x}: litri nisu ispravni`, `${x}: litres are not valid`));
+      if (m && (mas === null || !(mas > 0 && mas < 20))) return greske.push(t(`${x}: mast nije ispravna`, `${x}: fat is not valid`));
+      if (p && (pro === null || !(pro > 0 && pro < 15))) return greske.push(t(`${x}: proteini nisu ispravni`, `${x}: protein is not valid`));
+      plan.push([x, lit, mas, pro]);
+    });
+    if (greske.length) return ($("#gr").textContent = greske.slice(0, 4).join(" · "));
+    let novo = 0, uk = 0;
+    for (const [x, lit, mas, pro] of plan) {
+      const r = upisiMuznju(x, d, lit, mas, pro);
+      if (r === "novo" || r === "izmena") novo++;
+      if (lit) uk += lit;
+    }
+    const muzeno = plan.filter(([, lit]) => lit).length;
+    if (novo || plan.some(([, lit]) => lit === null)) zabelezi(t(`Mužnja ${fmtD(d)}: ${muzeno} grla, ${fmtBroj(uk)} L`, `Milking ${fmtD(d)}: ${muzeno} animals, ${fmtBroj(uk)} L`));
+    promena(t(`Mužnja sačuvana: ${muzeno} grla, ukupno ${fmtBroj(uk)} L`, `Milking saved: ${muzeno} animals, total ${fmtBroj(uk)} L`));
+    ekranMuznja(_, upit);
+  };
 }
 
 // ---------------------------------------------------------------- Danas (obaveštenja)
@@ -442,7 +522,7 @@ function ekranNovoGrlo(_, upit) {
   const k = K(), sva = M.grla(), posl = sva[0] || {};
   const cesto = l => { const c = {}; l.forEach(x => { if (x) c[x] = (c[x] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ""; };
   const stada = [...new Set(sva.map(a => a.stado).filter(Boolean))], rase = [...new Set(sva.map(a => a.rasa).filter(Boolean))];
-  let pol = "";
+  let pol = "", status = "";
   ekran.innerHTML = `<div class="kart">
     <div class="dve"><label class="polje"><span>${t("Oznaka *", "Tag *")}</span><input class="unos" id="id"></label>
       <label class="polje"><span>${t("Markica", "Ear tag")}</span>${saKamerom(`<input class="unos" id="mk" value="${h(upit ? upit.get("mk") || "" : "")}">`, "markica")}</label></div>
@@ -451,6 +531,7 @@ function ekranNovoGrlo(_, upit) {
     <div class="dve"><label class="polje"><span>${t("Vrsta", "Species")}</span><select class="unos" id="vrsta">${k.VRSTE.map(v => `<option ${v === (posl.vrsta || k.VRSTE[0]) ? "selected" : ""}>${h(v)}</option>`).join("")}</select></label>
       <label class="polje"><span>${t("Rasa", "Breed")}</span><input class="unos" id="rasa" list="dl-r"></label></div>
     <datalist id="dl-r">${rase.map(r => `<option value="${h(r)}">`).join("")}</datalist>
+    <label class="polje skriveno" id="nam-p"><span>${t("Namena rase *", "Breed purpose *")}</span><select class="unos" id="nam"></select></label>
     <label class="polje"><span>${t("Datum rođenja", "Date of birth")}</span><input class="unos" id="dat" type="date"></label>
     <div class="dve"><label class="polje"><span>${t("Otac", "Sire")}</span><input class="unos" id="otac" list="dl-o" autocomplete="off"></label>
       <label class="polje"><span>${t("Majka", "Dam")}</span><input class="unos" id="majka" list="dl-m" autocomplete="off"></label></div>
@@ -459,17 +540,32 @@ function ekranNovoGrlo(_, upit) {
       <label class="polje"><span>${t("Poreklo", "Origin")}</span><select class="unos" id="por"><option></option>${k.POREKLA.map(p => `<option>${h(p)}</option>`).join("")}</select></label></div>
     <datalist id="dl-s">${stada.map(s => `<option value="${h(s)}">`).join("")}</datalist>
     <label class="polje"><span>${t("Poreklo od (kupljeno od…)", "Origin from (bought from…)")}</span><input class="unos" id="pod"></label>
+    <label class="polje"><span>${t("Elektronski broj (RFID čitač)", "Electronic ID (RFID reader)")}</span><input class="unos" id="rfid" value="${h(upit ? upit.get("rfid") || "" : "")}" placeholder="${t("nije obavezno", "optional")}"></label>
+    <label class="polje" style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="autoh" style="width:22px;height:22px"><span style="font-weight:700">${t("Autohtona rasa", "Native (indigenous) breed")}</span></label>
+    <div class="polje"><span class="mali" style="font-weight:700">${t("Status grla *", "Status *")}</span><div class="izbor" id="status" style="margin-top:6px"><button data-s="aktivno">${t("Aktivno – na farmi", "Active – on the farm")}</button><button data-s="neaktivno">${t("Neaktivno – nije na farmi", "Inactive – not on the farm")}</button></div></div>
     <div class="greska" id="gr"></div>
     <button class="dug glavno puno" id="sac">${t("Sačuvaj grlo", "Save animal")}</button></div>`;
   $("#pol").onclick = e => { const b = e.target.closest("button"); if (!b) return; pol = b.dataset.p; $("#pol").querySelectorAll("button").forEach(x => x.classList.toggle("akt", x === b)); };
+  $("#status").onclick = e => { const b = e.target.closest("button"); if (!b) return; status = b.dataset.s; $("#status").querySelectorAll("button").forEach(x => x.classList.toggle("akt", x === b)); };
+  const namene = () => {                 // namena rase za goveda, ovce, koze i svinje
+    const izbori = nameneZa($("#vrsta").value), sad = $("#nam").value;
+    $("#nam-p").classList.toggle("skriveno", !izbori.length);
+    $("#nam").innerHTML = `<option value="">${t("– izaberi –", "– choose –")}</option>` + izbori.map(x => `<option ${x === sad ? "selected" : ""}>${h(x)}</option>`).join("");
+  };
+  $("#vrsta").onchange = namene; namene();
+  $("#rasa").addEventListener("input", () => { if (autohtonaRasa($("#rasa").value)) $("#autoh").checked = true; });
+  $("#majka").addEventListener("change", () => {     // namena od majke, ako još nije izabrana
+    const mj = M.nadji($("#majka").value);
+    if (mj && M.A[mj].namena && !$("#nam").value && [...$("#nam").options].some(o => o.value === M.A[mj].namena)) $("#nam").value = M.A[mj].namena;
+  });
   $("#sac").onclick = () => {
     const dat = $("#dat").value ? fmtD(parsirajDatum($("#dat").value)) : "";
-    const gr = novoGrlo({ id: $("#id").value, markica: $("#mk").value, pol, vrsta: $("#vrsta").value, rasa: $("#rasa").value, datum_rodjenja: dat,
-      otac: $("#otac").value, majka: $("#majka").value, stado: $("#stado").value, poreklo: $("#por").value, poreklo_od: $("#pod").value });
-    if (gr) return ($("#gr").textContent = gr);
-    const id = $("#id").value.trim();
-    promena(t(`Sačuvano: ${id}`, `Saved: ${id}`));
-    idi(`karton/${encodeURIComponent(id)}`);
+    const rez = novoGrlo({ id: $("#id").value, markica: $("#mk").value, pol, vrsta: $("#vrsta").value, rasa: $("#rasa").value, namena: $("#nam").value, autohtona: $("#autoh").checked, rfid: $("#rfid").value,
+      status, datum_rodjenja: dat, otac: $("#otac").value, majka: $("#majka").value, stado: $("#stado").value, poreklo: $("#por").value, poreklo_od: $("#pod").value });
+    if (typeof rez === "string") return ($("#gr").textContent = rez);
+    promena(rez.preimenovano ? t(`${rez.preimenovano} već postoji – upisano kao ${rez.id}`, `${rez.preimenovano} already exists – saved as ${rez.id}`)
+                             : t(`Sačuvano: ${rez.id}`, `Saved: ${rez.id}`));
+    idi(`karton/${encodeURIComponent(rez.id)}`);
   };
 }
 
@@ -541,10 +637,11 @@ function ekranVise() {
   postaviVrh(t("Više", "More"), false); meni("vise");
   const n = S.promene.length;
   ekran.innerHTML = `${dugmeInstalacije()}<div class="lista">
-    ${oblakPodesen() ? `<a class="red" href="#sinh"><span style="font-size:24px">☁</span><div class="sred"><b>${S.sinh ? t("Povezano sa računarom", "Connected to computer") : t("Upari sa računarom (QR kod)", "Pair with computer (QR code)")}</b><span>${h(S.sinh ? (sinhStanje.tekst || S.sinh.naziv || "") : t("jednom skeniraš i sve se samo usklađuje", "scan once and everything syncs"))}</span></div></a>` : ""}
+    ${oblakPodesen() ? `<a class="red" href="#sinh"><span style="font-size:24px">☁</span><div class="sred"><b>${S.sinh ? t("Povezano sa računarom", "Connected to computer") : t("Upari sa računarom (QR kod ili kod)", "Pair with computer (QR or code)")}</b><span>${h(S.sinh ? (sinhStanje.tekst || S.sinh.naziv || "") : t("jednom skeniraš i sve se samo usklađuje", "scan once and everything syncs"))}</span></div></a>` : ""}
     <a class="red" href="#prenos"><span style="font-size:24px">⇅</span><div class="sred"><b>${t("Prenos sa računarom", "Transfer with computer")}</b><span>${n ? t(`${n} promena čeka slanje računaru`, `${n} changes waiting to be sent`) : t("sve je poslato", "everything sent")}</span></div>${n ? `<span class="znak warn">${n}</span>` : ""}</a>
     <a class="red" href="#srodstvo"><span style="font-size:24px">⚯</span><div class="sred"><b>${t("Srodstvo dva grla", "Relationship of two animals")}</b><span>${t("koliko su srodni, zajednički preci", "how related they are, common ancestors")}</span></div></a>
     <a class="red" href="#novo"><span style="font-size:24px">＋</span><div class="sred"><b>${t("Novo grlo", "New animal")}</b><span>${t("kupljeno ili rođeno", "bought or born")}</span></div></a>
+    <a class="red" href="#muznja"><span style="font-size:24px">🥛</span><div class="sred"><b>${t("Mužnja", "Milking")}</b><span>${t("dnevni upis mleka za mlečna grla", "daily milk entry for dairy animals")}</span></div></a>
     <a class="red" href="#podsetnik"><span style="font-size:24px">⏰</span><div class="sred"><b>${t("Novi podsetnik", "New reminder")}</b><span>${t("vakcinacija, lečenje…", "vaccination, treatment…")}</span></div></a>
     <a class="red" href="#" id="problem"><span style="font-size:24px">⚠</span><div class="sred"><b>${t("Prijavi problem", "Report a problem")}</b><span>${t("pošalji izveštaj o greškama (bez podataka o grlima)", "send an error report (no animal data)")}</span></div></a>
     </div>

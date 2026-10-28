@@ -5,7 +5,7 @@ from tkinter import messagebox, ttk
 
 from osnova import EN
 from jezik import AUTO, GRAVIDNOST_PROFILI, PARENJE, STADO_PODMLADAK
-from podaci import nazivi, norm, norm_rasa, parsiraj_datum, pct, rasa_potomka, sada, vrsta_norm
+from podaci import nazivi, norm, norm_rasa, parsiraj_datum, pct, rasa_potomka, sada, slobodna_oznaka, vrsta_norm
 from izgled import BAD, BRAND, INK, INK2, OK, OK_BG, SURF, SURF2
 
 
@@ -581,15 +581,16 @@ class GravidnostDeo:
 
         def sacuvaj(ev=None):
             stado = sv.get().strip() or STADO_PODMLADAK
+            namena_majke = (m.A.get(majka) or {}).get("namena", "") if majka else ""
+            autoh_majke = (m.A.get(majka) or {}).get("autohtona", "") if majka else ""
             novi, vidjeni = [], set()
             for i, r in enumerate(redovi, 1):
                 nid, mk, pol = r["id"].get().strip(), r["mk"].get().strip(), r["pol"].get()
                 if not nid:
                     err.config(text=(f"Enter a tag or name for {n[2]} no. {i} (or remove the row ✕)." if EN else f"Upiši oznaku ili ime za {i}. {n[2]} (ili ukloni red ✕)."))
                     return
-                if nid in vidjeni or self.red_za(nid) or nid in m.A:
-                    err.config(text=(f"Tag {nid} already exists. Choose another." if EN else f"Oznaka {nid} već postoji. Izaberi drugu."))
-                    return
+                if nid in vidjeni or self.red_za(nid) or nid in m.A:     # isto ime -> sledeći broj po redu (Bela 2…)
+                    nid = slobodna_oznaka(nid, [x["id"] for x in self.tab.redovi] + list(m.A) + list(vidjeni))
                 if mk:
                     poruka = self.markica_zauzeta(mk, None)
                     if poruka or any(norm(mk) == norm(x["markica"]) for x in novi):
@@ -599,7 +600,7 @@ class GravidnostDeo:
                     err.config(text=(f"Choose the sex for {nid}." if EN else f"Izaberi pol za {nid}."))
                     return
                 vidjeni.add(nid)
-                novi.append(dict(id=nid, markica=mk, vrsta=vrsta, rasa=rasa, pol=pol, datum_rodjenja=dstr,
+                novi.append(dict(id=nid, markica=mk, vrsta=vrsta, rasa=rasa, namena=namena_majke, autohtona=autoh_majke, pol=pol, datum_rodjenja=dstr,
                                  otac=otac or "", majka=majka or "", status="aktivno", stado=stado,
                                  poreklo=("Home bred" if EN else "Sopstveni odgoj"), poreklo_od="", stare_markice="", uneto=sada()))
             for x in novi:

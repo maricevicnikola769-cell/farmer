@@ -7,7 +7,7 @@ from osnova import EN, _uz_tablicu, prevedi_vrednost
 from jezik import NAZIVI
 
 
-KOLONE = ["id", "markica", "vrsta", "rasa", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
+KOLONE = ["id", "markica", "rfid", "vrsta", "rasa", "namena", "autohtona", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
           "poreklo", "poreklo_od", "stare_markice", "uneto"]
 
 
@@ -142,14 +142,15 @@ class Tablica:
         self.mtime = os.path.getmtime(self.putanja)
 
 
-EN_KOL = {"id": "id", "markica": "ear_tag", "vrsta": "species", "rasa": "breed", "pol": "sex",
+EN_KOL = {"id": "id", "markica": "ear_tag", "rfid": "rfid", "vrsta": "species", "rasa": "breed", "namena": "purpose", "autohtona": "native_breed", "pol": "sex",
           "datum_rodjenja": "birth_date", "otac": "sire", "majka": "dam", "status": "status", "stado": "herd",
           "poreklo": "origin", "poreklo_od": "origin_from", "stare_markice": "old_ear_tags", "uneto": "added"}
 
 
 EN_IST = {"grlo": "animal", "datum": "date", "dogadjaj": "event", "opis": "description", "partner": "partner",
           "vrednost": "value", "automatski": "automatic", "uneto": "added", "ishod": "outcome", "ter": "heat",
-          "karenca_meso": "withdrawal_meat_days", "karenca_mleko": "withdrawal_milk_days", "upisao": "entered_by"}
+          "karenca_meso": "withdrawal_meat_days", "karenca_mleko": "withdrawal_milk_days", "upisao": "entered_by",
+          "mast": "fat_pct", "proteini": "protein_pct"}
 
 
 EN_POD = {"grlo": "animal", "datum": "date", "tip": "type", "tekst": "text", "ponavljanje": "repeat_days",
@@ -164,10 +165,61 @@ ALIAS = {"oznaka": "id", "grlo": "id", "usna_markica": "markica", "usni_broj": "
          "datum": "datum_rodjenja", "tag": "id", "animal": "id", "name": "id", "eartag": "markica",
          "ear_tag_number": "markica", "father": "otac", "mother": "majka", "date_of_birth": "datum_rodjenja",
          "dob": "datum_rodjenja", "birthdate": "datum_rodjenja", "born": "datum_rodjenja", "gender": "pol",
+         "farm": "gazdinstvo", "farma": "gazdinstvo", "namena_rase": "namena", "tip": "namena",
+         "eid": "rfid", "rfid_broj": "rfid", "elektronski_broj": "rfid", "electronic_id": "rfid", "e_markica": "rfid",
+         "autohtona_rasa": "autohtona", "autohtono": "autohtona", "native": "autohtona", "indigenous": "autohtona",
          **{v: k for k, v in EN_KOL.items()}}
 
 
 POL_MAP = {"m": "m", "z": "z", "ž": "z", "f": "z", "b": "m", "k": "z"}
+
+
+def da_ne(v):
+    """Kolona 'autohtona': '1' = da, '' = ne (prihvata da/yes/x/1/true iz Excela)."""
+    return "1" if str(v or "").strip().lower() in ("1", "da", "d", "yes", "y", "x", "true", "✓", "autohtona", "native") else ""
+
+
+# poznate autohtone rase u Srbiji – kad se upiše takva rasa, kvačica „autohtona“ se predloži sama
+AUTOHTONE_RASE = ("buša", "busa", "podolsk", "pramenka", "sjenič", "sjenic", "svrlji", "pirotsk", "krivovir", "karakačan",
+                  "karakacan", "lipsk", "bardoka", "vlaška vitoroga", "vlaska vitoroga", "cigaja", "balkansk", "mangulic",
+                  "mangalic", "moravk", "resavk", "brdski konj", "domaći brdski", "domaci brdski")
+
+
+def autohtona_rasa(rasa):
+    r = str(rasa or "").lower()
+    return any(k in r for k in AUTOHTONE_RASE)
+
+
+def cifre(t):
+    return "".join(c for c in str(t or "") if c.isdigit())
+
+
+def isti_broj_citaca(procitano, broj):
+    """Da li broj sa čitača (npr. 688 000123456789) odgovara upisanom broju (RFID ili markica).
+    Isto kad se poklapa ceo broj; inače kad se upisani broj (bar 8 cifara) nalazi na kraju pročitanog."""
+    a, b = norm(procitano), norm(broj)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    ca, cb = cifre(procitano), cifre(broj)
+    return len(cb) >= 8 and ca.endswith(cb)
+
+
+def slobodna_oznaka(nid, postojece):
+    """Ako oznaka/ime već postoji, novo grlo dobija sledeći broj po redu: Bela, Bela 2, Bela 3…
+    Poređenje ne gleda velika/mala slova ni razmake (Bela = bela)."""
+    nid = " ".join(str(nid or "").split())
+    zauzeto = {norm(x) for x in postojece if x}
+    if norm(nid) not in zauzeto:
+        return nid
+    osnova, n = nid, 2
+    delovi = nid.rsplit(" ", 1)
+    if len(delovi) == 2 and delovi[1].isdigit() and int(delovi[1]) >= 2:
+        osnova, n = delovi[0], int(delovi[1]) + 1
+    while norm(f"{osnova} {n}") in zauzeto:
+        n += 1
+    return f"{osnova} {n}"
 
 
 def norm_rasa(r):
@@ -346,8 +398,9 @@ def _obradi_tablicu(sirovo, excel=False):
         st = r.get("status", "").lower()
         r["status"] = ("aktivno" if st == "" or st.startswith(("akt", "act")) else
                        "obrisano" if st.startswith(("obr", "del")) else "neaktivno")
-        for p in ("poreklo", "rasa"):
+        for p in ("poreklo", "rasa", "namena"):
             r[p] = prevedi_vrednost(r.get(p, ""))
+        r["autohtona"] = da_ne(r.get("autohtona", ""))
         redovi.append(r)
     return redovi, zaglavlje
 
@@ -355,7 +408,7 @@ def _obradi_tablicu(sirovo, excel=False):
 # =============================================================== istorija grla
 
 IST_KOLONE = ["grlo", "datum", "dogadjaj", "opis", "partner", "vrednost", "automatski", "uneto", "ishod",
-              "ter", "karenca_meso", "karenca_mleko", "upisao"]
+              "ter", "karenca_meso", "karenca_mleko", "upisao", "mast", "proteini"]
 
 
 class Istorija:
@@ -413,8 +466,12 @@ class Istorija:
         self.zapisi.append(z)
         return z
 
-    def za(self, grlo=None, auto=True):
-        z = [x for x in self.zapisi if (grlo is None or x["grlo"] == grlo) and (auto or not x["automatski"])]
+    def za(self, grlo=None, auto=True, mleko=False):
+        """Zapisi za grlo (ili celo stado). Dnevna mužnja se ne prikazuje u običnoj istoriji (ima svoju stranu
+        „Mlečnost“) – osim kad se traži (mleko=True)."""
+        from jezik import MUZNJA
+        z = [x for x in self.zapisi if (grlo is None or x["grlo"] == grlo) and (auto or not x["automatski"])
+             and (mleko or x["dogadjaj"] != MUZNJA)]
         return sorted(z, key=lambda x: (parsiraj_datum(x["datum"]) or date.min, x["uneto"]), reverse=True)
 
     def preimenuj(self, staro, novo):

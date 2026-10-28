@@ -27,7 +27,7 @@ class KopijeDeo:
 
     _RUCNE = ("rucne", "manual")
 
-    _PRATECI = ("_istorija.csv", "_history.csv", "_podsetnici.csv", "_reminders.csv")
+    _PRATECI = ("_istorija.csv", "_history.csv", "_podsetnici.csv", "_reminders.csv", "_finansije.csv", "_finances.csv")
 
 
     @staticmethod
@@ -197,7 +197,8 @@ class KopijeDeo:
 
 
     def fajlovi_podataka(self):
-        return [p for p in (self.tab.putanja, self.ist.putanja, self.pods.putanja) if os.path.isfile(p)]
+        fin = getattr(self, "fin", None)
+        return [p for p in (self.tab.putanja, self.ist.putanja, self.pods.putanja, fin.putanja if fin else "") if p and os.path.isfile(p)]
 
 
     def napravi_kopiju(self, vrsta="automatske", naziv=None, tiho=True):
@@ -454,6 +455,7 @@ class KopijeDeo:
                 self.tab = Tablica(os.path.join(folder, os.path.basename(k["tab"])))
                 self.ist = Istorija(self.tab.putanja)
                 self.pods = Podsetnici(self.tab.putanja)
+                self._fin = None                   # finansije se ponovo učitaju iz vraćene kopije
             except Exception as e:
                 messagebox.showerror(T("Vraćanje nije uspelo", "Restore failed"), str(e), parent=win)
                 return
@@ -508,3 +510,4 @@ class KopijeDeo:
         self.btn(dd, T("Druga lokacija…", "Second location…") if st != "nema" else T("Izaberi drugu lokaciju…", "Choose second location…"),
                  self.izaberi_drugu_lokaciju, "Secondary" if st != "nema" else "Primary").pack(side="left")
         self.btn(dd, T("Otvori folder", "Open folder"), lambda: self.otvori_folder(self.folder_kopija())).pack(side="left", padx=8)
+        self.kartica_oblaka(c)

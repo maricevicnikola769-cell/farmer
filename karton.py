@@ -1,12 +1,12 @@
 """Karton grla, rodoslovno stablo, potomci, bočni srodnici i forma za upis/izmenu grla."""
 import tkinter as tk
 from datetime import date
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from osnova import EN
-from jezik import AUTO, GRUPE, POREKLA, T, VRSTE
+from jezik import AUTO, GRUPE, POREKLA, T, VRSTE, namene_za
 from podaci import (fmt_datum, fmt_starost, nazivi, norm, norm_rasa, parsiraj_datum, pct, rasa_potomka, sada,
-    sort_key, starost_meseci, vrsta_norm)
+    autohtona_rasa, slobodna_oznaka, sort_key, starost_meseci, vrsta_norm)
 from izgled import BAD, BAD_BG, BG, BRAND, INK, INK2, LINE, OK, SURF, SURF2, ScrollFrame, TAG, WARN
 from rodoslov import procena
 
@@ -79,6 +79,8 @@ class KartonEkran:
             lnk = self.lbl(mr, ("change" if EN else "promeni"), 9, "bold", fg=BRAND, cursor="hand2")
             lnk.pack(side="left", padx=10)
             lnk.bind("<Button-1>", lambda e: self.promena_markice(x, parent=win))
+            if a.get("rfid"):                     # elektronski broj ispod markice (manjim slovima)
+                self.lbl(kv, "RFID " + a["rfid"], 8, fg=INK2).grid(row=0, column=1, sticky="sw", padx=16, pady=(22, 0))
             por = a["poreklo"] + (f" – {a['poreklo_od']}" if a["poreklo_od"] else "") if a["poreklo"] else a["poreklo_od"]
             self.lbl(kv, ("Origin" if EN else "Poreklo"), 10, fg=INK2).grid(row=6, column=0, sticky="nw", pady=3)
             self.lbl(kv, por or ("not entered" if EN else "nije upisano"), 10, "bold" if por else "normal", fg=INK if por else INK2,
@@ -87,7 +89,8 @@ class KartonEkran:
                 self.lbl(kv, ("Previous ear tags" if EN else "Ranije markice"), 10, fg=INK2).grid(row=5, column=0, sticky="nw", pady=3)
                 self.lbl(kv, ", ".join(a["stare"]), 10, fg=INK2, wraplength=260, justify="left").grid(
                     row=5, column=1, sticky="w", padx=16, pady=3)
-            for i, (k, v) in enumerate(((("Ear tag" if EN else "Ušna markica"), None), (("Species" if EN else "Vrsta"), a["vrsta"]),
+            for i, (k, v) in enumerate(((("Ear tag" if EN else "Ušna markica"), None), (("Species" if EN else "Vrsta"), a["vrsta"] + (f"  ·  {a['namena']}" if a.get("namena") else "")
+                                         + (("  ·  native breed" if EN else "  ·  autohtona rasa") if a.get("autohtona") else "")),
                                         (("Born" if EN else "Rođeno"), (fmt_datum(a["datum"]) + (f"  ({fmt_starost(st)})" if st is not None else ""))
                                          if a["datum"] else "–"),
                                         (("Herd" if EN else "Stado"), a["stado"] or "–"))):
@@ -252,6 +255,8 @@ class KartonEkran:
             l2.pack(side="left", padx=16)
             l2.bind("<Button-1>", lambda e: self.istorija_prozor(x))
 
+        if not a["osnivac"]:
+            self.mlecnost_na_kartonu(b, x)
         act1 = tk.Frame(b, bg=SURF)
         act1.pack(anchor="w", pady=(24, 0))
         if not a["osnivac"]:
@@ -260,7 +265,8 @@ class KartonEkran:
         if not a["osnivac"]:
             act = tk.Frame(b, bg=SURF)
             act.pack(anchor="w", pady=(8, 0))
-            dete = dict(vrsta=a["vrsta"], rasa=a["rasa"], stado=a["stado"])
+            dete = dict(vrsta=a["vrsta"], rasa=a["rasa"], namena=a.get("namena", ""), autohtona=a.get("autohtona", ""),
+                        stado=a["stado"], status="aktivno")
             dete["otac" if a["pol"] == "m" else "majka"] = x
             self.btn(act, ("Add offspring" if EN else "Upiši potomka"), lambda: (win.destroy(), self.forma(preset=dete))).pack(side="left", padx=(0, 8))
             if a.get("obrisano"):
@@ -669,7 +675,7 @@ class KartonEkran:
         red = next((r for r in self.tab.redovi if r["id"] == jid), None) if jid else None
         posl = self.pod.get("poslednje", {})
         v = dict(red) if red else {"vrsta": posl.get("vrsta", ("cattle" if EN else "goveda")), "rasa": posl.get("rasa", ""),
-                                   "stado": posl.get("stado", ""), "status": "aktivno", **(preset or {})}
+                                   "stado": posl.get("stado", ""), "status": "", **(preset or {})}
         win = tk.Toplevel(self.root, bg=SURF)
         win.title(("Edit animal" if EN else "Izmena grla") if red else ("New animal" if EN else "Novo grlo"))
         win.transient(self.root)
@@ -705,7 +711,7 @@ class KartonEkran:
         polje(2, 1, ("Breed" if EN else "Rasa"), "rasa", "combo", sorted({a["rasa"] for a in sva if a["rasa"]}))
 
         pf = tk.Frame(b, bg=SURF)
-        pf.grid(row=3, column=0, columnspan=2, sticky="w", pady=6)
+        pf.grid(row=3, column=0, sticky="w", pady=6)
         self.lbl(pf, ("Sex *" if EN else "Pol *"), 9, "bold", fg=INK2).pack(anchor="w")
         segf = tk.Frame(pf, bg=SURF2)
         segf.pack(anchor="w", pady=(4, 0))
@@ -725,6 +731,26 @@ class KartonEkran:
             seg_btns[k] = lb
         crtaj_seg()
         vars_["vrsta"].trace_add("write", crtaj_seg)
+
+        # namena rase (goveda, ovce, koze i svinje): mlečna / tovna / kombinovana, odnosno mesnata / masna / kombinovana
+        nf = tk.Frame(b, bg=SURF)
+        self.lbl(nf, ("Breed purpose *" if EN else "Namena rase *"), 9, "bold", fg=INK2).pack(anchor="w")
+        namena = tk.StringVar(value=v.get("namena", ""))
+        cb_nam = ttk.Combobox(nf, textvariable=namena, width=26, font=self.f(10), state="readonly")
+        cb_nam.pack(fill="x", pady=(4, 0))
+        self.lbl(nf, ("cattle, sheep, goats and pigs" if EN else "za goveda, ovce, koze i svinje"), 8, fg="#8A968D").pack(anchor="w")
+
+        def crtaj_namenu(*_):
+            izbori = namene_za(vrsta_norm(vars_["vrsta"].get()) or vars_["vrsta"].get())
+            if izbori:
+                cb_nam.config(values=izbori)
+                if namena.get() and namena.get() not in izbori:
+                    namena.set("")
+                nf.grid(row=3, column=1, sticky="new", padx=(14, 0), pady=6)
+            else:
+                nf.grid_remove()
+        crtaj_namenu()
+        vars_["vrsta"].trace_add("write", crtaj_namenu)
 
         d = parsiraj_datum(v.get("datum_rodjenja"))
         v["datum_rodjenja"] = d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")) if d else v.get("datum_rodjenja", "")
@@ -749,9 +775,37 @@ class KartonEkran:
                 vars_["rasa"].set(predlog)
         vars_["otac"].trace_add("write", auto_rasa)
         vars_["majka"].trace_add("write", auto_rasa)
-        akt = tk.BooleanVar(value=v.get("status", "aktivno") != "neaktivno")
-        ttk.Checkbutton(b, text=("The animal is in the herd (not sold or dead)" if EN else "Grlo je u zapatu (nije prodato ni uginulo)"), variable=akt,
-                        style="Card.TCheckbutton").grid(row=7, column=0, columnspan=2, sticky="w", pady=(10, 0))
+
+        def namena_od_majke(*_):
+            """Ako namena još nije izabrana, preuzmi je od majke."""
+            mj_ = m.nadji(vars_["majka"].get())
+            nm = m.A[mj_].get("namena", "") if mj_ else ""
+            if nm and not namena.get() and nm in (cb_nam.cget("values") or ()):
+                namena.set(nm)
+        vars_["majka"].trace_add("write", namena_od_majke)
+        stf = tk.Frame(b, bg=SURF)
+        stf.grid(row=7, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        rf = tk.Frame(stf, bg=SURF)
+        rf.pack(anchor="w", fill="x", pady=(0, 10))
+        self.lbl(rf, ("Electronic ID (RFID reader)" if EN else "Elektronski broj (RFID čitač)"), 9, "bold", fg=INK2).pack(anchor="w")
+        rfid_var = tk.StringVar(value=v.get("rfid", ""))
+        ttk.Entry(rf, textvariable=rfid_var, width=30, font=self.f(10)).pack(anchor="w", pady=(4, 0))
+        self.lbl(rf, ("optional – click in the field and hold the reader to the ear tag" if EN else "nije obavezno – klikni u polje i prisloni čitač uz minđušu"),
+                 8, fg="#8A968D").pack(anchor="w")
+        autoh = tk.BooleanVar(value=bool(v.get("autohtona")))
+        ttk.Checkbutton(stf, text=("Native (indigenous) breed" if EN else "Autohtona rasa"), variable=autoh,
+                        style="Card.TCheckbutton").pack(anchor="w", pady=(0, 10))
+
+        def predlozi_autohtonu(*_):
+            if autohtona_rasa(vars_["rasa"].get()):
+                autoh.set(True)
+        vars_["rasa"].trace_add("write", predlozi_autohtonu)
+        self.lbl(stf, ("Status *" if EN else "Status grla *"), 9, "bold", fg=INK2).pack(anchor="w")
+        pocetni = v.get("status", "")
+        status = tk.StringVar(value="aktivno" if pocetni in ("aktivno", "obrisano") else "neaktivno" if pocetni else "")
+        for vr_, tekst in (("aktivno", ("Active – the animal is on the farm" if EN else "Aktivno – grlo je na farmi")),
+                           ("neaktivno", ("Inactive – not on the farm (sold, dead, on loan…)" if EN else "Neaktivno – grlo nije na farmi (prodato, uginulo, pozajmljeno…)"))):
+            ttk.Radiobutton(stf, text=tekst, value=vr_, variable=status, style="Card.TRadiobutton").pack(anchor="w", pady=(4, 0))
         err = self.lbl(b, "", 10, "bold", fg=BAD)
         err.grid(row=8, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
@@ -761,6 +815,9 @@ class KartonEkran:
                 err.config(text=("Enter the animal's tag." if EN else "Upiši oznaku grla."))
                 e_id.focus_set()
                 return
+            prvobitno = nid
+            if not red:                      # isto ime/oznaka već postoji -> sledeći broj po redu (Bela 2, Bela 3…)
+                nid = slobodna_oznaka(nid, [r["id"] for r in self.tab.redovi])
             dup = next((r for r in self.tab.redovi if r["id"] == nid and r is not red), None)
             if dup:
                 err.config(text=(f"Animal {nid} already exists." if EN else f"Grlo {nid} već postoji.") + ((" It is deleted – restore it from the \"Deleted animals\" list." if EN else " Obrisano je – vrati ga iz liste „Obrisana grla“.")
@@ -772,8 +829,22 @@ class KartonEkran:
                 if zauzeto:
                     err.config(text=zauzeto)
                     return
+            rfid = " ".join(rfid_var.get().split())
+            if rfid:
+                zauzeto = self.rfid_zauzet(rfid, red)
+                if zauzeto:
+                    err.config(text=zauzeto)
+                    return
             if pol.get() not in ("m", "z"):
                 err.config(text=("Choose the sex." if EN else "Izaberi pol."))
+                return
+            izbori_nam = namene_za(vrsta_norm(vars_["vrsta"].get()) or vars_["vrsta"].get())
+            if izbori_nam and not red and namena.get() not in izbori_nam:
+                err.config(text=("Choose the breed purpose (" if EN else "Izaberi namenu rase (") + " / ".join(izbori_nam) + ").")
+                return
+            if status.get() not in ("aktivno", "neaktivno"):
+                err.config(text=("Choose whether the animal is active (on the farm) or inactive." if EN
+                                 else "Izaberi da li je grlo aktivno (na farmi) ili neaktivno."))
                 return
             dat = vars_["datum_rodjenja"].get().strip()
             if dat and not parsiraj_datum(dat):
@@ -783,11 +854,12 @@ class KartonEkran:
             if nid in (o, mj):
                 err.config(text=("An animal cannot be its own parent." if EN else "Grlo ne može biti sopstveni roditelj."))
                 return
-            novi = dict(id=nid, markica=mk, vrsta=vrsta_norm(vars_["vrsta"].get()) or ("cattle" if EN else "goveda"),
-                        rasa=norm_rasa(vars_["rasa"].get()), pol=pol.get(),
+            novi = dict(id=nid, markica=mk, rfid=rfid, vrsta=vrsta_norm(vars_["vrsta"].get()) or ("cattle" if EN else "goveda"),
+                        rasa=norm_rasa(vars_["rasa"].get()), namena=namena.get() if izbori_nam else "",
+                        autohtona="1" if autoh.get() else "", pol=pol.get(),
                         datum_rodjenja=parsiraj_datum(dat).strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")) if dat else "",
                         otac=o, majka=mj, status=("obrisano" if red and red.get("status") == "obrisano"
-                                                  else "aktivno" if akt.get() else "neaktivno"),
+                                                  else status.get()),
                         stado=vars_["stado"].get().strip(), poreklo=vars_["poreklo"].get().strip(),
                         poreklo_od=vars_["poreklo_od"].get().strip())
             if red:
@@ -799,7 +871,8 @@ class KartonEkran:
                 red["id"] = nid
                 if norm(red.get("markica")) != norm(mk):
                     self.primeni_markicu(red, mk, zapamti=True)
-                nazivi_polja = dict(vrsta="vrsta", rasa="rasa", pol="pol", datum_rodjenja=("date of birth" if EN else "datum rođenja"),
+                nazivi_polja = dict(rfid=("electronic ID" if EN else "elektronski broj"), vrsta="vrsta", rasa="rasa", namena=("purpose" if EN else "namena"),
+                                    autohtona=("native breed" if EN else "autohtona"), pol="pol", datum_rodjenja=("date of birth" if EN else "datum rođenja"),
                                     otac=("sire" if EN else "otac"), majka=("dam" if EN else "majka"), status="status", stado=("herd" if EN else "stado"),
                                     poreklo="poreklo", poreklo_od=("origin from" if EN else "poreklo od"))
                 promene = [f"{n}: {red.get(k) or '–'} → {novi.get(k) or '–'}" for k, n in nazivi_polja.items()
@@ -832,6 +905,9 @@ class KartonEkran:
             win.grab_release()
             win.destroy()
             self.promena((f"Saved: {nid}" if EN else f"Sačuvano: {nid}"))
+            if nid != prvobitno:
+                messagebox.showinfo("HerdDoc", (f"{prvobitno} already exists, so the new animal was saved as {nid}." if EN
+                                                else f"{prvobitno} već postoji, pa je novo grlo upisano kao {nid}."))
             if dalje:
                 self.forma()
 

@@ -6,7 +6,7 @@ from datetime import date
 from tkinter import messagebox, ttk
 
 from osnova import EN, JEZIK, VERZIJA
-from jezik import DOGADJAJI, T
+from jezik import DOGADJAJI, PARENJE, T
 from podaci import fmt_datum, fmt_starost, parsiraj_datum, pct, sort_key, starost_meseci
 from izgled import BAD, BG, BRAND, INK, INK2, LINE, LOGO, OK, SURF, ScrollFrame, WARN
 from rodoslov import procena
@@ -220,6 +220,133 @@ def _app_stampaj_spisak(self):
     _otvori_html("spisak-stada", T("Spisak stada", "Herd list"), T("Sva grla u zapatu", "All animals in the herd"), telo)
 
 
+# ---------------------------------------------------------------- izveštaji za veterinara i udruženje
+IZVESTAJ_PERIODI = (("30", ("Poslednjih 30 dana", "Last 30 days")), ("mesec", ("Ovaj mesec", "This month")),
+                    ("prosli_mesec", ("Prošli mesec", "Last month")), ("godina", ("Ova godina", "This year")),
+                    ("prosla_godina", ("Prošla godina", "Last year")), ("12", ("Poslednjih 12 meseci", "Last 12 months")))
+
+
+def period_izvestaja(kljuc, danas=None):
+    from datetime import timedelta
+    d = danas or date.today()
+    if kljuc == "30":
+        return d - timedelta(days=29), d
+    if kljuc == "12":
+        return d - timedelta(days=364), d
+    from finansije import period
+    return period(kljuc, d)
+
+
+def _u_periodu(z, od, do):
+    d = parsiraj_datum(z.get("datum"))
+    return d is not None and od <= d <= do
+
+
+def _ozn(m, x):
+    """Oznaka grla sa markicom: 'Bela (RS 4021-01536)'."""
+    if not x:
+        return "–"
+    a = m.A.get(x) or {}
+    return _html_esc(x) + (f" <small>({_html_esc(a['markica'])})</small>" if a.get("markica") else "")
+
+
+def _period_txt(od, do):
+    return f"{fmt_datum(od)} – {fmt_datum(do)}"
+
+
+def _app_izvestaj_lekova(self, kljuc="12"):
+    """Evidencija upotrebe lekova i vakcina sa karencom – za veterinara i inspekciju."""
+    from datetime import timedelta
+    m = self.model
+    _html_esc.tablica = self.tab.putanja
+    od, do = period_izvestaja(kljuc)
+    leci, vak = DOGADJAJI[4], DOGADJAJI[3]
+    zap = sorted((z for z in self.ist.zapisi if z["dogadjaj"] in (leci, vak) and not z["automatski"] and _u_periodu(z, od, do)),
+                 key=lambda z: (parsiraj_datum(z["datum"]), z["uneto"]))
+    redovi = ""
+    for z in zap:
+        d = parsiraj_datum(z["datum"])
+        kar = []
+        for k, n in (("karenca_meso", T("meso", "meat")), ("karenca_mleko", T("mleko", "milk"))):
+            try:
+                dani = int(float(str(z.get(k) or "0").replace(",", ".")))
+            except ValueError:
+                dani = 0
+            if dani:
+                kar.append(f"{n}: {dani} {T('d.', 'd')} ({T('do', 'until')} {fmt_datum(d + timedelta(days=dani))})")
+        redovi += (f"<tr><td>{fmt_datum(d)}</td><td>{_ozn(m, z['grlo'])}</td><td>{_html_esc(z['dogadjaj'])}</td>"
+                   f"<td><b>{_html_esc(z['vrednost'] or '–')}</b></td><td>{_html_esc(z['opis'])}</td>"
+                   f"<td>{'<br>'.join(kar) or '–'}</td><td>{_html_esc(z.get('upisao') or '')}</td></tr>")
+    gaz = self.pod.get("gazdinstvo", "")
+    telo = (f"<table class='podaci'><tr><td>{T('Gazdinstvo', 'Farm')}</td><td><b>{_html_esc(gaz or '–')}</b></td></tr>"
+            f"<tr><td>{T('Period', 'Period')}</td><td><b>{_period_txt(od, do)}</b></td></tr>"
+            f"<tr><td>{T('Broj upisa', 'Entries')}</td><td><b>{len(zap)}</b></td></tr></table>"
+            f"<h2>{T('Upotreba lekova i vakcina', 'Use of medicines and vaccines')}</h2>"
+            + (f"<table><tr><th>{T('Datum', 'Date')}</th><th>{T('Grlo', 'Animal')}</th><th>{T('Vrsta', 'Type')}</th>"
+               f"<th>{T('Lek / vakcina', 'Medicine / vaccine')}</th><th>{T('Opis (dijagnoza, doza)', 'Description (diagnosis, dose)')}</th>"
+               f"<th>{T('Karenca', 'Withdrawal')}</th><th>{T('Upisao', 'Entered by')}</th></tr>{redovi}</table>"
+               if zap else f"<p>{T('U ovom periodu nema upisanih lečenja ni vakcinacija.', 'No treatments or vaccinations in this period.')}</p>")
+            + f"<div class='potpis'><div>{T('Vlasnik gazdinstva', 'Farm owner')}</div><div>{T('Veterinar', 'Veterinarian')}</div></div>")
+    _otvori_html("lekovi", T("Evidencija lekova i karence", "Medicine and withdrawal register"), _period_txt(od, do), telo)
+
+
+def _app_izvestaj_rodjenja(self, kljuc="12"):
+    """Spisak rođene teladi/jagnjadi… u periodu sa roditeljima – za prijavu udruženju odgajivača."""
+    m = self.model
+    _html_esc.tablica = self.tab.putanja
+    od, do = period_izvestaja(kljuc)
+    rodj = sorted((a for a in m.A.values() if not a["osnivac"] and not a.get("obrisano") and a["datum"] and od <= a["datum"] <= do),
+                  key=lambda a: (a["datum"], sort_key(a["id"])))
+    redovi = ""
+    for a in rodj:
+        o, mj = m.P.get(a["id"], (None, None))
+        redovi += (f"<tr><td>{fmt_datum(a['datum'])}</td><td><b>{_html_esc(a['id'])}</b></td><td>{_html_esc(a['markica'] or '–')}</td>"
+                   f"<td>{_html_esc(m.pol_naziv(a['id']))}</td><td>{_html_esc(a['vrsta'])}</td><td>{_html_esc(a['rasa'] or '–')}</td>"
+                   f"<td>{_ozn(m, o)}</td><td>{_ozn(m, mj)}</td><td>{pct(m.inbr(a['id']))}</td></tr>")
+    po_polu = {}
+    for a in rodj:
+        po_polu[a["pol"]] = po_polu.get(a["pol"], 0) + 1
+    gaz = self.pod.get("gazdinstvo", "")
+    telo = (f"<table class='podaci'><tr><td>{T('Gazdinstvo', 'Farm')}</td><td><b>{_html_esc(gaz or '–')}</b></td></tr>"
+            f"<tr><td>{T('Period', 'Period')}</td><td><b>{_period_txt(od, do)}</b></td></tr></table>"
+            f"<div class='sazetak'><div><b>{len(rodj)}</b>{T('rođeno', 'born')}</div>"
+            f"<div><b>{po_polu.get('z', 0)}</b>{T('ženskih', 'female')}</div><div><b>{po_polu.get('m', 0)}</b>{T('muških', 'male')}</div></div>"
+            f"<h2>{T('Rođena grla', 'Animals born')}</h2>"
+            + (f"<table><tr><th>{T('Rođeno', 'Born')}</th><th>{T('Oznaka', 'ID')}</th><th>{T('Markica', 'Ear tag')}</th><th>{T('Pol', 'Sex')}</th>"
+               f"<th>{T('Vrsta', 'Species')}</th><th>{T('Rasa', 'Breed')}</th><th>{T('Otac', 'Sire')}</th><th>{T('Majka', 'Dam')}</th><th>F</th></tr>"
+               f"{redovi}</table>" if rodj else f"<p>{T('U ovom periodu nema upisanih rođenja.', 'No births recorded in this period.')}</p>")
+            + f"<div class='potpis'><div>{T('Vlasnik gazdinstva', 'Farm owner')}</div><div>{T('Udruženje / selekcijska služba', 'Breed association')}</div></div>")
+    _otvori_html("rodjenja", T("Prijava rođenih grla", "Birth report"), _period_txt(od, do), telo)
+
+
+def _app_izvestaj_parenja(self, kljuc="12"):
+    """Parenja i osemenjavanja u periodu sa ishodom i očekivanim porođajem – za udruženje i selekcijsku službu."""
+    m = self.model
+    _html_esc.tablica = self.tab.putanja
+    od, do = period_izvestaja(kljuc)
+    zap = sorted((z for z in self.ist.zapisi if z["dogadjaj"] == PARENJE and not z["automatski"] and _u_periodu(z, od, do)),
+                 key=lambda z: (parsiraj_datum(z["datum"]), z["uneto"]))
+    redovi = ""
+    for z in zap:
+        majka, otac = self.roditelji_parenja(z)
+        oc = self.ocekivani_porodjaj(z)
+        redovi += (f"<tr><td>{fmt_datum(parsiraj_datum(z['datum']))}</td><td>{_ozn(m, majka)}</td><td>{_ozn(m, otac)}</td>"
+                   f"<td>{_html_esc(z['opis'])}</td><td>{fmt_datum(oc) if oc else '–'}</td>"
+                   f"<td>{_html_esc(self.opis_ishoda(z))}</td>"
+                   f"<td>{pct(m.kinship(majka, otac)) if majka in m.A and otac in m.A else '–'}</td></tr>")
+    gaz = self.pod.get("gazdinstvo", "")
+    telo = (f"<table class='podaci'><tr><td>{T('Gazdinstvo', 'Farm')}</td><td><b>{_html_esc(gaz or '–')}</b></td></tr>"
+            f"<tr><td>{T('Period', 'Period')}</td><td><b>{_period_txt(od, do)}</b></td></tr>"
+            f"<tr><td>{T('Broj parenja', 'Matings')}</td><td><b>{len(zap)}</b></td></tr></table>"
+            f"<h2>{T('Parenja i osemenjavanja', 'Matings and inseminations')}</h2>"
+            + (f"<table><tr><th>{T('Datum', 'Date')}</th><th>{T('Ženka', 'Female')}</th><th>{T('Mužjak / bik', 'Male / sire')}</th>"
+               f"<th>{T('Opis (VO, prirodno…)', 'Description (AI, natural…)')}</th><th>{T('Očekivani porođaj', 'Expected birth')}</th>"
+               f"<th>{T('Ishod', 'Outcome')}</th><th>{T('Inbriding potomka', 'Offspring inbreeding')}</th></tr>{redovi}</table>"
+               if zap else f"<p>{T('U ovom periodu nema upisanih parenja.', 'No matings recorded in this period.')}</p>")
+            + f"<div class='potpis'><div>{T('Vlasnik gazdinstva', 'Farm owner')}</div><div>{T('Osemenjivač / udruženje', 'Inseminator / association')}</div></div>")
+    _otvori_html("parenja", T("Izveštaj o parenjima i osemenjavanju", "Mating and insemination report"), _period_txt(od, do), telo)
+
+
 # ---------------------------------------------------------------- statistika
 def _crtaj_stubice(self, parent, naslov, podaci, boja=BRAND, sirina=520, visina=200, fmt=str):
     o, c = self.card(parent)
@@ -363,6 +490,28 @@ def _app_s_stampa(self):
            T("Sva grla u zapatu po stadima, sa markicama, roditeljima i inbridingom. Za veterinara ili inspekciju.",
              "All animals in the herd by herd group, with ear tags, parents and inbreeding. For the vet or inspection."),
            T("🖨 Napravi", "🖨 Create"), self.stampaj_spisak)
+    st_iz = self.ui.setdefault("izvestaj", {"period": "12"})
+    pv = tk.StringVar(value=T(*dict(IZVESTAJ_PERIODI)[st_iz["period"]]))
+
+    def birac_perioda(red):
+        cb = ttk.Combobox(red, textvariable=pv, values=[T(*n) for _, n in IZVESTAJ_PERIODI], state="readonly", width=19, font=self.f(10))
+        cb.pack(side="right", padx=10)
+        cb.bind("<<ComboboxSelected>>", lambda e: st_iz.update(period=next(k for k, n in IZVESTAJ_PERIODI if T(*n) == pv.get())))
+    self.lbl(body, T("Izveštaji za veterinara i udruženje", "Reports for the vet and breed association"), 13, "bold").pack(anchor="w", pady=(10, 8))
+    stavka(T("Evidencija lekova i karence", "Medicine and withdrawal register"),
+           T("Sva lečenja i vakcinacije u periodu: grlo, lek, doza, karenca za meso i mleko (do kog datuma). Za veterinara i inspekciju.",
+             "All treatments and vaccinations in the period: animal, medicine, dose, meat and milk withdrawal (until which date). For the vet and inspection."),
+           T("🖨 Napravi", "🖨 Create"), lambda: self.izvestaj_lekova(st_iz["period"]), birac_perioda)
+    stavka(T("Prijava rođenih grla", "Birth report"),
+           T("Grla rođena u periodu sa markicom, polom, rasom, ocem i majkom. Za udruženje odgajivača i matičnu evidenciju.",
+             "Animals born in the period with ear tag, sex, breed, sire and dam. For the breed association and herd book."),
+           T("🖨 Napravi", "🖨 Create"), lambda: self.izvestaj_rodjenja(st_iz["period"]))
+    stavka(T("Parenja i osemenjavanja", "Matings and inseminations"),
+           T("Parenja u periodu: ženka, bik, način (VO, prirodno), očekivani porođaj, ishod i inbriding potomka.",
+             "Matings in the period: female, sire, method (AI, natural), expected birth, outcome and offspring inbreeding."),
+           T("🖨 Napravi", "🖨 Create"), lambda: self.izvestaj_parenja(st_iz["period"]))
+    self.lbl(body, T("Period za izveštaje biraš kod prvog izveštaja i važi za sva tri.",
+                     "The report period is chosen at the first report and applies to all three."), 8, fg=INK2).pack(anchor="w", pady=(0, 14))
     stavka(T("Izvoz podataka (Excel / CSV)", "Export data (Excel / CSV)"),
            T("Grla, rodovnik u 3 kolena, istorija i podsetnici u Excel ili CSV fajl. Za udruženje odgajivača, laboratoriju, veterinara ili drugi program.",
              "Animals, 3-generation pedigree, history and reminders to an Excel or CSV file. For a breed association, laboratory, vet or another program."),
@@ -371,6 +520,9 @@ def _app_s_stampa(self):
 
 class StampaDeo:
     """Štampa, PDF i statistika kao delovi glavnog prozora."""
+    izvestaj_lekova = _app_izvestaj_lekova
+    izvestaj_rodjenja = _app_izvestaj_rodjenja
+    izvestaj_parenja = _app_izvestaj_parenja
     stampaj_rodoslov = _app_stampaj_rodoslov
     stampaj_plan = _app_stampaj_plan
     stampaj_spisak = _app_stampaj_spisak

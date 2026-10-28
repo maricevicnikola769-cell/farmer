@@ -356,3 +356,197 @@ def test_izvoz_samo_oznacenih(F):
     l = izvoz.tabele_za_izvoz(stado, m, None, None, samo_ids={"B", "Z"})
     assert sorted(r[0] for r in l[0][1][1:]) == ["B", "Z"]
     assert {r[0]: r[2:4] for r in l[1][1][1:]}["Z"] == ["B", "X"]
+
+
+def test_isto_ime_dobija_broj_po_redu():
+    """Isto ime/oznaka: novo grlo dobija sledeći broj (Bela, Bela 2, Bela 3…), bez obzira na velika slova i razmake."""
+    from podaci import slobodna_oznaka as s
+    assert s("Bela", ["K1"]) == "Bela"
+    assert s("Bela", ["Bela"]) == "Bela 2"
+    assert s("bela", ["Bela", "Bela 2"]) == "bela 3"
+    assert s("Bela 2", ["Bela", "Bela 2"]) == "Bela 3"
+    assert s("  Bela ", ["BELA", "Bela 3"]) == "Bela 2"
+
+
+def test_namena_rase(F, tmp_path):
+    """Namena rase postoji za goveda, ovce, koze i svinje (ne za konje); čuva se u tablici i prevodi pri promeni jezika."""
+    import jezik
+    sr = jezik.EN is False
+    ovce, svinje, goveda, konji = F.VRSTE[1], F.VRSTE[3], F.VRSTE[0], F.VRSTE[4]
+    assert jezik.namene_za(ovce) == jezik.NAMENE_MALI and len(jezik.NAMENE_MALI) == 3
+    assert jezik.namene_za(F.VRSTE[2]) == jezik.NAMENE_MALI
+    assert jezik.namene_za(svinje) == jezik.NAMENE_SVINJE and jezik.namene_za(konji) == []
+    assert jezik.namene_za(goveda) == jezik.NAMENE_MALI
+    t = F.Tablica(str(tmp_path / "t.csv"), ucitaj=False)
+    t.redovi = [dict(red("O1", pol="z", vrsta=ovce), namena=jezik.NAMENE_MALI[1])]
+    t.sacuvaj()
+    assert F.Tablica(t.putanja).redovi[0]["namena"] == jezik.NAMENE_MALI[1]
+    drugi = na_jeziku("en" if sr else "sr")                  # isti fajl na drugom jeziku: vrednost se prevodi
+    assert drugi.Tablica(t.putanja).redovi[0]["namena"] == jezik.NAMENE_MALI[1]
+    assert jezik.NAMENE_MALI[1] == ("meat breed" if sr else "tovna")
+
+
+def test_izvoz_sa_nazivom_gazdinstva(F, tmp_path):
+    """Naziv gazdinstva stoji odmah pored oznake grla (i u rodovniku); kupac pri uvozu zna odakle su preci."""
+    import izvoz
+    stado = [dict(r) for r in STADO]
+    for r in stado:
+        if r["id"] not in ("Z", "N"):
+            r["status"] = "neaktivno"
+    m = F.Model(stado)
+    l = izvoz.tabele_za_izvoz(stado, m, None, None, samo_zapat=True, gazdinstvo="Farma  Marić")
+    zag = l[0][1][0]
+    assert zag[1] in ("gazdinstvo", "farm") and all(r[1] == "Farma Marić" for r in l[0][1][1:])
+    assert l[1][1][0][1] in ("gazdinstvo", "farm") and l[1][1][1][1] == "Farma Marić"
+    p = str(tmp_path / "farma.xlsx")
+    izvoz.izvezi_u_fajl(p, l, "xlsx")
+    redovi, _ = F.procitaj_csv(p)
+    assert sorted(r["id"] for r in redovi) == ["N", "Z"] and redovi[0]["gazdinstvo"] == "Farma Marić"
+    tab = [{k: r.get(k, "") for k in F.KOLONE} for r in redovi]
+    izvoz.dopuni_iz_excela(F.procitaj_xlsx(p), tab, None, None, p)
+    m2 = F.Model(tab)
+    assert m2.inbr("Z") == pytest.approx(m.inbr("Z"))
+    assert {r["poreklo_od"] for r in tab if r["id"] not in ("N", "Z")} == {"Farma Marić"}
+
+
+def test_autohtona_rasa(F, tmp_path):
+    """Kvačica 'autohtona' za sve vrste: čuva se kao 1, iz Excela prihvata da/yes/x, poznate rase se prepoznaju."""
+    from podaci import autohtona_rasa, da_ne
+    assert autohtona_rasa("Buša") and autohtona_rasa("sjenička pramenka") and autohtona_rasa("mangulica")
+    assert not autohtona_rasa("simentalska") and not autohtona_rasa("")
+    assert [da_ne(x) for x in ("da", "Yes", "x", "1", "", "ne", "0")] == ["1", "1", "1", "1", "", "", ""]
+    p = tmp_path / "a.csv"
+    p.write_text("id;vrsta;pol;autohtona\nB1;goveda;z;da\nB2;goveda;z;\n", encoding="utf-8")
+    r, _ = F.procitaj_csv(str(p))
+    assert [x["autohtona"] for x in r] == ["1", ""]
+    m = F.Model(r)
+    assert m.A["B1"]["autohtona"] == "1"
+
+
+def test_mlecnost_laktacija_i_procena(F, tmp_path):
+    """Mužnja: upis po danu (izmena i brisanje istog dana), laktacija od telenja, procena za 305 dana; ne meša se u istoriju."""
+    from datetime import date, timedelta
+    import jezik
+    import mlecnost
+    zenka = dict(red("K1", pol="z", vrsta=F.VRSTE[0]), namena=jezik.NAMENE_MALI[0])
+    tele = dict(red("T1", "", "K1", vrsta=F.VRSTE[0]), datum_rodjenja=("01/01/2026" if jezik.EN else "01.01.2026"))
+    m = F.Model([zenka, tele])
+    assert mlecnost.mlecno_grlo(m.A["K1"]) and not mlecnost.mlecno_grlo(m.A["T1"])
+    ist = F.Istorija(str(tmp_path / "a.csv"))
+    ix = mlecnost.MlekoIndeks(ist, m)
+    poc = date(2026, 1, 1)
+    for i in range(10):                                     # dani 1..10 laktacije, 20 L dnevno
+        assert mlecnost.upisi_muznju(ist, ix, "K1", poc + timedelta(days=i), 20.0, 3.8, 3.3) == "novo"
+    assert mlecnost.upisi_muznju(ist, ix, "K1", poc, 22.5) == "izmena"
+    assert mlecnost.upisi_muznju(ist, ix, "K1", poc + timedelta(days=9), None) == "brisanje"
+    assert len([z for z in ist.zapisi if z["dogadjaj"] == jezik.MUZNJA]) == 9
+    assert ist.za("K1") == [] and len(ist.za("K1", mleko=True)) == 9  # obična istorija bez mužnje
+    ix = mlecnost.MlekoIndeks(ist, m)
+    s = ix.stat("K1", poc + timedelta(days=8))
+    assert (s["br"], s["dan"]) == (1, 9) and s["ukupno"] == pytest.approx(22.5 + 8 * 20)
+    assert s["prosek7"] == pytest.approx(20) and s["mast"] == pytest.approx(3.8)
+    assert s["procena305"] == pytest.approx(22.5 + (22.5 + 20) / 2 + 7 * 20 + 20 * (305 - 9))
+    ist.sacuvaj()
+    procitano = F.Istorija(str(tmp_path / "a.csv"))
+    z = [z for z in procitano.zapisi if z["dogadjaj"] == jezik.MUZNJA and z["vrednost"] == "22.5"]
+    assert z and z[0]["mast"] == "" and z[0]["proteini"] == ""
+
+
+def test_citac_mindjusa(F):
+    """Broj sa RFID čitača nalazi grlo: po upisanom elektronskom broju ili po markici na kraju pročitanog broja."""
+    from podaci import isti_broj_citaca
+    assert isti_broj_citaca("688 000123456789", "688000123456789")
+    assert isti_broj_citaca("688 0004021 01536", "RS 4021-01536")
+    assert not isti_broj_citaca("688 000123456789", "6789")            # prekratko za poređenje po kraju
+    redovi = [dict(red("A", pol="z"), markica="RS 4021-01536"), dict(red("B", pol="z"), rfid="688 000111222333"),
+              red("C", "OTAC", "A")]
+    m = F.Model(redovi)
+    assert m.nadji_citac("688000111222333") == "B" and m.nadji("688 000111222333") == "B"
+    assert m.nadji_citac("688 000402101536") == "A"
+    assert m.nadji_citac("688 000999999999") is None and m.nadji_citac("OTAC") is None   # roditelj bez upisa nije grlo
+
+
+def test_finansije(F, tmp_path):
+    """Prihodi i troškovi: čuvanje i čitanje (i na drugom jeziku), zbir po kategoriji i grlu, period, unos iznosa."""
+    from datetime import date
+    import finansije as fn
+    assert fn.broj("12.500,50") == 12500.5 and fn.broj("12,500.50") == 12500.5 and fn.broj("300") == 300 and fn.broj("x") is None
+    fin = fn.Finansije(str(tmp_path / "stado.csv"))
+    d = lambda dd: dd.strftime("%d/%m/%Y" if F.EN else "%d.%m.%Y")
+    hrana, mleko = fn.kategorije(fn.TROSAK)[0], fn.kategorije(fn.PRIHOD)[0]
+    fin.dodaj(d(date(2026, 10, 1)), fn.TROSAK, hrana, 12000, "K1")
+    fin.dodaj(d(date(2026, 10, 5)), fn.PRIHOD, mleko, 30000.5)
+    fin.dodaj(d(date(2025, 3, 1)), fn.TROSAK, hrana, 500)
+    fin.sacuvaj()
+    procitano = fn.Finansije(str(tmp_path / "stado.csv"))
+    assert len(procitano.zapisi) == 3
+    od, do = fn.period("mesec", date(2026, 10, 20))
+    pr, tr, kat, grla = fn.zbir(procitano.u_periodu(od, do))
+    assert (pr, tr) == (30000.5, 12000) and kat[(fn.TROSAK, hrana)] == 12000 and grla == {"K1": [0.0, 12000.0]}
+    assert len(procitano.u_periodu(*fn.period("prosla_godina", date(2026, 10, 20)))) == 1
+    assert len(procitano.u_periodu(*fn.period("sve"))) == 3
+    import jezik
+    drugi = "en" if not F.EN else "sr"                      # isti fajl na drugom jeziku: kategorije se prevode
+    jezik.postavi_jezik(drugi)
+    procitano2 = fn.Finansije(str(tmp_path / "stado.csv"))
+    assert fn.kategorije(fn.TROSAK)[0] in {z["kategorija"] for z in procitano2.zapisi}
+    assert {z["vrsta"] for z in procitano2.zapisi} == {fn.PRIHOD, fn.TROSAK}
+
+
+def test_kopija_u_oblaku(tmp_path):
+    """Kopija u oblaku: svi fajlovi šifrovano gore, stara kopija se briše, vraćanje ključem; bez kopije – snimak za telefone."""
+    pytest.importorskip("cryptography")
+    import base64
+    import oblak
+    import oblak_kopija as ok
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import lazni_firebase
+    srv, st, konfig = lazni_firebase.napravi_server()
+    try:
+        farma, kljuc = oblak.novo_gazdinstvo()
+        link = oblak.link_za_uparivanje(farma, kljuc, "Farma Marić")
+        assert ok.procitaj_kljuc(link) == (farma, kljuc, "Farma Marić") and ok.procitaj_kljuc("nešto drugo") is None
+        o = oblak.Oblak(konfig, farma, kljuc)
+        assert ok.preuzmi_kopiju(o, kljuc) is None                     # još ništa nije poslato
+        o.posalji_snimak({"grla": [{"id": "A"}], "istorija": [], "podsetnici": [], "izvezeno": "x"})
+        assert ok.preuzmi_kopiju(o, kljuc)["format"] == "farmer-telefon"  # rezerva: snimak za telefone
+        p = tmp_path / "stado.csv"
+        p.write_text("id;pol\nA;z\nB;m\n", encoding="utf-8")
+        (tmp_path / "stado_finansije.csv").write_text("datum;vrsta;kategorija;iznos\n01.10.2026;trosak;Hrana;100\n", encoding="utf-8")
+        sad = ok.napravi_sadrzaj([str(p), str(tmp_path / "stado_finansije.csv")], {"tablica": str(p), "prag": 0.05})
+        ok.posalji_kopiju(o, kljuc, sad)
+        ok.posalji_kopiju(o, kljuc, sad)                               # druga kopija briše prvu
+        assert len({polja["pid"] for _, polja in o.lista("kopije")}) == 1
+        vraceno = ok.preuzmi_kopiju(oblak.Oblak(konfig, farma, kljuc), kljuc)
+        assert vraceno["format"] == "herddoc-kopija" and vraceno["podesavanja"]["prag"] == 0.05
+        assert base64.b64decode(vraceno["fajlovi"]["stado.csv"]).decode() == "id;pol\nA;z\nB;m\n"
+        assert "stado_finansije.csv" in vraceno["fajlovi"]
+        with pytest.raises(oblak.OblakGreska):                         # pogrešan ključ ne otključava
+            ok.preuzmi_kopiju(oblak.Oblak(konfig, farma, oblak.novo_gazdinstvo()[1]), oblak.novo_gazdinstvo()[1])
+    finally:
+        srv.shutdown()
+
+
+def test_uparivanje_kodom(monkeypatch):
+    """Kod umesto QR koda: telefon iz koda nalazi ključ gazdinstva; pogrešan ili istekao kod ne radi."""
+    pytest.importorskip("cryptography")
+    import oblak
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import lazni_firebase
+    srv, st, konfig = lazni_firebase.napravi_server()
+    try:
+        farma, kljuc = oblak.novo_gazdinstvo()
+        kod = oblak.novi_kod()
+        assert len(kod) == 9 and kod[4] == "-" and all(c in oblak.KOD_ABECEDA for c in kod.replace("-", ""))
+        oblak.objavi_kod(konfig, kod, farma, kljuc, "Farma")
+        assert oblak.preuzmi_kod(konfig, kod.lower().replace("-", " ")) == (farma, kljuc, "Farma")
+        assert oblak.preuzmi_kod(konfig, "2222-3333") is None
+        assert oblak.mesto_koda(kod)[0] != farma                        # mesto koda ne otkriva gazdinstvo
+        stvarno = oblak.time.time
+        monkeypatch.setattr(oblak.time, "time", lambda: stvarno() + oblak.KOD_TRAJANJE + 5)
+        assert oblak.preuzmi_kod(konfig, kod) is None                   # posle 15 minuta ne važi
+        monkeypatch.setattr(oblak.time, "time", stvarno)
+        oblak.obrisi_kod(konfig, kod)
+        assert oblak.preuzmi_kod(konfig, kod) is None
+    finally:
+        srv.shutdown()

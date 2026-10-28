@@ -3,7 +3,7 @@
 "use strict";
 
 const IST_KOLONE = ["grlo", "datum", "dogadjaj", "opis", "partner", "vrednost", "automatski", "uneto", "ishod",
-  "ter", "karenca_meso", "karenca_mleko", "upisao"];
+  "ter", "karenca_meso", "karenca_mleko", "upisao", "mast", "proteini"];
 const POD_KOLONE = ["grlo", "datum", "tip", "tekst", "ponavljanje", "gotovo", "uneto"];
 
 // ---------------------------------------------------------------- stanje
@@ -137,7 +137,7 @@ class Model {
       const jid = String(r.id || "").trim();
       if (!jid) return;
       if (this.A[jid]) { this.warn.push(en ? `Tag ${jid} is entered more than once.` : `Oznaka ${jid} je upisana više puta.`); return; }
-      this.A[jid] = { id: jid, markica: r.markica || "", vrsta: r.vrsta || K().DRUGO, rasa: r.rasa || "", pol: r.pol || null,
+      this.A[jid] = { id: jid, markica: r.markica || "", rfid: r.rfid || "", vrsta: r.vrsta || K().DRUGO, rasa: r.rasa || "", namena: r.namena || "", autohtona: r.autohtona || "", pol: r.pol || null,
         datum: parsirajDatum(r.datum_rodjenja), aktivno: (r.status || "aktivno") === "aktivno", stado: r.stado || "",
         obrisano: r.status === "obrisano", osnivac: false, _otac: r.otac || "", _majka: r.majka || "", stare: stareLista(r),
         poreklo: (r.poreklo || "").trim(), poreklo_od: (r.poreklo_od || "").trim(), rb, uneto: r.uneto || "" };
@@ -149,6 +149,7 @@ class Model {
       }
     });
     for (const a of Object.values(this.A)) for (const st of a.stare) if (!(norm(st) in this.byMark)) this.byMark[norm(st)] = a.id;
+    for (const a of Object.values(this.A)) if (a.rfid && !(norm(a.rfid) in this.byMark)) this.byMark[norm(a.rfid)] = a.id;   // elektronski broj (RFID)
     for (const a of Object.values(this.A))
       this.P[a.id] = [this.nadji(a._otac) || (a._otac || null), this.nadji(a._majka) || (a._majka || null)];
     for (const [jid, par] of Object.entries(this.P)) {
@@ -198,6 +199,15 @@ class Model {
       this._norm = { n: broj, ix };
     }
     return this._norm.ix.get(n) || null;
+  }
+  // broj sa čitača minđuša (RFID): tačno, ili upisana markica/RFID (bar 8 cifara) na kraju pročitanog broja
+  nadjiCitac(procitano) {
+    const x = this.nadji(procitano);
+    if (x && !this.A[x].osnivac) return x;
+    const cif = s => String(s || "").replace(/\D/g, ""), c = cif(procitano);
+    const isti = b => b && (norm(b) === norm(procitano) || (cif(b).length >= 8 && c.endsWith(cif(b))));
+    const nadj = Object.values(this.A).filter(a => !a.osnivac && (isti(a.rfid) || isti(a.markica))).map(a => a.id);
+    return nadj.length === 1 ? nadj[0] : null;
   }
   grla(samoAktivna = false) {
     return Object.values(this.A).filter(a => !a.osnivac && !a.obrisano && (a.aktivno || !samoAktivna))
@@ -269,7 +279,8 @@ function osveziModel() { M = new Model(S.grla); }
 function imeTelefona() { return (S.sinh && S.sinh.ime) || S.imeTelefona || (S.jezik === "en" ? "Phone" : "Telefon"); }
 function dodaj(grlo, dogadjaj, o = {}) {
   const z = { grlo, datum: o.datum || fmtD(danas()), dogadjaj, opis: o.opis || "", partner: o.partner || "", vrednost: o.vrednost || "",
-    automatski: o.automatski ? "1" : "", uneto: sada(), ishod: "", ter: "", karenca_meso: o.karenca_meso || "", karenca_mleko: o.karenca_mleko || "", upisao: imeTelefona() };
+    automatski: o.automatski ? "1" : "", uneto: sada(), ishod: "", ter: "", karenca_meso: o.karenca_meso || "", karenca_mleko: o.karenca_mleko || "", upisao: imeTelefona(),
+    mast: o.mast || "", proteini: o.proteini || "" };
   S.istorija.push(z);
   return z;
 }
@@ -289,8 +300,10 @@ function ixIstorije() {
   }
   return _ix;
 }
-function istorijaZa(grlo, auto = true) {
-  return (grlo === null ? S.istorija : (ixIstorije().poGrlu.get(grlo) || [])).filter(x => (grlo === null || x.grlo === grlo) && (auto || !x.automatski))
+// dnevna mužnja se ne prikazuje u običnoj istoriji (ima svoj ekran) – osim kad se traži (mleko=true)
+function istorijaZa(grlo, auto = true, mleko = false) {
+  const mz = K().MUZNJA;
+  return (grlo === null ? S.istorija : (ixIstorije().poGrlu.get(grlo) || [])).filter(x => (grlo === null || x.grlo === grlo) && (auto || !x.automatski) && (mleko || x.dogadjaj !== mz))
     .sort((a, b) => ((parsirajDatum(b.datum) || 0) - (parsirajDatum(a.datum) || 0)) || ((a.uneto || "") < (b.uneto || "") ? 1 : (a.uneto || "") > (b.uneto || "") ? -1 : 0));
 }
 function zabelezi(tekst) { S.promene.push({ vreme: sada(), tekst }); }
@@ -556,13 +569,16 @@ function upisUListu(z, mladi, stado, ostaliCekaju) {
   stado = (stado || "").trim() || K().STADO_PODMLADAK;
   const vidjeni = new Set(), novi = [];
   for (let i = 0; i < mladi.length; i++) {
-    const nid = (mladi[i].id || "").trim(), mk = (mladi[i].markica || "").trim(), pol = mladi[i].pol;
+    let nid = (mladi[i].id || "").trim();
+    const mk = (mladi[i].markica || "").trim(), pol = mladi[i].pol;
     if (!nid) return en ? `Enter a tag for young no. ${i + 1}.` : `Upiši oznaku za ${i + 1}. mladunče.`;
-    if (vidjeni.has(nid) || S.grla.some(r => r.id === nid) || M.A[nid]) return en ? `Tag ${nid} already exists.` : `Oznaka ${nid} već postoji.`;
+    if (vidjeni.has(nid) || S.grla.some(r => r.id === nid) || M.A[nid])
+      nid = slobodnaOznaka(nid, S.grla.map(r => r.id).concat(Object.keys(M.A), [...vidjeni]));
     if (mk) { const p = markicaZauzeta(mk, null); if (p || novi.some(x => norm(x.markica) === norm(mk))) return p || (en ? `Ear tag ${mk} is entered twice.` : `Markica ${mk} je upisana dva puta.`); }
     if (pol !== "m" && pol !== "z") return en ? `Choose the sex for ${nid}.` : `Izaberi pol za ${nid}.`;
     vidjeni.add(nid);
-    novi.push({ id: nid, markica: mk, vrsta, rasa, pol, datum_rodjenja: dstr, otac: otac || "", majka: majka || "", status: "aktivno", stado,
+    novi.push({ id: nid, markica: mk, vrsta, rasa, namena: (majka && M.A[majka] && M.A[majka].namena) || "",
+      autohtona: (majka && M.A[majka] && M.A[majka].autohtona) || "", pol, datum_rodjenja: dstr, otac: otac || "", majka: majka || "", status: "aktivno", stado,
       poreklo: K().SOPSTVENI, poreklo_od: "", stare_markice: "", uneto: sada() });
   }
   if (!novi.length) return en ? "Enter at least one young animal." : "Upiši bar jedno mladunče.";
@@ -585,19 +601,52 @@ function upisUListu(z, mladi, stado, ostaliCekaju) {
 }
 
 // novo grlo (forma u karton.py)
+// namena rase: goveda, ovce i koze (mlečna/tovna/kombinovana), svinje (mesnata/masna/kombinovana); konji nemaju
+function nameneZa(vrsta) {
+  const v = String(vrsta || "").trim().toLowerCase().slice(0, 3);
+  if (["gov", "bik", "kra", "cat", "cow", "bul", "ovc", "ova", "she", "ewe", "ram", "koz", "goa", "jar"].includes(v)) return K().NAMENE_MALI.slice();
+  if (["svi", "pig", "sow", "swi", "ner", "boa"].includes(v)) return K().NAMENE_SVINJE.slice();
+  return [];
+}
+
+// poznate autohtone rase u Srbiji – kvačica „autohtona“ se predloži sama (kao na računaru)
+const AUTOHTONE_RASE = ["buša", "busa", "podolsk", "pramenka", "sjenič", "sjenic", "svrlji", "pirotsk", "krivovir", "karakačan",
+  "karakacan", "lipsk", "bardoka", "vlaška vitoroga", "vlaska vitoroga", "cigaja", "balkansk", "mangulic", "mangalic", "moravk",
+  "resavk", "brdski konj", "domaći brdski", "domaci brdski"];
+const autohtonaRasa = r => { r = String(r || "").toLowerCase(); return AUTOHTONE_RASE.some(k => r.includes(k)); };
+
+// isto ime/oznaka već postoji -> sledeći broj po redu: Bela, Bela 2, Bela 3… (kao na računaru)
+function slobodnaOznaka(nid, postojece) {
+  nid = String(nid || "").trim().split(/\s+/).join(" ");
+  const zauzeto = new Set(postojece.filter(Boolean).map(norm));
+  if (!zauzeto.has(norm(nid))) return nid;
+  let osnova = nid, n = 2;
+  const m = nid.match(/^(.*) (\d+)$/);
+  if (m && parseInt(m[2], 10) >= 2) { osnova = m[1]; n = parseInt(m[2], 10) + 1; }
+  while (zauzeto.has(norm(`${osnova} ${n}`))) n++;
+  return `${osnova} ${n}`;
+}
+
+// vraća poruku o grešci (tekst) ili {id} sačuvanog grla
 function novoGrlo(v) {
-  const en = EN(), nid = (v.id || "").trim();
-  if (!nid) return en ? "Enter the animal's tag." : "Upiši oznaku grla.";
-  if (S.grla.some(r => r.id === nid)) return en ? `Animal ${nid} already exists.` : `Grlo ${nid} već postoji.`;
+  const en = EN(), uneto = (v.id || "").trim();
+  if (!uneto) return en ? "Enter the animal's tag." : "Upiši oznaku grla.";
+  const nid = slobodnaOznaka(uneto, S.grla.map(r => r.id));
   const mk = (v.markica || "").trim(), z = markicaZauzeta(mk, null);
   if (z) return z;
+  const rfid = String(v.rfid || "").trim().split(/\s+/).join(" ");
+  const rz = rfid && S.grla.find(r => norm(r.rfid) === norm(rfid));
+  if (rz) return en ? `Electronic ID ${rfid} is already entered for animal ${rz.id}.` : `Elektronski broj ${rfid} je već upisan za grlo ${rz.id}.`;
   if (v.pol !== "m" && v.pol !== "z") return en ? "Choose the sex." : "Izaberi pol.";
+  const izbori = nameneZa(vrstaNorm(v.vrsta) || v.vrsta);
+  if (izbori.length && !izbori.includes(v.namena)) return (en ? "Choose the breed purpose (" : "Izaberi namenu rase (") + izbori.join(" / ") + ").";
+  if (v.status !== "aktivno" && v.status !== "neaktivno") return en ? "Choose whether the animal is active (on the farm) or inactive." : "Izaberi da li je grlo aktivno (na farmi) ili neaktivno.";
   const dat = (v.datum_rodjenja || "").trim();
   if (dat && !parsirajDatum(dat)) return en ? "The date is not valid." : "Datum nije ispravan.";
   const o = (v.otac || "").trim(), mj = (v.majka || "").trim();
   if (nid === o || nid === mj) return en ? "An animal cannot be its own parent." : "Grlo ne može biti sopstveni roditelj.";
-  const novi = { id: nid, markica: mk, vrsta: vrstaNorm(v.vrsta) || K().VRSTE[0], rasa: normRasa(v.rasa), pol: v.pol,
-    datum_rodjenja: dat ? fmtD(parsirajDatum(dat)) : "", otac: o, majka: mj, status: "aktivno", stado: (v.stado || "").trim(),
+  const novi = { id: nid, markica: mk, rfid, vrsta: vrstaNorm(v.vrsta) || K().VRSTE[0], rasa: normRasa(v.rasa), namena: izbori.length ? v.namena : "", autohtona: v.autohtona ? "1" : "", pol: v.pol,
+    datum_rodjenja: dat ? fmtD(parsirajDatum(dat)) : "", otac: o, majka: mj, status: v.status, stado: (v.stado || "").trim(),
     poreklo: (v.poreklo || "").trim(), poreklo_od: (v.poreklo_od || "").trim(), stare_markice: "", uneto: sada() };
   S.grla.push(novi);
   dodaj(nid, K().AUTO, { opis: (en ? "Animal added to the records" : "Grlo upisano u evidenciju") + (novi.poreklo ? ` (${novi.poreklo}${novi.poreklo_od ? " – " + novi.poreklo_od : ""})` : ""), automatski: true });
@@ -609,7 +658,67 @@ function novoGrlo(v) {
   }
   zabelezi((en ? "New animal: " : "Novo grlo: ") + nid);
   osveziModel();
-  return null;
+  return { id: nid, preimenovano: nid !== uneto ? uneto : "" };
+}
+
+// ---------------------------------------------------------------- mlečnost (isto kao mlecnost.py na računaru)
+function broj(v) {
+  const t = String(v == null ? "" : v).trim().replace(/\s/g, "").replace(",", ".");
+  if (!t) return null;
+  const x = Number(t);
+  return Number.isFinite(x) ? x : null;
+}
+function fmtBroj(v, dec = 1) {
+  const x = typeof v === "number" ? v : broj(v);
+  if (x === null) return String(v || "");
+  return x.toLocaleString(EN() ? "en-GB" : "sr-Latn-RS", { maximumFractionDigits: dec, minimumFractionDigits: 0 });
+}
+const zapisBroja = x => String(Math.round(x * 100) / 100);
+function muznaVrsta(a) { return !!a && a.pol === "z" && !a.osnivac && nameneZa(a.vrsta).join() === K().NAMENE_MALI.join(); }
+function mlecnoGrlo(a) { return muznaVrsta(a) && [K().NAMENE_MALI[0], K().NAMENE_MALI[2]].includes(a.namena); }
+function telenja(x) {
+  const t = new Set(), porod = K().POROD;
+  for (const z of istorijaZa(x, true, false)) if (z.dogadjaj === porod) { const d = parsirajDatum(z.datum); if (d) t.add(+d); }
+  for (const [c, par] of Object.entries(M.P)) if (par && par[1] === x && M.A[c] && M.A[c].datum) t.add(+M.A[c].datum);
+  return [...t].sort((a, b) => a - b).map(n => new Date(n));
+}
+function muznjeZa(x) {               // {iso datum: zapis}; isti dan dvaput -> važi poslednji upis
+  const mz = K().MUZNJA, rez = {};
+  for (const z of istorijaZa(x, true, true)) {
+    if (z.dogadjaj !== mz) continue;
+    const d = parsirajDatum(z.datum); if (!d) continue;
+    const k = uIso(d);
+    if (!rez[k] || (z.uneto || "") >= (rez[k].uneto || "")) rez[k] = z;
+  }
+  return rez;
+}
+function statMleka(x, d = danas()) {
+  const tel = telenja(x).filter(t => t <= d), poc = tel.length ? tel[tel.length - 1] : null;
+  const od = poc || dodajDane(d, -304), mz = muznjeZa(x);
+  const mer = Object.entries(mz).map(([k, z]) => [parsirajDatum(z.datum), broj(z.vrednost)]).filter(([dd, l]) => l !== null && dd >= od && dd <= d).sort((a, b) => a[0] - b[0]);
+  const sedam = mer.filter(([dd]) => razlikaDana(d, dd) < 7).map(m => m[1]);
+  return { br: tel.length, pocetak: poc, dan: poc ? razlikaDana(d, poc) + 1 : null, poslednje: mer.length ? mer[mer.length - 1] : null,
+    prosek7: sedam.length ? sedam.reduce((a, b) => a + b, 0) / sedam.length : null, ukupno: mer.reduce((a, m) => a + m[1], 0), n: mer.length };
+}
+// upis/izmena mužnje za dan d; litara=null briše upis za taj dan
+function upisiMuznju(x, d, litara, mast, proteini) {
+  const mz = K().MUZNJA, iso = uIso(d);
+  const stari = S.istorija.filter(z => z.grlo === x && z.dogadjaj === mz && uIso(parsirajDatum(z.datum)) === iso);
+  if (litara === null) {
+    if (!stari.length) return null;
+    S.istorija = S.istorija.filter(z => !stari.includes(z));
+    return "brisanje";
+  }
+  const vr = { vrednost: zapisBroja(litara), mast: mast ? zapisBroja(mast) : "", proteini: proteini ? zapisBroja(proteini) : "" };
+  if (stari.length) {
+    const z = stari.reduce((a, b) => ((b.uneto || "") >= (a.uneto || "") ? b : a));
+    if (stari.length > 1) S.istorija = S.istorija.filter(s => s === z || !stari.includes(s));
+    if (Object.keys(vr).every(k => (z[k] || "") === vr[k])) return null;
+    Object.assign(z, vr);
+    return "izmena";
+  }
+  dodaj(x, mz, Object.assign({ datum: fmtD(d) }, vr));
+  return "novo";
 }
 
 function podsetnikUradjen(p) {

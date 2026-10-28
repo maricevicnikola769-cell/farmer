@@ -2,7 +2,7 @@
 from datetime import date
 
 from osnova import EN
-from podaci import nazivi, norm, parsiraj_datum, sort_key, stare_lista
+from podaci import isti_broj_citaca, nazivi, norm, parsiraj_datum, sort_key, stare_lista
 from izgled import BAD, OK, WARN
 
 
@@ -17,8 +17,8 @@ class Model:
             if jid in self.A:
                 self.warn.append((f"Tag {jid} is entered more than once." if EN else f"Oznaka {jid} je upisana više puta."))
                 continue
-            self.A[jid] = dict(id=jid, markica=r.get("markica", ""), vrsta=r.get("vrsta") or ("other" if EN else "drugo"),
-                               rasa=r.get("rasa", ""), pol=r.get("pol") or None,
+            self.A[jid] = dict(id=jid, markica=r.get("markica", ""), rfid=r.get("rfid", ""), vrsta=r.get("vrsta") or ("other" if EN else "drugo"),
+                               rasa=r.get("rasa", ""), namena=r.get("namena", ""), autohtona=r.get("autohtona", ""), pol=r.get("pol") or None,
                                datum=parsiraj_datum(r.get("datum_rodjenja")),
                                aktivno=r.get("status", "aktivno") == "aktivno", stado=r.get("stado", ""),
                                obrisano=r.get("status") == "obrisano",
@@ -30,6 +30,8 @@ class Model:
                 if n in self.by_mark and self.by_mark[n] != jid:
                     self.warn.append((f"Ear tag {r['markica']} is entered for both {self.by_mark[n]} and {jid}." if EN else f"Markica {r['markica']} je upisana i za {self.by_mark[n]} i za {jid}."))
                 self.by_mark[n] = jid
+            if r.get("rfid"):                     # elektronski broj (RFID) takođe nalazi grlo
+                self.by_mark.setdefault(norm(r["rfid"]), jid)
         for a in list(self.A.values()):   # stari brojevi markica i dalje nalaze grlo
             for st in a.get("stare", []):
                 self.by_mark.setdefault(norm(st), a["id"])
@@ -39,7 +41,7 @@ class Model:
         for jid, par in list(self.P.items()):
             for i, r in enumerate(par):
                 if r and r not in self.A:
-                    self.A[r] = dict(id=r, markica="", vrsta=self.A[jid]["vrsta"], rasa="",
+                    self.A[r] = dict(id=r, markica="", rfid="", vrsta=self.A[jid]["vrsta"], rasa="", namena="", autohtona="",
                                      pol="m" if i == 0 else "z", datum=None, aktivno=False, stado="",
                                      osnivac=True, obrisano=False, stare=[], poreklo="", poreklo_od="",
                                      rb=-1, uneto="")
@@ -111,6 +113,16 @@ class Model:
                 ix.setdefault(norm(k), k)
             self._norm = (len(self.A), ix)
         return self._norm[1].get(n)
+
+    def nadji_citac(self, procitano):
+        """Grlo za broj sa čitača minđuša (RFID): tačno poklapanje oznake, markice ili RFID broja,
+        a inače upisana markica/RFID na kraju pročitanog broja (čitač često doda kod zemlje i nule)."""
+        x = self.nadji(procitano)
+        if x and not self.A[x]["osnivac"]:
+            return x
+        nadjena = [a["id"] for a in self.A.values() if not a["osnivac"]
+                   and any(isti_broj_citaca(procitano, a.get(k)) for k in ("rfid", "markica"))]
+        return nadjena[0] if len(nadjena) == 1 else None
 
     def grla(self, samo_aktivna=False, redosled="Poslednje upisana prvo"):
         """Grla za liste i pretragu (obrisana se ne prikazuju, ali ostaju u rodoslovu).
