@@ -4,11 +4,11 @@ import os
 from datetime import date, datetime
 
 from osnova import EN, _uz_tablicu, prevedi_vrednost
-from jezik import NAZIVI
+from jezik import NAZIVI, T, vrsta_kanon, vrsta_na_jeziku
 
 
 KOLONE = ["id", "markica", "rfid", "vrsta", "rasa", "namena", "autohtona", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
-          "poreklo", "poreklo_od", "stare_markice", "uneto"]
+          "poreklo", "poreklo_od", "stare_markice", "uneto", "napomena"]      # napomena: vidi se svuda gde je grlo
 
 
 def sada():
@@ -16,7 +16,7 @@ def sada():
 
 
 def nazivi(vrsta):
-    return NAZIVI.get((vrsta or "")[:3], (("male" if EN else "mužjak"), ("female" if EN else "ženka"), ("young" if EN else "mladunče"), ("young" if EN else "mladunčad")))
+    return NAZIVI.get(vrsta_kanon(vrsta), ((T("mužjak", "male")), (T("ženka", "female")), (T("mladunče", "young")), (T("mladunčad", "young"))))
 
 
 def norm(t):
@@ -76,10 +76,10 @@ def fmt_starost(m):
     if m is None:
         return ""
     if m < 24:
-        return (f"{m} mo." if EN else f"{m} mes.")
+        return (T(f"{m} mes.", f"{m} mo."))
     g = m // 12
     if EN:
-        return f"{g} " + ("year" if g == 1 else "years")
+        return f"{g} " + T("godina", "year" if g == 1 else "years")
     else:
         return f"{g} " + ("godine" if 2 <= g % 10 <= 4 and not 12 <= g % 100 <= 14 else "godina")
 
@@ -144,13 +144,13 @@ class Tablica:
 
 EN_KOL = {"id": "id", "markica": "ear_tag", "rfid": "rfid", "vrsta": "species", "rasa": "breed", "namena": "purpose", "autohtona": "native_breed", "pol": "sex",
           "datum_rodjenja": "birth_date", "otac": "sire", "majka": "dam", "status": "status", "stado": "herd",
-          "poreklo": "origin", "poreklo_od": "origin_from", "stare_markice": "old_ear_tags", "uneto": "added"}
+          "poreklo": "origin", "poreklo_od": "origin_from", "stare_markice": "old_ear_tags", "uneto": "added", "napomena": "note"}
 
 
 EN_IST = {"grlo": "animal", "datum": "date", "dogadjaj": "event", "opis": "description", "partner": "partner",
           "vrednost": "value", "automatski": "automatic", "uneto": "added", "ishod": "outcome", "ter": "heat",
           "karenca_meso": "withdrawal_meat_days", "karenca_mleko": "withdrawal_milk_days", "upisao": "entered_by",
-          "mast": "fat_pct", "proteini": "protein_pct"}
+          "mast": "fat_pct", "proteini": "protein_pct", "lab": "lab", "uzorak": "sample", "fajl": "file", "izvestaj": "report"}
 
 
 EN_POD = {"grlo": "animal", "datum": "date", "tip": "type", "tekst": "text", "ponavljanje": "repeat_days",
@@ -256,15 +256,9 @@ def rasa_potomka(rasa_oca, rasa_majke):
 
 
 def vrsta_norm(v):
-    v = (v or "").strip().lower()
-    return {"gov": "goveda", "bik": "goveda", "kra": "goveda", "ovc": "ovce", "ova": "ovce",
-            "koz": "koze", "svi": "svinje", "kon": "konji",
-            "cat": "goveda", "cow": "goveda", "bul": "goveda", "she": "ovce", "ewe": "ovce", "ram": "ovce",
-            "goa": "koze", "pig": "svinje", "swi": "svinje", "sow": "svinje", "boa": "svinje",
-            "hor": "konji", "mar": "konji"}.get(v[:3], v) if not EN else {"cat": "cattle", "cow": "cattle", "bul": "cattle", "gov": "cattle", "bik": "cattle", "kra": "cattle",
-            "she": "sheep", "ewe": "sheep", "ram": "sheep", "ovc": "sheep", "ova": "sheep",
-            "goa": "goats", "koz": "goats", "pig": "pigs", "swi": "pigs", "sow": "pigs", "boa": "pigs",
-            "svi": "pigs", "hor": "horses", "mar": "horses", "kon": "horses"}.get(v[:3], v)
+    """Vrsta upisana na bilo kom jeziku -> naziv na trenutnom jeziku (nepoznata vrsta ostaje kako je upisana)."""
+    k = vrsta_kanon(v)
+    return vrsta_na_jeziku(k) if k else (v or "").strip().lower()
 
 
 def _excel_datum(v):
@@ -376,9 +370,8 @@ def _obradi_tablicu(sirovo, excel=False):
         return [], []
     zaglavlje = [ALIAS.get(k, k) if ALIAS.get(k, k) not in zaglavlje else k for k in zaglavlje]
     if "id" not in zaglavlje and "markica" not in zaglavlje:
-        raise ValueError(("The table must have an 'id' (tag) or 'ear_tag' column.\n" if EN else
-                          "Tablica mora imati kolonu 'id' (oznaka) ili 'markica'.\n") +
-                         (f"Columns found: {', '.join(zaglavlje)}" if EN else f"Pronađene kolone: {', '.join(zaglavlje)}"))
+        raise ValueError((T("Tablica mora imati kolonu 'id' (oznaka) ili 'markica'.\n", "The table must have an 'id' (tag) or 'ear_tag' column.\n")) +
+                         (T(f"Pronađene kolone: {', '.join(zaglavlje)}", f"Columns found: {', '.join(zaglavlje)}")))
     redovi = []
     for red in citac:
         if not any((x or "").strip() for x in red):
@@ -408,7 +401,7 @@ def _obradi_tablicu(sirovo, excel=False):
 # =============================================================== istorija grla
 
 IST_KOLONE = ["grlo", "datum", "dogadjaj", "opis", "partner", "vrednost", "automatski", "uneto", "ishod",
-              "ter", "karenca_meso", "karenca_mleko", "upisao", "mast", "proteini"]
+              "ter", "karenca_meso", "karenca_mleko", "upisao", "mast", "proteini", "lab", "uzorak", "fajl", "izvestaj"]   # DNK test: lab, uzorak, fajl (nalazi, „|“), izvestaj (tekst)
 
 
 class Istorija:

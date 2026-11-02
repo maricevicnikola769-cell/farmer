@@ -4,7 +4,7 @@
 const DEO = 900000;
 const AAD = new TextEncoder().encode("farmer1");
 const KOLONE_GRLA = ["id", "markica", "rfid", "vrsta", "rasa", "namena", "autohtona", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
-  "poreklo", "poreklo_od", "stare_markice", "uneto"];
+  "poreklo", "poreklo_od", "stare_markice", "uneto", "napomena"];
 
 function oblakKonfig() {
   let test = {};
@@ -135,10 +135,18 @@ class Oblak {
 }
 
 // ---------------------------------------------------------------- spajanje (isto kao na računaru)
-const PREVODNA = ["dogadjaj", "ishod", "ter", "tip", "poreklo"];
+const PREVODNA = ["dogadjaj", "ishod", "ter", "tip", "poreklo", "namena"];
+// vrednost sačuvana na bilo kom jeziku (događaj, poreklo…) -> na jeziku telefona
+let _indeksVr = null;
 function prevediVr(v) {
-  const P = KONST.PREVOD;
-  return EN() ? (v in P.es ? v : (P.se[v] ?? v)) : (v in P.se ? v : (P.es[v] ?? v));
+  const V = KONST.VREDNOSTI;
+  if (!_indeksVr) {
+    _indeksVr = {};
+    for (const j of ["sr", "en", "fr", "de", "es", "pt"]) for (const [k, sv] of Object.entries(V)) if (sv[j] !== undefined && !(sv[j] in _indeksVr)) _indeksVr[sv[j]] = k;
+  }
+  if (V[v] && V[v][S.jezik] === v) return v;
+  const k = (S.jezik === "sr" && v in V) ? v : _indeksVr[v];
+  return k === undefined ? v : (V[k][S.jezik] ?? v);
 }
 function normVr(k, v) {
   v = v === null || v === undefined ? "" : String(v);
@@ -172,7 +180,7 @@ function spoji3(baza, tel, rac, kljuc, kolone) {
   return rez;
 }
 function primeniSnimak(snap) {
-  S.jezik = snap.jezik === "en" ? "en" : "sr";
+  S.jezik = jezikTelefona(snap.jezik);
   const baza = S.osnova || { grla: [], istorija: [], podsetnici: [] };
   const kolG = [...new Set(KOLONE_GRLA.concat(...(snap.grla || []).map(Object.keys), ...S.grla.map(Object.keys)))];
   S.grla = spoji3(baza.grla, S.grla, snap.grla || [], kljucGrla, kolG);
@@ -180,7 +188,7 @@ function primeniSnimak(snap) {
   S.podsetnici = spoji3(baza.podsetnici, S.podsetnici, snap.podsetnici || [], kljucPod, POD_KOLONE);
   S.osnova = JSON.parse(JSON.stringify({ grla: snap.grla || [], istorija: snap.istorija || [], podsetnici: snap.podsetnici || [] }));
   S.prag = +snap.prag || S.prag;
-  S.grav = snap.gravidnost || S.grav;
+  S.grav = gravNaJeziku(snap.gravidnost) || S.grav;
   S.izvoz = { id: snap.id, datum: snap.izvezeno, stada: snap.stada || [] };
   if (S.sinh) S.sinh.spisak = snap.telefoni || null;   // računar zna za ove telefone
   osveziModel();
@@ -230,6 +238,7 @@ async function usaglasi(rucno, dubina = 0) {
       const paket = { format: "farmer-paket", verzija: 1, napravljeno: sada(), jezik: S.jezik, osnova_verzija: S.sinh.verzija || null,
         tel: { tid: S.sinh.tid, ime: imeTelefona(), javni: { x: S.sinh.ec.x, y: S.sinh.ec.y } },
         razlike: razlike(), promene: S.promene.slice(0, n) };
+      paket.slike = slikeZa(Object.values(paket.razlike.istorija || []).map(d => d && d.t));   // slike DNK nalaza iz izmenjenih zapisa
       const pid = `${Date.now()}${Math.random().toString(16).slice(2, 8)}`;
       await o.upisiVeliko("paketi", pid, await zakljucaj(paket, S.sinh.kljuc));
       S.poslato = (S.poslato || []).concat(S.promene.slice(0, n)).slice(-100);

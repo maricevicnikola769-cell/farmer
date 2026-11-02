@@ -16,7 +16,7 @@ from rodoslov import Model
 TELEFON_URL = "https://maricevicnikola769-cell.github.io/farmer/telefon/"
 QR_PNG = "iVBORw0KGgoAAAANSUhEUgAAALkAAAC5AQMAAABOYwwfAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGUExURf///xgiHPREO9kAAAABYktHRACIBR1IAAAAB3RJTUUH6goUFhU3eWPW9AAAAaJJREFUWMPllzGugzAQRBeloOQI3AQuFgmkXMzcxEegdIHYzKxxlP97pomlrAgvxco7M3bMfnfN7l7MnmbT4N4nFD9VYMKndL5af9ojmw1rfacBg+cy709DL4v35/DyogUs/QZaTA/Q1ehcmIcUcB7zjoKHsfwb1M0glDgNr9zKH4neDKztC0rbDVMBtoHdeHjpKIbrqwysIwaweLTmaTjGppL7AbwfT1Diztb8BSoDu7ErFIuGMJQqBglA6sUTunqyIIKSDMB+/YZ9ibxHOZjAIoCsowSgg5MepCXrPDQAvWyO3E3wAp4wFFOBqY5i4buVIUhDqAC9D/sdCMHQwceDCjBzDzqHBMKDNQVUII6YaOisKbC08BWA7jP9yN32Ew1g7sbxDhtE7q5fgXw/uAKvhmCEUZIBWzLngTMemvQNVAi4G4nBEw1h5XatvR/Y5QWKIXTwyEUGPv8m4ADEf4SvqUDcLCP/4sQ5ednRgbjQM/86joJNNg+KAJVYz1rkXxYDyjHeRfx/b8nNgPO4rlYelzvXgVDizK/0AsvYJxX41fUGNmq3seBVPlgAAAAASUVORK5CYII="
 
-_PREVOD = ("dogadjaj", "ishod", "ter", "tip", "poreklo")
+_PREVOD = ("dogadjaj", "ishod", "ter", "tip", "poreklo", "namena")
 
 
 def _normalizuj(k, v):
@@ -198,6 +198,8 @@ class TelefonDeo:
         self.napravi_kopiju("manual" if EN else "rucne", sada().replace(":", "-").replace(" ", "_") + T("_pre_telefona", "_before_phone"), tiho=False)
         try:
             g, i, p, izv = spoji_sve(obj, self.tab.redovi, self.ist.zapisi, self.pods.zapisi)
+            from dnk import sacuvaj_slike_sa_telefona
+            sacuvaj_slike_sa_telefona(self.tab.putanja, obj.get("slike"))
             Model(g)   # provera da se rodoslov može izračunati
         except Exception as e:
             messagebox.showerror("HerdDoc", T("Spajanje nije uspelo – ništa nije promenjeno.\n\n", "Merging failed – nothing was changed.\n\n") + str(e))
@@ -211,11 +213,11 @@ class TelefonDeo:
         messagebox.showinfo(T("Preneto sa telefona", "Transferred from phone"),
                             T(f"Novih grla: {izv['grla']['novo']}\nNovih događaja: {izv['istorija']['novo']}\n"
                               f"Izmena (parenja, porođaji, podsetnici…): {izv['grla']['sa_telefona'] + izv['istorija']['sa_telefona'] + izv['podsetnici']['sa_telefona'] - izv['grla']['novo'] - izv['istorija']['novo']}"
-                              + (f"\n\n{sukob} zapisa je menjano i na računaru i na telefonu – uzeta je verzija sa telefona." if sukob else "")
+                              + (T(f"\n\n{sukob} zapisa je menjano i na računaru i na telefonu – uzeta je verzija sa telefona.", f"\n\n{sukob} records were changed on both the computer and the phone – the phone version was used.") if sukob else "")
                               + "\n\nSada pošalji telefonu novi fajl („Pošalji na telefon“), da i on ima sve podatke.",
                               f"New animals: {izv['grla']['novo']}\nNew events: {izv['istorija']['novo']}\n"
                               f"Changes (matings, births, reminders…): {izv['grla']['sa_telefona'] + izv['istorija']['sa_telefona'] + izv['podsetnici']['sa_telefona'] - izv['grla']['novo'] - izv['istorija']['novo']}"
-                              + (f"\n\n{sukob} records were changed on both the computer and the phone – the phone version was used." if sukob else "")
+                              + (T(f"\n\n{sukob} zapisa je menjano i na računaru i na telefonu – uzeta je verzija sa telefona.", f"\n\n{sukob} records were changed on both the computer and the phone – the phone version was used.") if sukob else "")
                               + "\n\nNow send the phone a new file (\"Send to phone\") so it has all the data too."))
 
     def s_telefon(self):

@@ -12,8 +12,8 @@ from xml.sax.saxutils import escape
 from osnova import EN
 from jezik import T
 from osnova import prevedi_vrednost
-from podaci import (EN_IST, EN_KOL, EN_POD, IST_KOLONE, KOLONE, STATUS_EN, Podsetnici, _excel_datum, kolona, parsiraj_datum,
-                    sada, tabela_u_recnike)
+from podaci import (EN_IST, EN_KOL, EN_POD, IST_KOLONE, KOLONE, STATUS_EN, Podsetnici, _excel_datum, kolona, norm, parsiraj_datum,
+                    sada, slobodna_oznaka, tabela_u_recnike)
 from izgled import BAD, INK2, SURF
 
 
@@ -160,11 +160,14 @@ def mlecnost_broj(v):
 
 
 def tabele_za_izvoz(redovi_tablice, model, istorija=None, podsetnici=None, samo_zapat=False,
-                    sa_rodovnikom=True, sa_istorijom=True, sa_podsetnicima=True, dodatne=(), samo_ids=None, gazdinstvo="", finansije=None):
+                    sa_rodovnikom=True, sa_istorijom=True, sa_podsetnicima=True, dodatne=(), samo_ids=None, gazdinstvo="", finansije=None,
+                    sa_srodnicima=False):
     """Vraća [(naziv lista, [zaglavlje, redovi...])]. Ne zavisi od prozora, pa se može testirati.
-    gazdinstvo: naziv farme koja izvozi – upisuje se u kolonu odmah pored oznake grla."""
+    gazdinstvo: naziv farme koja izvozi – upisuje se u kolonu odmah pored oznake grla.
+    sa_srodnicima: dodaju se i sva grla u srodstvu sa izvezenim (preci, potomci, braća, rođaci…) kao neaktivna,
+    da kupac ima ceo rodoslov i tačan račun srodstva. Njihova istorija se ne izvozi."""
     gazdinstvo = " ".join(str(gazdinstvo or "").split())
-    kol_farma = [T("gazdinstvo", "farm")] if gazdinstvo else []
+    kol_farma = [("farm" if EN else "gazdinstvo")] if gazdinstvo else []
     farma = [gazdinstvo] if gazdinstvo else []
     ukljuceno = []
     for r in redovi_tablice:
@@ -176,14 +179,20 @@ def tabele_za_izvoz(redovi_tablice, model, istorija=None, podsetnici=None, samo_
             continue
         ukljuceno.append(r)
     ids = {r["id"] for r in ukljuceno}
+    if sa_srodnicima and ukljuceno:
+        srodni = model.srodnici({model.nadji(r["id"]) or r["id"] for r in ukljuceno})
+        for r in redovi_tablice:
+            jid = model.nadji(r["id"]) or r["id"]
+            if r["id"] not in ids and jid in srodni:
+                ukljuceno.append(dict(r, status="neaktivno"))      # srodnik: ide kao neaktivno grlo
 
     kol = list(KOLONE) + [k for k in dodatne if k not in KOLONE]
-    zag = [_naziv_kol(kol[0], EN_KOL)] + kol_farma + [_naziv_kol(k, EN_KOL) for k in kol[1:]] + [T("inbriding_%", "inbreeding_%")]
+    zag = [_naziv_kol(kol[0], EN_KOL)] + kol_farma + [_naziv_kol(k, EN_KOL) for k in kol[1:]] + [("inbreeding_%" if EN else "inbriding_%")]
     grla = [zag]
     for r in ukljuceno:
         vr = dict(r)
         vr["pol"] = (POL_EN if EN else POL_SR).get(vr.get("pol", ""), vr.get("pol", ""))
-        vr["autohtona"] = T("da", "yes") if vr.get("autohtona") else ""
+        vr["autohtona"] = ("yes" if EN else "da") if vr.get("autohtona") else ""
         if EN:
             vr["status"] = STATUS_EN.get(vr.get("status", ""), vr.get("status", ""))
         jid = model.nadji(r["id"]) or r["id"]
@@ -241,7 +250,7 @@ def tabele_za_izvoz(redovi_tablice, model, istorija=None, podsetnici=None, samo_
             if samo_ids is not None and z.get("grlo") not in ids:
                 continue
             vr = dict(z)
-            vr["vrsta"] = T("prihod", "income") if z.get("vrsta") == PRIHOD else T("trošak", "cost")
+            vr["vrsta"] = ("income" if EN else "prihod") if z.get("vrsta") == PRIHOD else ("cost" if EN else "trošak")   # podatak, ne prevodi se
             red = [vr.get(k, "") for k in FIN_KOLONE]
             iznos = mlecnost_broj(z.get("iznos"))
             red[FIN_KOLONE.index("iznos")] = iznos if iznos is not None else z.get("iznos", "")
@@ -275,12 +284,74 @@ def _ozn_markica(t):
     return t, ""
 
 
+class Identiteti:
+    """Uvoz sa DRUGOG gazdinstva: koje grlo iz fajla je koje grlo kod nas.
+    - ista ušna markica (ili elektronski broj) = isto grlo, makar se drugačije zvalo;
+    - isto ime, a ranije uvezeno sa tog istog gazdinstva = isto grlo;
+    - isto ime, a nije potvrđeno da je isto grlo = DRUGO grlo -> dobija slobodno ime (Bela 2, Bela 3…).
+    Uvoz sa svog gazdinstva (bez kolone gazdinstvo) radi kao i do sada: isto ime = isto grlo."""
+
+    def __init__(self, redovi_tablice, farma="", tudje=True):
+        self.farma, self.tudje = " ".join(str(farma or "").split()), tudje
+        self.mapa, self.markice, self.novo_ime = {}, {}, set()
+        self.po_id = {r["id"]: r for r in redovi_tablice}
+        self.po_mark, self.po_rfid = {}, {}
+        for r in redovi_tablice:
+            for m in [r.get("markica", "")] + [x.strip() for x in str(r.get("stare_markice", "")).split(",")]:
+                if norm(m):
+                    self.po_mark.setdefault(norm(m), r["id"])
+            if norm(r.get("rfid")):
+                self.po_rfid.setdefault(norm(r.get("rfid")), r["id"])
+        self.zauzeto = set(self.po_id)
+
+    def zapamti_markicu(self, ime, markica):
+        """Markica pretka iz lista Rodovnik (da se predak prepozna i kad nije u listi grla)."""
+        if ime and norm(markica):
+            self.markice.setdefault(ime, markica)
+
+    def id(self, ime, markica="", rfid="", stare=""):
+        """Ime grla u fajlu -> ime kod nas (isto, postojeće grlo sa istom markicom ili novo slobodno ime).
+        stare: ranije markice tog grla iz fajla (grlo je u međuvremenu dobilo novu minđušu na jednoj od farmi)."""
+        ime = " ".join(str(ime or "").split())
+        if not ime:
+            return ""
+        if ime in self.mapa:
+            return self.mapa[ime]
+        if not self.tudje:
+            self.mapa[ime] = ime
+            return ime
+        markica = markica or self.markice.get(ime, "")
+        nase = self.po_mark.get(norm(markica)) if norm(markica) else None
+        nase = nase or (self.po_rfid.get(norm(rfid)) if norm(rfid) else None)
+        for st in str(stare or "").split(","):                 # njihova stara markica = naša markica (ili naša stara)
+            if not nase and norm(st):
+                nase = self.po_mark.get(norm(st))
+        if not nase and ime in self.po_id:
+            r = self.po_id[ime]
+            iste_markice = norm(markica) and norm(r.get("markica")) == norm(markica)
+            sa_iste_farme = self.farma and " ".join(str(r.get("poreklo_od", "")).split()) == self.farma \
+                and not (norm(markica) and norm(r.get("markica")) and norm(r.get("markica")) != norm(markica))
+            if iste_markice or sa_iste_farme:
+                nase = ime
+        if not nase:
+            nase = slobodna_oznaka(ime, self.zauzeto) if ime in self.zauzeto else ime
+            if nase != ime:
+                self.novo_ime.add(ime)
+        self.zauzeto.add(nase)
+        self.mapa[ime] = nase
+        return nase
+
+    def preimenovana(self):
+        """{ime u fajlu: novo ime} za grla koja su dobila drugo ime (za poruku korisniku)."""
+        return {k: v for k, v in self.mapa.items() if k in self.novo_ime}
+
+
 def _datum_txt(v):
     v = (v or "").strip()
     return _excel_datum(v) if v.replace(".", "", 1).isdigit() and 1000 < float(v) < 80000 else v
 
 
-def dopuni_iz_excela(listovi, redovi_tablice, istorija, podsetnici, ime_fajla=""):
+def dopuni_iz_excela(listovi, redovi_tablice, istorija, podsetnici, ime_fajla="", ident=None):
     """Posle uvoza grla iz HerdDoc Excel fajla: preci iz lista Rodovnik, istorija i podsetnici.
     Postojeći podaci se ne menjaju (samo se popunjava ono što nedostaje), a isti zapis se ne dodaje dvaput.
     Vraća (novih predaka, novih zapisa istorije, novih podsetnika)."""
@@ -302,6 +373,9 @@ def dopuni_iz_excela(listovi, redovi_tablice, istorija, podsetnici, ime_fajla=""
                 farma = (red[fi] or "").strip() if fi is not None else ""
                 cvorovi = [grlo] + [_ozn_markica(x) for x in red[pi:pi + 14]]
                 ids = [grlo] + [c[0] for c in cvorovi[1:]]
+                if ident is not None:          # imena iz fajla -> imena kod nas (isto ime ≠ isto grlo)
+                    ids = [ident.id(grlo)] + [ident.id(c[0], c[1]) if c[0] else "" for c in cvorovi[1:]]
+                    grlo = ids[0]
                 vrsta = (po_id.get(grlo) or {}).get("vrsta", "")
                 # položaj i: roditelji su na 2i+1 (otac) i 2i+2 (majka) – kao u listu Rodovnik
                 for i in range(len(ids)):
@@ -326,6 +400,10 @@ def dopuni_iz_excela(listovi, redovi_tablice, istorija, podsetnici, ime_fajla=""
                 z = {k: z.get(k, "") for k in IST_KOLONE}
                 if not z["grlo"]:
                     continue
+                if ident is not None:
+                    z["grlo"] = ident.id(z["grlo"])
+                    if z["partner"]:
+                        z["partner"] = ident.id(z["partner"])
                 z["datum"] = _datum_txt(z["datum"])
                 for k in ("dogadjaj", "ishod", "ter"):
                     if z[k]:
@@ -341,6 +419,8 @@ def dopuni_iz_excela(listovi, redovi_tablice, istorija, podsetnici, ime_fajla=""
             postoji = {(z["grlo"], z["datum"], z["tip"], z["tekst"]) for z in podsetnici.zapisi}
             for z in zapisi:
                 z = {k: z.get(k, "") for k in Podsetnici.KOLONE}
+                if ident is not None and z["grlo"]:
+                    z["grlo"] = ident.id(z["grlo"])
                 z["datum"] = _datum_txt(z["datum"])
                 if z["tip"]:
                     z["tip"] = prevedi_vrednost(z["tip"])
@@ -410,13 +490,19 @@ class IzvozDeo:
         self.lbl(b, T("Uključi", "Include"), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 2))
         rv, iv, pv = tk.BooleanVar(value=True), tk.BooleanVar(value=True), tk.BooleanVar(value=True)
         fv_ = tk.BooleanVar(value=False)          # finansije su poverljive – podrazumevano se ne izvoze
+        sv = tk.BooleanVar(value=bool(oznacena))  # srodnici: podrazumevano kad se izvoze označena grla (prodaja)
         for tekst, var in ((T("Rodovnik u 3 kolena (roditelji, dedovi, pradedovi)",
                               "3-generation pedigree (parents, grandparents, great-grandparents)"), rv),
                            (T("Istorija događaja (parenja, porođaji, lečenja…)",
                               "Event history (matings, births, treatments…)"), iv),
                            (T("Podsetnici", "Reminders"), pv),
-                           (T("Finansije (prihodi i troškovi)", "Finances (income and costs)"), fv_)):
+                           (T("Finansije (prihodi i troškovi)", "Finances (income and costs)"), fv_),
+                           (T("Sva grla u srodstvu sa izvezenim (preci, potomci, braća, rođaci) – kao neaktivna",
+                              "All animals related to the exported ones (ancestors, offspring, siblings, cousins) – as inactive"), sv)):
             ttk.Checkbutton(b, text=tekst, variable=var, style="Card.TCheckbutton").pack(anchor="w", pady=(4, 0))
+        self.lbl(b, T("Kupac tako dobija ceo rodoslov i tačan inbriding. Srodna grla ne ulaze u njegov zapat.",
+                      "The buyer gets the whole pedigree and correct inbreeding. Related animals do not enter their herd."),
+                 8, fg=INK2, wraplength=460, justify="left").pack(anchor="w", padx=(24, 0))
         err = self.lbl(b, "", 10, "bold", fg=BAD)
         err.pack(anchor="w", pady=(8, 0))
 
@@ -442,7 +528,7 @@ class IzvozDeo:
                                           sa_istorijom=iv.get(), sa_podsetnicima=pv.get(),
                                           dodatne=getattr(self.tab, "dodatne", ()),
                                           samo_ids=set(oznacena) if gv.get() == "oznacena" else None, gazdinstvo=farma,
-                                          finansije=self.fin.zapisi if fv_.get() else None)
+                                          finansije=self.fin.zapisi if fv_.get() else None, sa_srodnicima=sv.get())
                 fajlovi = izvezi_u_fajl(put, listovi, fmt)
             except OSError as e:
                 err.config(text=T("Fajl nije sačuvan: ", "The file was not saved: ") + str(e)

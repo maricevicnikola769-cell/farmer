@@ -144,6 +144,8 @@ class SinhronizacijaDeo:
         if tid and tid in self.pod.get("sinh", {}).get("iskljuceni", []):
             return 0                                 # isključen telefon – ne prima se ništa od njega
         r = sadrzaj.get("razlike", {})
+        from dnk import sacuvaj_slike_sa_telefona
+        sacuvaj_slike_sa_telefona(self.tab.putanja, sadrzaj.get("slike"))   # slike DNK nalaza slikane telefonom
         kol_g = list(dict.fromkeys(KOLONE + [k for x in r.get("grla", []) for k in (x.get("t") or {})]))
         g, sg = spoji_razlike(r.get("grla", []), self.tab.redovi, lambda x: x.get("id", ""), kol_g)
         i, si = spoji_razlike(r.get("istorija", []), self.ist.zapisi, _kljuc_ist, IST_KOLONE)

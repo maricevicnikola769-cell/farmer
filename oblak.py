@@ -20,6 +20,15 @@ AAD = b"farmer1"
 TELEFON_URL = "https://maricevicnikola769-cell.github.io/farmer/telefon/"
 
 
+def T(sr, en):
+    """Prevod poruke (jezik.T, ako je program učitan; ovaj modul radi i sam, npr. u testovima)."""
+    try:
+        from jezik import T as _T
+        return _T(sr, en)
+    except ImportError:
+        return sr
+
+
 class OblakGreska(Exception):
     def __init__(self, poruka, bez_mreze=False):
         super().__init__(poruka)
@@ -90,7 +99,7 @@ def otkljucaj(tekst, kljuc):
         sirovo = base64.b64decode(tekst)
         podaci = AESGCM(iz_b64u(kljuc)).decrypt(sirovo[1:13], sirovo[13:], AAD)
     except Exception:
-        raise OblakGreska("Podaci ne mogu da se otključaju (pogrešan ključ – telefon je uparen sa drugim računarom?)")
+        raise OblakGreska(T("Podaci ne mogu da se otključaju (pogrešan ključ – telefon je uparen sa drugim računarom?)", "The data cannot be unlocked (wrong key – is the phone paired with another computer?)"))
     if sirovo[0] == 1:
         podaci = gzip.decompress(podaci)
     return json.loads(podaci.decode("utf-8"))
@@ -134,9 +143,9 @@ class Oblak:
                 poruka = poruka.get("message", poruka) if isinstance(poruka, dict) else poruka
             except Exception:
                 poruka = e.reason
-            raise OblakGreska(f"Server je odbio zahtev ({e.code}): {poruka}")
+            raise OblakGreska(T(f"Server je odbio zahtev ({e.code}): {poruka}", f"The server refused the request ({e.code}): {poruka}"))
         except (urllib.error.URLError, TimeoutError, OSError) as e:
-            raise OblakGreska(f"Nema veze sa internetom ({e})", bez_mreze=True)
+            raise OblakGreska(T(f"Nema veze sa internetom ({e})", f"No internet connection ({e})"), bez_mreze=True)
 
     def _prijava(self):
         if self.token.get("id") and self.token.get("istice", 0) > time.time() + 120:
@@ -154,7 +163,7 @@ class Oblak:
                     raise
         r = self._http("POST", f"{self.auth_url}/v1/accounts:signUp?key={self.kljuc_api}", {"returnSecureToken": True})
         if not r or not r.get("idToken"):
-            raise OblakGreska("Prijava na server nije uspela (proveri Anonymous u Firebase Authentication).")
+            raise OblakGreska(T("Prijava na server nije uspela (proveri Anonymous u Firebase Authentication).", "Signing in to the server failed (check Anonymous in Firebase Authentication)."))
         self.token = dict(id=r["idToken"], osvezi=r.get("refreshToken", ""), istice=time.time() + int(r.get("expiresIn", 3600)))
         return self.token["id"]
 
@@ -199,7 +208,7 @@ class Oblak:
         for n in range(int(ukupno)):
             d = self.citaj(kol, f"{osnova}_{n:03d}")
             if d is None:
-                raise OblakGreska("Deo podataka nedostaje na serveru (pokušaću ponovo).")
+                raise OblakGreska(T("Deo podataka nedostaje na serveru (pokušaću ponovo).", "Part of the data is missing on the server (will try again)."))
             delovi.append(d.get("deo", ""))
         return "".join(delovi)
 

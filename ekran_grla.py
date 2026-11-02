@@ -7,7 +7,7 @@ from datetime import date, datetime
 from tkinter import messagebox, ttk
 
 from osnova import EN
-from jezik import AUTO, POREKLA, REDOSLEDI
+from jezik import AUTO, POREKLA, REDOSLEDI, T, vrsta_kanon, vrsta_na_jeziku
 from podaci import (Istorija, Podsetnici, fmt_starost, fmt_upis, norm, parsiraj_datum, pct, sort_key,
     stare_lista, starost_meseci)
 from izgled import BAD, BG, BRAND, INK, INK2, OK, SURF, SURF2, WARN
@@ -23,20 +23,21 @@ class GrlaEkran:
         body = self.strana_okvir(scroll=False)
         sva = self.model.grla()
         akt = sum(a["aktivno"] for a in sva)
-        self.zaglavlje(body, ("Animals" if EN else "Grla"), (f"{akt} in herd, {len(sva)} recorded in total." if EN else f"{akt} u zapatu, ukupno {len(sva)} upisanih.")
-                       if sva else ("Records of all animals with their parents." if EN else "Evidencija svih grla sa roditeljima."),
-                       [(("Partner search" if EN else "Pretraga partnera"), self.idi_na_pretragu, "Secondary"),
-                        (("Import" if EN else "Uvezi"), self.uvezi, "Secondary"), (("Export" if EN else "Izvezi"), self.izvezi, "Secondary"), (("📶 Reader" if EN else "📶 Čitač"), self.citac, "Secondary"), (("Open in Excel" if EN else "Otvori u Excelu"), self.otvori_excel, "Secondary"),
-                        (("+  New animal" if EN else "+  Novo grlo"), lambda: self.forma(), "Primary")])
+        self.zaglavlje(body, (T("Grla", "Animals")), (T(f"{akt} u zapatu, ukupno {len(sva)} upisanih.", f"{akt} in herd, {len(sva)} recorded in total."))
+                       if sva else (T("Evidencija svih grla sa roditeljima.", "Records of all animals with their parents.")),
+                       [((T("Pretraga partnera", "Partner search")), self.idi_na_pretragu, "Secondary"),
+                        ((T("Uvezi", "Import")), self.uvezi, "Secondary"), ((T("Izvezi", "Export")), self.izvezi, "Secondary"), ((T("📶 Čitač", "📶 Reader")), self.citac, "Secondary"), ((T("Otvori u Excelu", "Open in Excel")), self.otvori_excel, "Secondary"),
+                        ((T("+  Novo grlo", "+  New animal")), lambda: self.forma(), "Primary")])
         if not sva:
             self.prazno(body)
             return
+        self.trake_vrsta(body, sva)
         tb = tk.Frame(body, bg=BG)
         tb.pack(fill="x", pady=(0, 12))
         self.q_var = tk.StringVar(value=self.ui["q"])
         e = ttk.Entry(tb, textvariable=self.q_var, font=self.f(10), width=26)
         e.pack(side="left")
-        ph = self.lbl(tb, ("⌕  Search by tag, ear tag, breed…" if EN else "⌕  Traži po oznaci, markici, rasi…"), 10, fg="#98A39B", bg=SURF)
+        ph = self.lbl(tb, (T("⌕  Traži po oznaci, markici, rasi…", "⌕  Search by tag, ear tag, breed…")), 10, fg="#98A39B", bg=SURF)
         def ph_show(*_):
             if self.q_var.get():
                 ph.place_forget()
@@ -44,28 +45,28 @@ class GrlaEkran:
                 ph.place(in_=e, x=10, rely=0.5, anchor="w")
         ph.bind("<Button-1>", lambda ev: e.focus_set())
         ph_show()
-        self.pol_var = tk.StringVar(value={"": ("All sexes" if EN else "Svi polovi"), "z": ("Females" if EN else "Ženska"), "m": ("Males" if EN else "Muška")}[self.ui["pol"]])
-        cb = ttk.Combobox(tb, textvariable=self.pol_var, values=[("All sexes" if EN else "Svi polovi"), ("Females" if EN else "Ženska"), ("Males" if EN else "Muška")], width=10,
+        self.pol_var = tk.StringVar(value={"": (T("Svi polovi", "All sexes")), "z": (T("Ženska", "Females")), "m": (T("Muška", "Males"))}[self.ui["pol"]])
+        cb = ttk.Combobox(tb, textvariable=self.pol_var, values=[(T("Svi polovi", "All sexes")), (T("Ženska", "Females")), (T("Muška", "Males"))], width=10,
                           state="readonly", font=self.f(10))
         cb.pack(side="left", padx=10)
-        self.por_var = tk.StringVar(value=self.ui.get("poreklo") or ("Any origin" if EN else "Svako poreklo"))
-        cbp = ttk.Combobox(tb, textvariable=self.por_var, values=[("Any origin" if EN else "Svako poreklo")] + POREKLA, width=15,
+        self.por_var = tk.StringVar(value=self.ui.get("poreklo") or (T("Svako poreklo", "Any origin")))
+        cbp = ttk.Combobox(tb, textvariable=self.por_var, values=[(T("Svako poreklo", "Any origin"))] + POREKLA, width=15,
                            state="readonly", font=self.f(10))
         cbp.pack(side="left", padx=(0, 10))
         cbp.bind("<<ComboboxSelected>>", lambda ev: self.grla_filter())
         self.akt_var = tk.BooleanVar(value=self.ui["samo_akt"])
-        ttk.Checkbutton(tb, text=("Only in herd" if EN else "Samo u zapatu"), variable=self.akt_var,
+        ttk.Checkbutton(tb, text=(T("Samo u zapatu", "Only in herd")), variable=self.akt_var,
                         command=lambda: self.grla_filter()).pack(side="left", padx=6)
         self.red_var = tk.StringVar(value=self.ui.get("redosled") or REDOSLEDI[0])
         cbr = ttk.Combobox(tb, textvariable=self.red_var, values=REDOSLEDI, state="readonly", width=21,
                            font=self.f(10))
         cbr.pack(side="right")
         cbr.bind("<<ComboboxSelected>>", lambda ev: self.grla_filter())
-        self.lbl(tb, ("Order:" if EN else "Redosled:"), 9, "bold", fg=INK2).pack(side="right", padx=(0, 6))
+        self.lbl(tb, (T("Redosled:", "Order:")), 9, "bold", fg=INK2).pack(side="right", padx=(0, 6))
 
-        wrap, tv = self.tabela(body, [("id", ("Animal" if EN else "Grlo"), 105), ("markica", ("Ear tag" if EN else "Markica"), 125), ("pol", ("Sex" if EN else "Pol"), 70),
-                                      ("rasa", ("Breed" if EN else "Rasa"), 130), ("starost", ("Age" if EN else "Starost"), 90), ("otac", ("Sire" if EN else "Otac"), 100),
-                                      ("majka", ("Dam" if EN else "Majka"), 100), ("upis", ("Added" if EN else "Upisano"), 95), ("f", ("Inbreeding" if EN else "Inbriding"), 90, "e")],
+        wrap, tv = self.tabela(body, [("id", (T("Grlo", "Animal")), 105), ("markica", (T("Markica", "Ear tag")), 125), ("pol", (T("Pol", "Sex")), 70),
+                                      ("rasa", (T("Rasa", "Breed")), 130), ("starost", (T("Starost", "Age")), 90), ("otac", (T("Otac", "Sire")), 100),
+                                      ("majka", (T("Majka", "Dam")), 100), ("upis", (T("Upisano", "Added")), 95), ("f", (T("Inbriding", "Inbreeding")), 90, "e")],
                                visina=14)
         wrap.pack(fill="both", expand=True)
         self.tv_grla = tv
@@ -76,11 +77,11 @@ class GrlaEkran:
         tv.bind("<Button-2>", lambda ev: self.meni_grla(tv, ev))
         dno = tk.Frame(body, bg=BG)
         dno.pack(fill="x", pady=(8, 0))
-        self.lbl(dno, ("Double-click opens the card, right-click gives more options. Select animals (several with Ctrl): Delete removes them, Export exports only them." if EN else "Dvoklik otvara karton, desni klik daje više opcija. Označi grla (više uz Ctrl): Delete ih briše, Izvezi izvozi samo njih."),
+        self.lbl(dno, (T("Dvoklik otvara karton, desni klik daje više opcija. Označi grla (više uz Ctrl): Delete ih briše, Izvezi izvozi samo njih.", "Double-click opens the card, right-click gives more options. Select animals (several with Ctrl): Delete removes them, Export exports only them.")),
                  9, fg=INK2).pack(side="left")
         n_obr = len(self.model.obrisana())
         if n_obr:
-            lnk = self.lbl(dno, (f"Deleted animals ({n_obr})" if EN else f"Obrisana grla ({n_obr})"), 9, "bold", fg=BRAND, cursor="hand2")
+            lnk = self.lbl(dno, (T(f"Obrisana grla ({n_obr})", f"Deleted animals ({n_obr})")), 9, "bold", fg=BRAND, cursor="hand2")
             lnk.pack(side="right")
             lnk.bind("<Button-1>", lambda e: self.prikazi("obrisana"))
         self.q_var.trace_add("write", lambda *_: (ph_show(), self.grla_filter()))
@@ -94,12 +95,58 @@ class GrlaEkran:
         self.grla_filter()
 
 
+    def trake_vrsta(self, body, sva):
+        """Dugmad za vrstu iznad liste: Sve vrste · Goveda · Ovce · Koze · Svinje · Konji (samo vrste koje postoje u stadu).
+        Izbor se pamti i posle zatvaranja programa."""
+        broj = {}
+        for a in sva:                       # broj = grla u zapatu
+            k = vrsta_kanon(a["vrsta"]) or "drugo"
+            broj[k] = broj.get(k, 0) + (1 if a["aktivno"] else 0)
+        izabrana = self.pod.get("vrsta_grla", "")
+        if izabrana and izabrana not in broj:
+            izabrana = ""
+        self.ui["vrsta"] = izabrana
+        red = tk.Frame(body, bg=BG)
+        red.pack(fill="x", pady=(0, 10))
+        # stado / lokacija – desno u istom redu (pamti se i posle zatvaranja programa)
+        stada = sorted({a["stado"] for a in sva if a["stado"]}, key=sort_key)
+        sv_ = self.pod.get("stado_grla", "")
+        if sv_ not in stada:
+            sv_ = ""
+        self.stado_var = tk.StringVar(value=sv_ or T("Sva stada", "All herds"))
+        if stada:
+            cbs = ttk.Combobox(red, textvariable=self.stado_var, values=[T("Sva stada", "All herds")] + stada, width=18,
+                               state="readonly", font=self.f(10))
+            cbs.pack(side="right")
+            cbs.bind("<<ComboboxSelected>>", lambda ev: self.grla_filter())
+            self.lbl(red, T("Stado:", "Herd:"), 9, "bold", fg=INK2).pack(side="right", padx=(0, 6))
+
+        def izaberi(k):
+            self.pod["vrsta_grla"] = k
+            self.sacuvaj_podesavanja()
+            self.prikazi("grla")
+        redosled = ("goveda", "ovce", "koze", "svinje", "konji", "drugo")
+        opcije = [("", T("Sve vrste", "All species"), sum(broj.values()))] + \
+                 [(k, (vrsta_na_jeziku(k) if k != "drugo" else T("ostalo", "other")).capitalize(), broj[k]) for k in redosled if k in broj]
+        for k, naziv, n in opcije:
+            akt = k == izabrana
+            b = tk.Label(red, text=f"{naziv}  {n}", bg=BRAND if akt else SURF, fg="#FFFFFF" if akt else INK,
+                         font=self.f(10, "bold"), padx=14, pady=6, cursor="hand2", highlightthickness=1,
+                         highlightbackground=BRAND if akt else "#D6DDD3")
+            b.pack(side="left", padx=(0, 8))
+            b.bind("<Button-1>", lambda e, k=k: izaberi(k))
+
     def grla_filter(self):
         self.ui["q"] = self.q_var.get()
-        self.ui["pol"] = {("Females" if EN else "Ženska"): "z", ("Males" if EN else "Muška"): "m"}.get(self.pol_var.get(), "")
-        self.ui["poreklo"] = "" if self.por_var.get() == ("Any origin" if EN else "Svako poreklo") else self.por_var.get()
+        self.ui["pol"] = {(T("Ženska", "Females")): "z", (T("Muška", "Males")): "m"}.get(self.pol_var.get(), "")
+        self.ui["poreklo"] = "" if self.por_var.get() == (T("Svako poreklo", "Any origin")) else self.por_var.get()
         self.ui["samo_akt"] = self.akt_var.get()
         self.ui["redosled"] = self.red_var.get()
+        stado_f = self.stado_var.get() if getattr(self, "stado_var", None) else ""
+        stado_f = "" if stado_f == T("Sva stada", "All herds") else stado_f
+        if stado_f != self.pod.get("stado_grla", ""):
+            self.pod["stado_grla"] = stado_f
+            self.sacuvaj_podesavanja()
         tv, m, q = self.tv_grla, self.model, norm(self.ui["q"])
         tv.delete(*tv.get_children())
         i = 0
@@ -109,6 +156,10 @@ class GrlaEkran:
             if self.ui["poreklo"] and norm(a["poreklo"]) != norm(self.ui["poreklo"]):
                 continue
             if self.ui["pol"] and a["pol"] != self.ui["pol"]:
+                continue
+            if self.ui.get("vrsta") and (vrsta_kanon(a["vrsta"]) or "drugo") != self.ui["vrsta"]:
+                continue
+            if stado_f and a["stado"] != stado_f:
                 continue
             if q and not (any(q in norm(a.get(k)) for k in ("id", "markica", "rfid", "rasa", "stado", "poreklo_od"))
                           or any(q in norm(x) for x in a["stare"])):
@@ -129,7 +180,7 @@ class GrlaEkran:
                               fmt_upis(a["uneto"]), pct(f) + ("  ⚠" if f > self.prag else "")), tags=tags)
             i += 1
         if not i:
-            tv.insert("", "end", text="", values=("", ("No animal matches the search." if EN else "Nijedno grlo ne odgovara pretrazi."), "", "", "", "", "", ""))
+            tv.insert("", "end", text="", values=("", (T("Nijedno grlo ne odgovara pretrazi.", "No animal matches the search.")), "", "", "", "", "", ""))
 
 
     def idi_na_pretragu(self, x=None):
@@ -158,11 +209,11 @@ class GrlaEkran:
             if r is red:
                 continue
             if r.get("markica") and norm(r["markica"]) == n:
-                return (f"Ear tag {mk} is already entered for animal {r['id']}." if EN else f"Markica {mk} je već upisana za grlo {r['id']}.")
+                return (T(f"Markica {mk} je već upisana za grlo {r['id']}.", f"Ear tag {mk} is already entered for animal {r['id']}."))
             if any(norm(x) == n for x in stare_lista(r)):
-                return (f"Ear tag {mk} previously belonged to animal {r['id']}." if EN else f"Markica {mk} je ranije pripadala grlu {r['id']}.")
+                return (T(f"Markica {mk} je ranije pripadala grlu {r['id']}.", f"Ear tag {mk} previously belonged to animal {r['id']}."))
             if norm(r["id"]) == n:
-                return (f"{mk} is already the tag of animal {r['id']}." if EN else f"{mk} je već oznaka grla {r['id']}.")
+                return (T(f"{mk} je već oznaka grla {r['id']}.", f"{mk} is already the tag of animal {r['id']}."))
         return None
 
 
@@ -185,7 +236,7 @@ class GrlaEkran:
                 red["stare_markice"] = ", ".join(st)
         red["stare_markice"] = ", ".join(x for x in stare_lista(red) if norm(x) != norm(nova))
         if norm(stara) != norm(nova):
-            self.ist.dodaj(red["id"], AUTO, (f"Ear tag changed: {stara or '–'} → {nova or '–'}" if EN else f"Ušna markica promenjena: {stara or '–'} → {nova or '–'}"), automatski=True)
+            self.ist.dodaj(red["id"], AUTO, (T(f"Ušna markica promenjena: {stara or '–'} → {nova or '–'}", f"Ear tag changed: {stara or '–'} → {nova or '–'}")), automatski=True)
         red["markica"] = nova
 
 
@@ -194,28 +245,28 @@ class GrlaEkran:
         if not red:
             return
         win = tk.Toplevel(parent or self.root, bg=SURF)
-        win.title(("Change ear tag" if EN else "Promena ušne markice"))
+        win.title((T("Promena ušne markice", "Change ear tag")))
         win.transient(parent or self.root)
         win.resizable(False, False)
         win.grab_set()
         b = tk.Frame(win, bg=SURF)
         b.pack(fill="both", expand=True, padx=26, pady=22)
-        self.lbl(b, ("Change ear tag" if EN else "Promena ušne markice"), 16, "bold").pack(anchor="w")
+        self.lbl(b, (T("Promena ušne markice", "Change ear tag")), 16, "bold").pack(anchor="w")
         top = tk.Frame(b, bg=SURF)
         top.pack(anchor="w", pady=(14, 4))
         self.cip(top, jid).pack(side="left")
-        self.lbl(top, (f"current ear tag:  {red.get('markica') or '–'}" if EN else f"sadašnja markica:  {red.get('markica') or '–'}"), 10, fg=INK2).pack(side="left", padx=12)
+        self.lbl(top, (T(f"sadašnja markica:  {red.get('markica') or '–'}", f"current ear tag:  {red.get('markica') or '–'}")), 10, fg=INK2).pack(side="left", padx=12)
         stare = stare_lista(red)
         if stare:
-            self.lbl(b, ("Previous ear tags: " if EN else "Ranije markice: ") + ", ".join(stare), 9, fg=INK2).pack(anchor="w")
-        self.lbl(b, ("New ear tag" if EN else "Nova markica"), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 4))
+            self.lbl(b, (T("Ranije markice: ", "Previous ear tags: ")) + ", ".join(stare), 9, fg=INK2).pack(anchor="w")
+        self.lbl(b, (T("Nova markica", "New ear tag")), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 4))
         var = tk.StringVar(value=red.get("markica", ""))
         e = ttk.Entry(b, textvariable=var, width=36, font=self.f(11))
         e.pack(anchor="w", fill="x")
-        self.lbl(b, ("e.g. UK 123456 700123. Leave empty to remove the ear tag." if EN else "npr. RS 1234-5678. Ostavi prazno da ukloniš markicu."),
+        self.lbl(b, (T("npr. RS 1234-5678. Ostavi prazno da ukloniš markicu.", "e.g. UK 123456 700123. Leave empty to remove the ear tag.")),
                  8, fg="#8A968D").pack(anchor="w")
         zap = tk.BooleanVar(value=True)
-        ttk.Checkbutton(b, text=("Remember the old ear tag (search still finds the animal by its old number)" if EN else "Zapamti staru markicu (pretraga i dalje nalazi grlo po starom broju)"),
+        ttk.Checkbutton(b, text=(T("Zapamti staru markicu (pretraga i dalje nalazi grlo po starom broju)", "Remember the old ear tag (search still finds the animal by its old number)")),
                         variable=zap, style="Card.TCheckbutton").pack(anchor="w", pady=(12, 0))
         err = self.lbl(b, "", 10, "bold", fg=BAD)
         err.pack(anchor="w", pady=(8, 0))
@@ -234,12 +285,12 @@ class GrlaEkran:
             self.primeni_markicu(red, nova, zapamti=zap.get())
             win.grab_release()
             win.destroy()
-            self.promena((f"{jid}: ear tag {stara} → {nova or '–'}" if EN else f"{jid}: markica {stara} → {nova or '–'}"))
+            self.promena((T(f"{jid}: markica {stara} → {nova or '–'}", f"{jid}: ear tag {stara} → {nova or '–'}")))
 
         fb = tk.Frame(b, bg=SURF)
         fb.pack(fill="x", pady=(18, 0))
-        self.btn(fb, ("Save" if EN else "Sačuvaj"), sacuvaj, "Primary").pack(side="right")
-        self.btn(fb, ("Cancel" if EN else "Otkaži"), win.destroy).pack(side="right", padx=8)
+        self.btn(fb, (T("Sačuvaj", "Save")), sacuvaj, "Primary").pack(side="right")
+        self.btn(fb, (T("Otkaži", "Cancel")), win.destroy).pack(side="right", padx=8)
         win.bind("<Return>", sacuvaj)
         win.bind("<Escape>", lambda ev: win.destroy())
         win.update_idletasks()
@@ -261,31 +312,31 @@ class GrlaEkran:
         if not ids:
             return
         win = tk.Toplevel(parent or self.root, bg=SURF)
-        win.title(("Move to another herd" if EN else "Premeštanje u drugo stado"))
+        win.title((T("Premeštanje u drugo stado", "Move to another herd")))
         win.transient(parent or self.root)
         win.resizable(False, False)
         win.grab_set()
         b = tk.Frame(win, bg=SURF)
         b.pack(fill="both", expand=True, padx=26, pady=22)
-        self.lbl(b, ("Move to another herd" if EN else "Premeštanje u drugo stado"), 16, "bold").pack(anchor="w")
+        self.lbl(b, (T("Premeštanje u drugo stado", "Move to another herd")), 16, "bold").pack(anchor="w")
         top = tk.Frame(b, bg=SURF)
         top.pack(anchor="w", pady=(12, 4))
         for i in ids[:8]:
             self.cip(top, i).pack(side="left", padx=(0, 6))
         if len(ids) > 8:
-            self.lbl(top, (f"+ {len(ids) - 8} more" if EN else f"+ još {len(ids) - 8}"), 9, fg=INK2).pack(side="left")
+            self.lbl(top, (T(f"+ još {len(ids) - 8}", f"+ {len(ids) - 8} more")), 9, fg=INK2).pack(side="left")
         sada_st = sorted({self.red_za(i).get("stado") or "–" for i in ids})
-        self.lbl(b, ("Current herd: " if EN else "Sadašnje stado: ") + ", ".join(sada_st), 10, fg=INK2).pack(anchor="w")
-        self.lbl(b, ("New herd" if EN else "Novo stado"), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 4))
+        self.lbl(b, (T("Sadašnje stado: ", "Current herd: ")) + ", ".join(sada_st), 10, fg=INK2).pack(anchor="w")
+        self.lbl(b, (T("Novo stado", "New herd")), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 4))
         sv = tk.StringVar(value="")
         e = ttk.Combobox(b, textvariable=sv, values=self.sva_stada(), width=34, font=self.f(11))
         e.pack(anchor="w", fill="x")
-        self.lbl(b, ("Choose an existing herd or type a new name." if EN else "Izaberi postojeće stado ili upiši novi naziv."), 8, fg="#8A968D").pack(anchor="w")
-        self.lbl(b, ("Date of move" if EN else "Datum premeštanja"), 9, "bold", fg=INK2).pack(anchor="w", pady=(12, 4))
+        self.lbl(b, (T("Izaberi postojeće stado ili upiši novi naziv.", "Choose an existing herd or type a new name.")), 8, fg="#8A968D").pack(anchor="w")
+        self.lbl(b, (T("Datum premeštanja", "Date of move")), 9, "bold", fg=INK2).pack(anchor="w", pady=(12, 4))
         dv = tk.StringVar(value=date.today().strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")))
         ttk.Entry(b, textvariable=dv, width=16, font=self.f(10)).pack(anchor="w")
         zv = tk.BooleanVar(value=True)
-        ttk.Checkbutton(b, text=("Record the move in the animal's history" if EN else "Zapiši premeštanje u istoriju grla"), variable=zv,
+        ttk.Checkbutton(b, text=(T("Zapiši premeštanje u istoriju grla", "Record the move in the animal's history")), variable=zv,
                         style="Card.TCheckbutton").pack(anchor="w", pady=(12, 0))
         err = self.lbl(b, "", 10, "bold", fg=BAD)
         err.pack(anchor="w", pady=(8, 0))
@@ -293,11 +344,11 @@ class GrlaEkran:
         def sacuvaj(ev=None):
             novo = sv.get().strip()
             if not novo:
-                err.config(text=("Type or choose the new herd." if EN else "Upiši ili izaberi novo stado."))
+                err.config(text=(T("Upiši ili izaberi novo stado.", "Type or choose the new herd.")))
                 return
             d = parsiraj_datum(dv.get())
             if not d:
-                err.config(text=("The date is not valid. Enter it as 15/03/2026." if EN else "Datum nije ispravan. Upiši ga kao 15.03.2026."))
+                err.config(text=(T("Datum nije ispravan. Upiši ga kao 15.03.2026.", "The date is not valid. Enter it as 15/03/2026.")))
                 return
             # isti naziv kao postojece stado (bez obzira na velika slova) -> koristi postojeci
             novo = next((x for x in self.sva_stada() if x.lower() == novo.lower()), novo)
@@ -310,16 +361,16 @@ class GrlaEkran:
                 r["stado"] = novo
                 pomereno += 1
                 if zv.get():
-                    self.ist.dodaj(i, ("Move" if EN else "Premeštanje"), (f"From herd {staro or '–'} to herd {novo}" if EN else f"Iz stada {staro or '–'} u stado {novo}"),
+                    self.ist.dodaj(i, (T("Premeštanje", "Move")), (T(f"Iz stada {staro or '–'} u stado {novo}", f"From herd {staro or '–'} to herd {novo}")),
                                    datum=d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), vrednost=novo)
             win.grab_release()
             win.destroy()
-            self.promena((f"Moved to herd {novo}: {pomereno} animals" if EN else f"Premešteno u stado {novo}: {pomereno} grla") if pomereno else ("The animals are already in that herd." if EN else "Grla su već u tom stadu."))
+            self.promena((T(f"Premešteno u stado {novo}: {pomereno} grla", f"Moved to herd {novo}: {pomereno} animals")) if pomereno else (T("Grla su već u tom stadu.", "The animals are already in that herd.")))
 
         fb = tk.Frame(b, bg=SURF)
         fb.pack(fill="x", pady=(18, 0))
-        self.btn(fb, ("Move" if EN else "Premesti"), sacuvaj, "Primary").pack(side="right")
-        self.btn(fb, ("Cancel" if EN else "Otkaži"), win.destroy).pack(side="right", padx=8)
+        self.btn(fb, (T("Premesti", "Move")), sacuvaj, "Primary").pack(side="right")
+        self.btn(fb, (T("Otkaži", "Cancel")), win.destroy).pack(side="right", padx=8)
         win.bind("<Return>", sacuvaj)
         win.bind("<Escape>", lambda ev: win.destroy())
         win.update_idletasks()
@@ -331,17 +382,17 @@ class GrlaEkran:
 
     def preimenuj_stado(self, staro):
         win = tk.Toplevel(self.root, bg=SURF)
-        win.title(("Rename herd" if EN else "Preimenovanje stada"))
+        win.title((T("Preimenovanje stada", "Rename herd")))
         win.transient(self.root)
         win.resizable(False, False)
         win.grab_set()
         b = tk.Frame(win, bg=SURF)
         b.pack(fill="both", expand=True, padx=26, pady=22)
         n = sum(1 for r in self.tab.redovi if (r.get("stado") or "").strip() == staro)
-        self.lbl(b, ("Rename herd" if EN else "Preimenovanje stada"), 16, "bold").pack(anchor="w")
-        self.lbl(b, (f"Herd \"{staro}\" has {n} animals. The new name applies to all of them." if EN else f"Stado „{staro}“ ima {n} grla. Novi naziv važi za sva ta grla."), 10, fg=INK2).pack(
+        self.lbl(b, (T("Preimenovanje stada", "Rename herd")), 16, "bold").pack(anchor="w")
+        self.lbl(b, (T(f"Stado „{staro}“ ima {n} grla. Novi naziv važi za sva ta grla.", f"Herd \"{staro}\" has {n} animals. The new name applies to all of them.")), 10, fg=INK2).pack(
             anchor="w", pady=(8, 0))
-        self.lbl(b, ("New name" if EN else "Novi naziv"), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 4))
+        self.lbl(b, (T("Novi naziv", "New name")), 9, "bold", fg=INK2).pack(anchor="w", pady=(14, 4))
         sv = tk.StringVar(value=staro)
         e = ttk.Entry(b, textvariable=sv, width=34, font=self.f(11))
         e.pack(anchor="w", fill="x")
@@ -351,7 +402,7 @@ class GrlaEkran:
         def sacuvaj(ev=None):
             novo = sv.get().strip()
             if not novo:
-                err.config(text=("Type a new name." if EN else "Upiši novi naziv."))
+                err.config(text=(T("Upiši novi naziv.", "Type a new name.")))
                 return
             if novo == staro:
                 win.destroy()
@@ -359,15 +410,15 @@ class GrlaEkran:
             for r in self.tab.redovi:
                 if (r.get("stado") or "").strip() == staro:
                     r["stado"] = novo
-                    self.ist.dodaj(r["id"], AUTO, (f"Herd renamed: {staro} → {novo}" if EN else f"Stado preimenovano: {staro} → {novo}"), automatski=True)
+                    self.ist.dodaj(r["id"], AUTO, (T(f"Stado preimenovano: {staro} → {novo}", f"Herd renamed: {staro} → {novo}")), automatski=True)
             win.grab_release()
             win.destroy()
-            self.promena((f"Herd \"{staro}\" is now \"{novo}\"" if EN else f"Stado „{staro}“ je sada „{novo}“"))
+            self.promena((T(f"Stado „{staro}“ je sada „{novo}“", f"Herd \"{staro}\" is now \"{novo}\"")))
 
         fb = tk.Frame(b, bg=SURF)
         fb.pack(fill="x", pady=(18, 0))
-        self.btn(fb, ("Save" if EN else "Sačuvaj"), sacuvaj, "Primary").pack(side="right")
-        self.btn(fb, ("Cancel" if EN else "Otkaži"), win.destroy).pack(side="right", padx=8)
+        self.btn(fb, (T("Sačuvaj", "Save")), sacuvaj, "Primary").pack(side="right")
+        self.btn(fb, (T("Otkaži", "Cancel")), win.destroy).pack(side="right", padx=8)
         win.bind("<Return>", sacuvaj)
         win.bind("<Escape>", lambda ev: win.destroy())
         win.update_idletasks()
@@ -381,17 +432,17 @@ class GrlaEkran:
     def brisanje_svih(self):
         n_grla = len(self.tab.redovi)
         if not n_grla:
-            messagebox.showinfo(("Delete all animals" if EN else "Brisanje svih grla"), ("There are no animals in the records." if EN else "U evidenciji nema nijednog grla."))
+            messagebox.showinfo((T("Brisanje svih grla", "Delete all animals")), (T("U evidenciji nema nijednog grla.", "There are no animals in the records.")))
             return
         n_ist = len(self.ist.zapisi)
         win = tk.Toplevel(self.root, bg=SURF)
-        win.title(("Delete all animals" if EN else "Brisanje svih grla"))
+        win.title((T("Brisanje svih grla", "Delete all animals")))
         win.transient(self.root)
         win.resizable(False, False)
         win.grab_set()
         st = {"korak": 1, "istorija": tk.StringVar(value="sve"), "kopija": None, "tekst": tk.StringVar(),
               "odbrojavanje": 0, "gotovo": False}
-        NASLOVI = [("Warning" if EN else "Upozorenje"), ("What is deleted" if EN else "Šta se briše"), ("Backup" if EN else "Rezervna kopija"), ("Confirmation" if EN else "Potvrda"), ("Deletion" if EN else "Brisanje")]
+        NASLOVI = [(T("Upozorenje", "Warning")), (T("Šta se briše", "What is deleted")), (T("Rezervna kopija", "Backup")), (T("Potvrda", "Confirmation")), (T("Brisanje", "Deletion"))]
 
         glava = tk.Frame(win, bg=SURF)
         glava.pack(fill="x", padx=26, pady=(22, 0))
@@ -405,7 +456,7 @@ class GrlaEkran:
             for w in glava.winfo_children() + sadrzaj.winfo_children() + dno.winfo_children():
                 w.destroy()
             k = st["korak"]
-            self.lbl(glava, (f"Step {k} of 5 – {NASLOVI[k - 1]}" if EN else f"Korak {k} od 5 – {NASLOVI[k - 1]}"), 16, "bold",
+            self.lbl(glava, (T(f"Korak {k} od 5 – {NASLOVI[k - 1]}", f"Step {k} of 5 – {NASLOVI[k - 1]}")), 16, "bold",
                      fg=BAD if k >= 4 else INK).pack(anchor="w")
             tr = tk.Frame(glava, bg=SURF)
             tr.pack(anchor="w", pady=(10, 0))
@@ -415,13 +466,13 @@ class GrlaEkran:
             [k1, k2, k3, k4, k5][k - 1]()
 
         def dugmad(dalje_txt="Dalje  ›", dalje=None, dalje_stil="Primary", nazad=True, stanje="normal"):
-            self.btn(dno, ("Cancel" if EN else "Otkaži"), win.destroy).pack(side="left")
+            self.btn(dno, (T("Otkaži", "Cancel")), win.destroy).pack(side="left")
             b = self.btn(dno, dalje_txt, dalje or sledeci, dalje_stil)
             b.pack(side="right")
             if stanje == "disabled":
                 b.state(["disabled"])
             if nazad and st["korak"] > 1:
-                self.btn(dno, ("‹  Back" if EN else "‹  Nazad"), prethodni).pack(side="right", padx=8)
+                self.btn(dno, (T("‹  Nazad", "‹  Back")), prethodni).pack(side="right", padx=8)
             return b
 
         def sledeci():
@@ -433,35 +484,35 @@ class GrlaEkran:
             nacrtaj()
 
         def k1():
-            self.napomena(sadrzaj, wraplength=520, tekst=("This action deletes ALL animals from the records. After that the animal list, mating plan, "
-                                   "relationships and overview will be empty." if EN else "Ova radnja briše SVA grla iz evidencije. Posle toga lista grla, plan parenja, "
-                                   "srodstvo i pregled biće prazni."))
-            self.lbl(sadrzaj, ("Currently in the records:" if EN else "U evidenciji je sada:"), 10, "bold").pack(anchor="w", pady=(4, 6))
-            for t in ((f"•  {n_grla} animals (including deleted and out of herd)" if EN else f"•  {n_grla} grla (uključujući obrisana i van zapata)"),
-                      (f"•  {n_ist} history records" if EN else f"•  {n_ist} zapisa u istoriji"),
-                      (f"•  table: {self.tab.putanja}" if EN else f"•  tablica: {self.tab.putanja}")):
+            self.napomena(sadrzaj, wraplength=520, tekst=(T("Ova radnja briše SVA grla iz evidencije. Posle toga lista grla, plan parenja, "
+                                   "srodstvo i pregled biće prazni.", "This action deletes ALL animals from the records. After that the animal list, mating plan, "
+                                   "relationships and overview will be empty.")))
+            self.lbl(sadrzaj, (T("U evidenciji je sada:", "Currently in the records:")), 10, "bold").pack(anchor="w", pady=(4, 6))
+            for t in ((T(f"•  {n_grla} grla (uključujući obrisana i van zapata)", f"•  {n_grla} animals (including deleted and out of herd)")),
+                      (T(f"•  {n_ist} zapisa u istoriji", f"•  {n_ist} history records")),
+                      (T(f"•  tablica: {self.tab.putanja}", f"•  table: {self.tab.putanja}"))):
                 self.lbl(sadrzaj, t, 10, fg=INK2, wraplength=540, justify="left").pack(anchor="w", pady=1)
-            self.lbl(sadrzaj, ("If you only want to remove some animals, cancel and use normal deletion "
-                              "(select the animal and press Delete)." if EN else "Ako želiš da ukloniš samo neka grla, otkaži i koristi obično brisanje "
-                              "(označi grlo i pritisni Delete)."), 9, fg=INK2, wraplength=540,
+            self.lbl(sadrzaj, (T("Ako želiš da ukloniš samo neka grla, otkaži i koristi obično brisanje "
+                              "(označi grlo i pritisni Delete).", "If you only want to remove some animals, cancel and use normal deletion "
+                              "(select the animal and press Delete).")), 9, fg=INK2, wraplength=540,
                      justify="left").pack(anchor="w", pady=(14, 0))
-            dugmad(("I understand, next  ›" if EN else "Razumem, dalje  ›"))
+            dugmad((T("Razumem, dalje  ›", "I understand, next  ›")))
 
         def k2():
-            self.lbl(sadrzaj, ("Choose what is deleted:" if EN else "Izaberi šta se briše:"), 10, "bold").pack(anchor="w", pady=(0, 8))
-            for val, t, opis in (("sve", ("All animals and the whole history" if EN else "Sva grla i cela istorija"),
-                                  ("The records become completely empty, like a new program." if EN else "Evidencija postaje potpuno prazna, kao novi program.")),
-                                 ("grla", ("Animals only, history is kept" if EN else "Samo grla, istorija ostaje sačuvana"),
-                                  ("History records stay in the file but are not shown until the animals are entered again." if EN else "Zapisi iz istorije ostaju u fajlu, ali se ne vide dok se grla ponovo ne upišu."))):
+            self.lbl(sadrzaj, (T("Izaberi šta se briše:", "Choose what is deleted:")), 10, "bold").pack(anchor="w", pady=(0, 8))
+            for val, t, opis in (("sve", (T("Sva grla i cela istorija", "All animals and the whole history")),
+                                  (T("Evidencija postaje potpuno prazna, kao novi program.", "The records become completely empty, like a new program."))),
+                                 ("grla", (T("Samo grla, istorija ostaje sačuvana", "Animals only, history is kept")),
+                                  (T("Zapisi iz istorije ostaju u fajlu, ali se ne vide dok se grla ponovo ne upišu.", "History records stay in the file but are not shown until the animals are entered again.")))):
                 ttk.Radiobutton(sadrzaj, text=t, value=val, variable=st["istorija"],
                                 style="Card.TRadiobutton").pack(anchor="w", pady=(6, 0))
                 self.lbl(sadrzaj, opis, 9, fg=INK2).pack(anchor="w", padx=26)
             dugmad()
 
         def k3():
-            self.lbl(sadrzaj, ("Before deleting, the program makes a backup of all data. Everything can be "
-                              "restored from it if you change your mind." if EN else "Pre brisanja program pravi rezervnu kopiju svih podataka. Iz nje se sve može "
-                              "vratiti ako se predomisliš."), 10, wraplength=540, justify="left").pack(anchor="w")
+            self.lbl(sadrzaj, (T("Pre brisanja program pravi rezervnu kopiju svih podataka. Iz nje se sve može "
+                              "vratiti ako se predomisliš.", "Before deleting, the program makes a backup of all data. Everything can be "
+                              "restored from it if you change your mind.")), 10, wraplength=540, justify="left").pack(anchor="w")
             if not st["kopija"]:
                 try:
                     folder = self.folder_kopija()
@@ -471,28 +522,28 @@ class GrlaEkran:
                     for izvor in (self.tab.putanja, self.ist.putanja):
                         if os.path.isfile(izvor):
                             ime, ext = os.path.splitext(os.path.basename(izvor))
-                            cilj = os.path.join(folder, (f"{ime}_before_delete_{oznaka}{ext}" if EN else f"{ime}_pre_brisanja_{oznaka}{ext}"))
+                            cilj = os.path.join(folder, (T(f"{ime}_pre_brisanja_{oznaka}{ext}", f"{ime}_before_delete_{oznaka}{ext}")))
                             shutil.copy2(izvor, cilj)
                             kopije.append((izvor, cilj))
                     st["kopija"] = (folder, kopije)
                 except OSError as e:
-                    self.napomena(sadrzaj, wraplength=520, tekst=(f"Backup was not made: {e}\nDeletion has been stopped." if EN else f"Rezervna kopija nije napravljena: {e}\nBrisanje je zaustavljeno."))
-                    dugmad(("Next  ›" if EN else "Dalje  ›"), stanje="disabled")
+                    self.napomena(sadrzaj, wraplength=520, tekst=(T(f"Rezervna kopija nije napravljena: {e}\nBrisanje je zaustavljeno.", f"Backup was not made: {e}\nDeletion has been stopped.")))
+                    dugmad((T("Dalje  ›", "Next  ›")), stanje="disabled")
                     return
             folder, kopije = st["kopija"]
-            self.napomena(sadrzaj, wraplength=520, tekst=("Backup has been made." if EN else "Rezervna kopija je napravljena."), ok=True)
+            self.napomena(sadrzaj, wraplength=520, tekst=(T("Rezervna kopija je napravljena.", "Backup has been made.")), ok=True)
             for _, cilj in kopije:
                 self.lbl(sadrzaj, "•  " + os.path.basename(cilj), 10, fg=INK2).pack(anchor="w", pady=1)
             self.lbl(sadrzaj, f"Folder: {folder}", 9, fg=INK2, wraplength=540, justify="left").pack(
                 anchor="w", pady=(8, 0))
-            lk = self.lbl(sadrzaj, ("Open backup folder" if EN else "Otvori folder sa kopijom"), 9, "bold", fg=BRAND, cursor="hand2")
+            lk = self.lbl(sadrzaj, (T("Otvori folder sa kopijom", "Open backup folder")), 9, "bold", fg=BRAND, cursor="hand2")
             lk.pack(anchor="w", pady=(6, 0))
             lk.bind("<Button-1>", lambda e: otvori_folder(folder))
             dugmad()
 
         def k4():
-            self.lbl(sadrzaj, ("To confirm, type exactly:" if EN else "Da potvrdiš, upiši tačno reči:"), 10).pack(anchor="w")
-            self.lbl(sadrzaj, ("DELETE ALL" if EN else "OBRIŠI SVE"), 18, "bold", fg=BAD).pack(anchor="w", pady=(6, 10))
+            self.lbl(sadrzaj, (T("Da potvrdiš, upiši tačno reči:", "To confirm, type exactly:")), 10).pack(anchor="w")
+            self.lbl(sadrzaj, (T("OBRIŠI SVE", "DELETE ALL")), 18, "bold", fg=BAD).pack(anchor="w", pady=(6, 10))
             e = ttk.Entry(sadrzaj, textvariable=st["tekst"], width=24, font=self.f(13))
             e.pack(anchor="w")
             info = self.lbl(sadrzaj, "", 9, fg=INK2)
@@ -500,12 +551,9 @@ class GrlaEkran:
             b = dugmad(stanje="disabled")
 
             def provera(*_):
-                if EN:
-                    ok = norm(st["tekst"].get()) == "DELETEALL"
-                else:
-                    ok = norm(st["tekst"].get()).replace("Š", "S") == "OBRISISVE"
+                ok = norm(st["tekst"].get()).replace("Š", "S") == norm(T("OBRIŠI SVE", "DELETE ALL")).replace("Š", "S")
                 b.state(["!disabled"] if ok else ["disabled"])
-                info.config(text=("Confirmed." if EN else "Potvrđeno.") if ok else ("The \"Next\" button turns on when you type the exact text." if EN else "Dugme „Dalje“ se uključuje kad upišeš tačan tekst."),
+                info.config(text=(T("Potvrđeno.", "Confirmed.")) if ok else (T("Dugme „Dalje“ se uključuje kad upišeš tačan tekst.", "The \"Next\" button turns on when you type the exact text.")),
                             fg=OK if ok else INK2)
             tr_id = st["tekst"].trace_add("write", provera)
             e.bind("<Destroy>", lambda ev: st["tekst"].trace_remove("write", tr_id))
@@ -515,34 +563,34 @@ class GrlaEkran:
         def k5():
             if st["gotovo"]:
                 folder, kopije = st["kopija"]
-                self.napomena(sadrzaj, wraplength=520, tekst=("All animals have been deleted." if EN else "Sva grla su obrisana."), ok=True)
-                self.lbl(sadrzaj, ("The backup is saved in the folder:" if EN else "Rezervna kopija je sačuvana u folderu:"), 10).pack(anchor="w")
+                self.napomena(sadrzaj, wraplength=520, tekst=(T("Sva grla su obrisana.", "All animals have been deleted.")), ok=True)
+                self.lbl(sadrzaj, (T("Rezervna kopija je sačuvana u folderu:", "The backup is saved in the folder:")), 10).pack(anchor="w")
                 self.lbl(sadrzaj, folder, 9, fg=INK2, wraplength=540, justify="left").pack(anchor="w", pady=(2, 10))
-                self.lbl(sadrzaj, ("If this was a mistake, click \"Restore data\" – everything will be as before." if EN else "Ako je ovo bila greška, klikni „Vrati podatke“ – sve će biti kao pre brisanja."),
+                self.lbl(sadrzaj, (T("Ako je ovo bila greška, klikni „Vrati podatke“ – sve će biti kao pre brisanja.", "If this was a mistake, click \"Restore data\" – everything will be as before.")),
                          9, fg=INK2, wraplength=540, justify="left").pack(anchor="w")
-                self.btn(dno, ("Restore data" if EN else "Vrati podatke"), vrati).pack(side="left")
-                self.btn(dno, ("Close" if EN else "Zatvori"), win.destroy, "Primary").pack(side="right")
+                self.btn(dno, (T("Vrati podatke", "Restore data")), vrati).pack(side="left")
+                self.btn(dno, (T("Zatvori", "Close")), win.destroy, "Primary").pack(side="right")
                 return
-            sta = ("all animals and the whole history" if EN else "sva grla i celu istoriju") if st["istorija"].get() == "sve" else ("all animals (history is kept)" if EN else "sva grla (istorija ostaje)")
-            self.lbl(sadrzaj, (f"Last step. Clicking the button deletes {sta}." if EN else f"Poslednji korak. Klikom na dugme briše se {sta}."), 11, "bold",
+            sta = (T("sva grla i celu istoriju", "all animals and the whole history")) if st["istorija"].get() == "sve" else (T("sva grla (istorija ostaje)", "all animals (history is kept)"))
+            self.lbl(sadrzaj, (T(f"Poslednji korak. Klikom na dugme briše se {sta}.", f"Last step. Clicking the button deletes {sta}.")), 11, "bold",
                      wraplength=540, justify="left").pack(anchor="w")
-            self.lbl(sadrzaj, (f"Number of animals: {n_grla}" if EN else f"Broj grla: {n_grla}") + ((f"   ·   history records: {n_ist}" if EN else f"   ·   zapisa istorije: {n_ist}")
+            self.lbl(sadrzaj, (T(f"Broj grla: {n_grla}", f"Number of animals: {n_grla}")) + ((T(f"   ·   zapisa istorije: {n_ist}", f"   ·   history records: {n_ist}"))
                                                           if st["istorija"].get() == "sve" else ""),
                      10, fg=INK2).pack(anchor="w", pady=(6, 0))
             odb = self.lbl(sadrzaj, "", 10, "bold", fg=WARN)
             odb.pack(anchor="w", pady=(16, 0))
-            b = dugmad(("Permanently delete all" if EN else "Trajno obriši sve"), obrisi_sve, "Danger", stanje="disabled")
+            b = dugmad((T("Trajno obriši sve", "Permanently delete all")), obrisi_sve, "Danger", stanje="disabled")
             st["odbrojavanje"] = 5
 
             def tik():
                 if not odb.winfo_exists():
                     return
                 if st["odbrojavanje"] > 0:
-                    odb.config(text=(f"The button turns on in {st['odbrojavanje']} s…" if EN else f"Dugme se uključuje za {st['odbrojavanje']} s…"))
+                    odb.config(text=(T(f"Dugme se uključuje za {st['odbrojavanje']} s…", f"The button turns on in {st['odbrojavanje']} s…")))
                     st["odbrojavanje"] -= 1
                     win.after(1000, tik)
                 else:
-                    odb.config(text=("You can confirm the deletion." if EN else "Možeš potvrditi brisanje."), fg=BAD)
+                    odb.config(text=(T("Možeš potvrditi brisanje.", "You can confirm the deletion.")), fg=BAD)
                     b.state(["!disabled"])
             tik()
 
@@ -568,7 +616,7 @@ class GrlaEkran:
             self.tab.redovi = []
             if st["istorija"].get() == "sve":
                 self.ist.zapisi = []
-            self.promena((f"Deleted all {n_grla} animals." if EN else f"Obrisano svih {n_grla} grla."))
+            self.promena((T(f"Obrisano svih {n_grla} grla.", f"Deleted all {n_grla} animals.")))
             st["gotovo"] = True
             nacrtaj()
 
@@ -581,11 +629,11 @@ class GrlaEkran:
                 self.ist = Istorija(self.tab.putanja)
                 self.pods = Podsetnici(self.tab.putanja)
             except Exception as e:
-                messagebox.showerror(("Restore failed" if EN else "Vraćanje nije uspelo"), str(e), parent=win)
+                messagebox.showerror((T("Vraćanje nije uspelo", "Restore failed")), str(e), parent=win)
                 return
             self.model = Model(self.tab.redovi)
             self.prikazi(self.strana)
-            self.toast((f"Restored {len(self.tab.redovi)} animals from the backup." if EN else f"Vraćeno {len(self.tab.redovi)} grla iz rezervne kopije."))
+            self.toast((T(f"Vraćeno {len(self.tab.redovi)} grla iz rezervne kopije.", f"Restored {len(self.tab.redovi)} animals from the backup.")))
             win.destroy()
 
         win.bind("<Escape>", lambda e: win.destroy())
@@ -599,24 +647,24 @@ class GrlaEkran:
         ids = [i for i in ids if self.red_za(i) and self.red_za(i).get("status") != "obrisano"]
         if not ids:
             return False
-        naziv = ids[0] if len(ids) == 1 else (f"{len(ids)} animals ({', '.join(ids[:5])}{'…' if len(ids) > 5 else ''})" if EN else f"{len(ids)} grla ({', '.join(ids[:5])}{'…' if len(ids) > 5 else ''})")
+        naziv = ids[0] if len(ids) == 1 else (T(f"{len(ids)} grla ({', '.join(ids[:5])}{'…' if len(ids) > 5 else ''})", f"{len(ids)} animals ({', '.join(ids[:5])}{'…' if len(ids) > 5 else ''})"))
         if not messagebox.askyesno(
-                ("Delete animal" if EN else "Obriši grlo"), (f"Delete {naziv}?\n\n"
-                "The animal disappears from the list and all searches, but stays in the pedigree, "
-                "so that the relationships of its offspring stay correct.\n\n"
-                "You can restore it on the \"Deleted animals\" page." if EN else f"Obrisati {naziv}?\n\n"
+                (T("Obriši grlo", "Delete animal")), (T(f"Obrisati {naziv}?\n\n"
                 "Grlo nestaje iz liste i iz svih pretraga, ali ostaje zapamćeno u rodoslovu, "
                 "da bi srodstvo njegovih potomaka bilo tačno.\n\n"
-                "Možeš ga vratiti na strani „Obrisana grla“."), parent=parent or self.root):
+                "Možeš ga vratiti na strani „Obrisana grla“.", f"Delete {naziv}?\n\n"
+                "The animal disappears from the list and all searches, but stays in the pedigree, "
+                "so that the relationships of its offspring stay correct.\n\n"
+                "You can restore it on the \"Deleted animals\" page.")), parent=parent or self.root):
             return False
         for i in ids:
             self.red_za(i)["status"] = "obrisano"
-            self.ist.dodaj(i, AUTO, ("Animal deleted from the list (kept in the pedigree)" if EN else "Grlo obrisano iz liste (ostaje u rodoslovu)"), automatski=True)
+            self.ist.dodaj(i, AUTO, (T("Grlo obrisano iz liste (ostaje u rodoslovu)", "Animal deleted from the list (kept in the pedigree)")), automatski=True)
         if self.karton_win and self.karton_win.winfo_exists() and getattr(self.karton_win, "grlo", None) in ids:
             self.karton_win.destroy()
         if self.ui.get("partner") in ids:
             self.ui.update(partner="", partner_upit="")
-        self.promena((f"Deleted: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}" if EN else f"Obrisano: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}"))
+        self.promena((T(f"Obrisano: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}", f"Deleted: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}")))
         return True
 
 
@@ -625,24 +673,24 @@ class GrlaEkran:
             r = self.red_za(i)
             if r:
                 r["status"] = "aktivno"
-                self.ist.dodaj(i, AUTO, ("Animal restored to the herd" if EN else "Grlo vraćeno u stado"), automatski=True)
-        self.promena((f"Restored to herd: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}" if EN else f"Vraćeno u stado: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}"))
+                self.ist.dodaj(i, AUTO, (T("Grlo vraćeno u stado", "Animal restored to the herd")), automatski=True)
+        self.promena((T(f"Vraćeno u stado: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}", f"Restored to herd: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}")))
 
 
     def trajno_obrisi(self, ids):
         m = self.model
         pot = sorted({k for k, pr in m.P.items() for i in ids if i in pr and k not in ids}, key=sort_key)
-        upoz = ((f"\n\nWarning: {', '.join(pot[:6])}{'…' if len(pot) > 6 else ''} has/have this animal as a parent. "
-                "Their ancestors through this animal will be lost and the relationships will be wrong." if EN else f"\n\nPažnja: {', '.join(pot[:6])}{'…' if len(pot) > 6 else ''} ima(ju) ovo grlo kao roditelja. "
-                "Njihovi preci preko ovog grla biće izgubljeni i srodstvo će biti netačno.")
+        upoz = ((T(f"\n\nPažnja: {', '.join(pot[:6])}{'…' if len(pot) > 6 else ''} ima(ju) ovo grlo kao roditelja. "
+                "Njihovi preci preko ovog grla biće izgubljeni i srodstvo će biti netačno.", f"\n\nWarning: {', '.join(pot[:6])}{'…' if len(pot) > 6 else ''} has/have this animal as a parent. "
+                "Their ancestors through this animal will be lost and the relationships will be wrong."))
                 if pot else "")
-        if not messagebox.askyesno(("Permanent deletion" if EN else "Trajno brisanje"), (f"Permanently delete {', '.join(ids[:5])}"
-                                   f"{'…' if len(ids) > 5 else ''}? This cannot be undone.{upoz}" if EN else f"Trajno obrisati {', '.join(ids[:5])}"
-                                   f"{'…' if len(ids) > 5 else ''}? Ovo se ne može poništiti.{upoz}"),
+        if not messagebox.askyesno((T("Trajno brisanje", "Permanent deletion")), (T(f"Trajno obrisati {', '.join(ids[:5])}"
+                                   f"{'…' if len(ids) > 5 else ''}? Ovo se ne može poništiti.{upoz}", f"Permanently delete {', '.join(ids[:5])}"
+                                   f"{'…' if len(ids) > 5 else ''}? This cannot be undone.{upoz}")),
                                    icon="warning"):
             return
         self.tab.redovi = [r for r in self.tab.redovi if r["id"] not in ids]
-        self.promena((f"Permanently deleted: {len(ids)} animals" if EN else f"Trajno obrisano: {len(ids)} grla"))
+        self.promena((T(f"Trajno obrisano: {len(ids)} grla", f"Permanently deleted: {len(ids)} animals")))
 
 
     def meni_grla(self, tv, ev):
@@ -655,24 +703,24 @@ class GrlaEkran:
         mn = tk.Menu(self.root, tearoff=0, font=self.f(10), bg=SURF, fg=INK, activebackground=SURF2,
                      activeforeground=INK, bd=0)
         if len(sel) == 1:
-            mn.add_command(label=("Open card" if EN else "Otvori karton"), command=lambda: self.karton(iid))
-            mn.add_command(label=("Edit details" if EN else "Izmeni podatke"), command=lambda: self.forma(iid))
-            mn.add_command(label=("Change ear tag" if EN else "Promeni ušnu markicu"), command=lambda: self.promena_markice(iid))
-            mn.add_command(label=("Partner search" if EN else "Pretraga partnera"), command=lambda: self.idi_na_pretragu(iid))
-            mn.add_command(label=("Pedigree (family tree)" if EN else "Poreklo (rodoslovno stablo)"), command=lambda: self.stablo(iid))
-            mn.add_command(label=("Animal history (details and entry)" if EN else "Istorija grla (podaci i unos)"), command=lambda: self.istorija_prozor(iid))
-            mn.add_command(label=("Add event…" if EN else "Dodaj događaj…"), command=lambda: self.dogadjaj_forma(iid))
-            mn.add_command(label=("Add reminder…" if EN else "Dodaj podsetnik…"), command=lambda: self.podsetnik_forma(iid))
+            mn.add_command(label=(T("Otvori karton", "Open card")), command=lambda: self.karton(iid))
+            mn.add_command(label=(T("Izmeni podatke", "Edit details")), command=lambda: self.forma(iid))
+            mn.add_command(label=(T("Promeni ušnu markicu", "Change ear tag")), command=lambda: self.promena_markice(iid))
+            mn.add_command(label=(T("Pretraga partnera", "Partner search")), command=lambda: self.idi_na_pretragu(iid))
+            mn.add_command(label=(T("Poreklo (rodoslovno stablo)", "Pedigree (family tree)")), command=lambda: self.stablo(iid))
+            mn.add_command(label=(T("Istorija grla (podaci i unos)", "Animal history (details and entry)")), command=lambda: self.istorija_prozor(iid))
+            mn.add_command(label=(T("Dodaj događaj…", "Add event…")), command=lambda: self.dogadjaj_forma(iid))
+            mn.add_command(label=(T("Dodaj podsetnik…", "Add reminder…")), command=lambda: self.podsetnik_forma(iid))
             mn.add_separator()
-        mn.add_command(label=(f"Move to another herd{'' if len(sel) == 1 else f' ({len(sel)} animals)'}…" if EN else f"Premesti u drugo stado{'' if len(sel) == 1 else f' ({len(sel)} grla)'}…"),
+        mn.add_command(label=(T(f"Premesti u drugo stado{'' if len(sel) == 1 else f' ({len(sel)} grla)'}…", f"Move to another herd{'' if len(sel) == 1 else f' ({len(sel)} animals)'}…")),
                        command=lambda: self.promena_stada(sel))
         st_ = self.model.A[iid]["stado"]
         if st_:
-            mn.add_command(label=(f"Rename herd \"{st_}\"…" if EN else f"Preimenuj stado „{st_}“…"), command=lambda: self.preimenuj_stado(st_))
-        mn.add_command(label=(f"Export{'' if len(sel) == 1 else f' ({len(sel)} animals)'}…" if EN else f"Izvezi{'' if len(sel) == 1 else f' ({len(sel)} grla)'}…"),
+            mn.add_command(label=(T(f"Preimenuj stado „{st_}“…", f"Rename herd \"{st_}\"…")), command=lambda: self.preimenuj_stado(st_))
+        mn.add_command(label=(T(f"Izvezi{'' if len(sel) == 1 else f' ({len(sel)} grla)'}…", f"Export{'' if len(sel) == 1 else f' ({len(sel)} animals)'}…")),
                        command=lambda: self.izvezi(oznacena=sel))
         mn.add_separator()
-        mn.add_command(label=(f"Delete{'' if len(sel) == 1 else f' ({len(sel)} animals)'}" if EN else f"Obriši{'' if len(sel) == 1 else f' ({len(sel)} grla)'}"),
+        mn.add_command(label=(T(f"Obriši{'' if len(sel) == 1 else f' ({len(sel)} grla)'}", f"Delete{'' if len(sel) == 1 else f' ({len(sel)} animals)'}")),
                        foreground=BAD, command=lambda: self.obrisi_grla(sel))
         try:
             mn.tk_popup(ev.x_root, ev.y_root)
@@ -684,19 +732,19 @@ class GrlaEkran:
         body = self.strana_okvir(scroll=False)
         m = self.model
         obr = m.obrisana()
-        self.zaglavlje(body, ("Deleted animals" if EN else "Obrisana grla"),
-                       ("These animals are not shown in the list or searches, but stay in the pedigree so that the relationships "
-                       "of their offspring stay correct." if EN else "Ova grla se ne vide u listi ni u pretragama, ali ostaju u rodoslovu da bi srodstvo "
-                       "njihovih potomaka bilo tačno."),
-                       [(("← Back to animals" if EN else "← Nazad na grla"), lambda: self.prikazi("grla"), "Secondary")])
+        self.zaglavlje(body, (T("Obrisana grla", "Deleted animals")),
+                       (T("Ova grla se ne vide u listi ni u pretragama, ali ostaju u rodoslovu da bi srodstvo "
+                       "njihovih potomaka bilo tačno.", "These animals are not shown in the list or searches, but stay in the pedigree so that the relationships "
+                       "of their offspring stay correct.")),
+                       [((T("← Nazad na grla", "← Back to animals")), lambda: self.prikazi("grla"), "Secondary")])
         if not obr:
-            self.napomena(body, ("There are no deleted animals." if EN else "Nema obrisanih grla."), ok=True)
+            self.napomena(body, (T("Nema obrisanih grla.", "There are no deleted animals.")), ok=True)
             return
         tb = tk.Frame(body, bg=BG)
         tb.pack(fill="x", pady=(0, 12))
-        wrap, tv = self.tabela(body, [("id", ("Animal" if EN else "Grlo"), 105), ("markica", ("Ear tag" if EN else "Markica"), 125), ("pol", ("Sex" if EN else "Pol"), 70),
-                                      ("rasa", ("Breed" if EN else "Rasa"), 130), ("stado", ("Herd" if EN else "Stado"), 90),
-                                      ("pot", ("Offspring in pedigree" if EN else "Potomaka u rodoslovu"), 150, "e")], visina=14)
+        wrap, tv = self.tabela(body, [("id", (T("Grlo", "Animal")), 105), ("markica", (T("Markica", "Ear tag")), 125), ("pol", (T("Pol", "Sex")), 70),
+                                      ("rasa", (T("Rasa", "Breed")), 130), ("stado", (T("Stado", "Herd")), 90),
+                                      ("pot", (T("Potomaka u rodoslovu", "Offspring in pedigree")), 150, "e")], visina=14)
         for i, a in enumerate(obr):
             n = sum(1 for pr in m.P.values() if a["id"] in pr)
             tv.insert("", "end", iid=a["id"], text="  " + a["id"], image=self.img_tag_siv,
@@ -708,15 +756,15 @@ class GrlaEkran:
             if s_:
                 self.vrati_grla(s_)
             else:
-                self.toast(("First select an animal in the table." if EN else "Prvo označi grlo u tabeli."))
+                self.toast((T("Prvo označi grlo u tabeli.", "First select an animal in the table.")))
         def trajno():
             s_ = izbor()
             if s_:
                 self.trajno_obrisi(s_)
             else:
-                self.toast(("First select an animal in the table." if EN else "Prvo označi grlo u tabeli."))
-        self.btn(tb, ("Restore to herd" if EN else "Vrati u stado"), vrati, "Primary").pack(side="left")
-        self.btn(tb, ("Delete permanently" if EN else "Trajno obriši"), trajno, "Danger").pack(side="left", padx=8)
-        self.lbl(tb, ("Select an animal (or several with Ctrl), then choose an action." if EN else "Označi grlo (ili više uz Ctrl) pa izaberi radnju."), 9, fg=INK2).pack(side="left", padx=8)
+                self.toast((T("Prvo označi grlo u tabeli.", "First select an animal in the table.")))
+        self.btn(tb, (T("Vrati u stado", "Restore to herd")), vrati, "Primary").pack(side="left")
+        self.btn(tb, (T("Trajno obriši", "Delete permanently")), trajno, "Danger").pack(side="left", padx=8)
+        self.lbl(tb, (T("Označi grlo (ili više uz Ctrl) pa izaberi radnju.", "Select an animal (or several with Ctrl), then choose an action.")), 9, fg=INK2).pack(side="left", padx=8)
         wrap.pack(fill="both", expand=True)
         tv.bind("<Double-1>", lambda e: self.otvori_iz(tv))

@@ -550,3 +550,209 @@ def test_uparivanje_kodom(monkeypatch):
         assert oblak.preuzmi_kod(konfig, kod) is None
     finally:
         srv.shutdown()
+
+
+# ---------------------------------------------------------------- više jezika (fr, de, es, pt)
+STRANI = ("fr", "de", "es", "pt")
+
+
+@pytest.mark.parametrize("j", STRANI)
+def test_strani_jezik_prevodi_i_sabloni(j):
+    """Tekst se prevodi; tekst sa brojem/oznakom (šablon) dobija vrednosti na pravo mesto."""
+    try:
+        jezik.postavi_jezik(j)
+        T = jezik.T
+        assert T("Grla", "Animals") not in ("Grla", "Animals")
+        poruka = T("Markica RS-77 je već upisana za grlo K12.", "Ear tag RS-77 is already entered for animal K12.")
+        assert "RS-77" in poruka and "K12" in poruka and "already" not in poruka
+        assert T("nešto novo", "something new") == "something new"          # nepoznat tekst ostaje engleski
+        assert len(jezik.VRSTE) == 5 and len(set(jezik.VRSTE)) == 5
+        for v in jezik.VRSTE:
+            assert jezik.vrsta_kanon(v) and podaci.vrsta_norm(v) == v
+        assert podaci.nazivi(jezik.VRSTE[0])[0] == T("bik", "bull")
+        assert jezik.namene_za(jezik.VRSTE[3]) == jezik.NAMENE_SVINJE
+    finally:
+        jezik.postavi_jezik("sr")
+
+
+def test_isti_brojevi_u_prevodima():
+    """Svaki prevod šablona ima iste {0}, {1}… kao engleski tekst (inače bi poruka izgubila broj ili oznaku)."""
+    import re
+    import prevodi
+    for j, recnik in prevodi.PREVODI.items():
+        for en in prevodi.SABLONI:
+            if en in recnik:
+                assert sorted(re.findall(r"(?<!\{)\{\d+\}(?!\})", en)) == sorted(re.findall(r"(?<!\{)\{\d+\}(?!\})", recnik[en])), (j, en)
+
+
+def test_podaci_prelaze_iz_jezika_u_jezik():
+    """Događaj upisan na francuskom računaru čita se ispravno na srpskom, nemačkom… (i nazad)."""
+    import osnova
+    try:
+        jezik.postavi_jezik("fr")
+        fr = list(jezik.DOGADJAJI)
+        for j in ("sr", "en", "de", "es", "pt", "fr"):
+            jezik.postavi_jezik(j)
+            assert [osnova.prevedi_vrednost(v) for v in fr] == list(jezik.DOGADJAJI), j
+            assert podaci.vrsta_norm("Schweine") == jezik.VRSTE[3]
+    finally:
+        jezik.postavi_jezik("sr")
+
+
+def test_mlecnost_samo_za_mlecne_vrste():
+    """Mlečnost: ženke goveda, ovaca i koza (mlečne, kombinovane ili bez upisane namene); tovne rase, svinje, konji i mužjaci – ne."""
+    import mlecnost
+    jezik.postavi_jezik("sr")
+    z = lambda vrsta, namena="", pol="z": dict(id="A", pol=pol, vrsta=vrsta, namena=namena, osnivac=False)
+    assert mlecnost.muzna_vrsta(z("goveda", "mlečna")) and mlecnost.muzna_vrsta(z("koze", "kombinovana")) and mlecnost.muzna_vrsta(z("ovce"))
+    assert not mlecnost.muzna_vrsta(z("goveda", "tovna")) and not mlecnost.muzna_vrsta(z("ovce", "tovna"))
+    assert not mlecnost.muzna_vrsta(z("svinje", "mesnata")) and not mlecnost.muzna_vrsta(z("konji"))
+    assert not mlecnost.muzna_vrsta(z("goveda", "mlečna", pol="m"))
+
+
+def test_prirast_i_napomena(tmp_path):
+    """Prirast iz merenja težine (g/dan) i napomena o grlu koja se čuva u tablici."""
+    import prirast
+    jezik.postavi_jezik("sr")
+    ist = podaci.Istorija(str(tmp_path / "stado.csv"))
+    for d, kg in (("01.01.2026", "200"), ("31.01.2026", "230,5"), ("02.03.2026", "248 kg")):
+        ist.dodaj("T1", jezik.DOGADJAJI[5], "", vrednost=kg, datum=d)
+    s = prirast.stat(ist, "T1")
+    assert s["poslednje"][1] == 248 and s["od_prethodnog"] == 583 and s["prosek"] == 800 and s["dana_prethodno"] == 30
+    assert prirast.stat(ist, "nema")["poslednje"] is None
+    put = str(tmp_path / "stado.csv")
+    t = podaci.Tablica(put, ucitaj=False)
+    t.redovi = [dict(red("T1"), napomena="Agresivna – oprez")]
+    t.sacuvaj()
+    t2 = podaci.Tablica(put)
+    assert t2.redovi[0]["napomena"] == "Agresivna – oprez"
+    assert rodoslov.Model(t2.redovi).A["T1"]["napomena"] == "Agresivna – oprez"
+
+
+def test_muzjak_iz_istog_stada():
+    """Ženku pari mužjak iz njenog stada (iste vrste, u zapatu, stariji od 6 meseci)."""
+    jezik.postavi_jezik("sr")
+    r = lambda i, pol, stado, vrsta="goveda", dat="", status="aktivno": dict(red(i, pol=pol, vrsta=vrsta), stado=stado, datum_rodjenja=dat, status=status)
+    m = rodoslov.Model([r("K1", "z", "Pašnjak"), r("B1", "m", "Pašnjak", dat="01.01.2020"), r("B2", "m", "Štala"),
+                        r("T1", "m", "Pašnjak", dat=podaci.date.today().strftime("%d.%m.%Y")),     # tek rođeno muško tele
+                        r("O1", "m", "Pašnjak", vrsta="ovce"), r("B3", "m", "Pašnjak", status="neaktivno")])
+    assert m.muzjaci_u_stadu("K1") == ["B1"]
+    assert rodoslov.Model([r("K2", "z", "")]).muzjaci_u_stadu("K2") == []
+
+
+def test_izvoz_sa_srodnicima():
+    """Izvoz označenog grla sa svim srodnicima: srodna grla idu kao neaktivna, nesrodna (O2) ne idu."""
+    import izvoz
+    jezik.postavi_jezik("sr")
+    stado = [dict(r) for r in STADO]
+    m = rodoslov.Model(stado)
+    assert m.srodnici({"X"}) == {"B", "S", "O", "M", "H", "Y", "Z", "N"}
+    sve = izvoz.tabele_za_izvoz(stado, m, samo_ids={"X"}, sa_srodnicima=True, sa_istorijom=False, sa_podsetnicima=False)
+    zag, *redovi = sve[0][1]
+    st = {r[0]: r[zag.index("status")] for r in redovi}
+    assert st["X"] == "aktivno" and set(st) == {"X", "B", "S", "O", "M", "H", "Y", "Z", "N"}
+    assert all(v == "neaktivno" for k, v in st.items() if k != "X")
+    bez = izvoz.tabele_za_izvoz(stado, m, samo_ids={"X"}, sa_istorijom=False, sa_podsetnicima=False)
+    assert [r[0] for r in bez[0][1][1:]] == ["X"]
+
+
+def test_uvoz_sa_drugog_gazdinstva_isto_ime():
+    """Isto ime sa drugog gazdinstva nije isto grlo: ista markica = isto grlo, inače novo ime (Bela 2)."""
+    import izvoz
+    nasa = [dict(red("Bela"), markica="SR-1"), dict(red("Bik", pol="m"), markica="RS-9"), dict(red("Mira"), poreklo_od="Farma A")]
+    i = izvoz.Identiteti(nasa, "Farma A")
+    assert i.id("Bela", "RS-5") == "Bela 2"            # druga markica -> drugo grlo
+    assert i.id("Bela") == "Bela 2"                    # isto ime u istom fajlu -> isto (novo) grlo
+    assert i.id("Bik", "RS-9") == "Bik"                # ista markica -> naše grlo
+    assert i.id("Drugi", "SR-1") == "Bela"             # ista markica, drugo ime -> naše grlo
+    assert i.id("Mira") == "Mira"                      # ranije uvezena sa te farme
+    assert i.id("Nova") == "Nova" and i.preimenovana() == {"Bela": "Bela 2"}
+    svoje = izvoz.Identiteti(nasa, "", tudje=False)    # svoja tablica iz Excela: isto ime = isto grlo
+    assert svoje.id("Bela", "RS-5") == "Bela"
+
+
+def test_uvoz_grlo_sa_promenjenom_markicom():
+    """Grlo je na jednoj farmi dobilo novu minđušu: prepoznaje se po staroj markici (u oba smera) i po elektronskom broju."""
+    import izvoz
+    nasa = [dict(red("Bela"), markica="NOVA-2", stare_markice="STARA-1"), dict(red("Zora"), markica="Z-1", rfid="688000123")]
+    i = izvoz.Identiteti(nasa, "Farma A")
+    assert i.id("Bela", "STARA-1") == "Bela"                            # mi smo promenili markicu, oni imaju staru
+    assert i.id("Belka", "NOVA-3", stare="NOVA-2") == "Bela"            # oni su promenili markicu (i ime)
+    assert i.id("Zora", "DRUGA", rfid="688 000 123") == "Zora"          # elektronski broj se ne menja
+
+
+def test_dnk_test_i_provera_porekla(tmp_path):
+    """DNK test se čuva u istoriji; provera porekla se prepoznaje i kad je upisana na drugom jeziku."""
+    import dnk
+    try:
+        jezik.postavi_jezik("fr")
+        ist = podaci.Istorija(str(tmp_path / "herd.csv"))
+        z = ist.dodaj("K1", jezik.DNK, jezik.DNK_POREKLO[2], datum="01/10/2026", vrednost=jezik.DNK_PROVERA)
+        z.update(lab="Lab X", uzorak=jezik.DNK_UZORCI[0], fajl="K1_nalaz.pdf")
+        ist.dodaj("K1", jezik.DNK, "A2/A2", datum="05/10/2026", vrednost=jezik.DNK_TESTOVI[6])
+        ist.sacuvaj()
+        jezik.postavi_jezik("sr")
+        ist2 = podaci.Istorija(str(tmp_path / "herd.csv"))
+        import osnova
+        assert [osnova.prevedi_vrednost(z["vrednost"]) for z in dnk.dnk_zapisi(ist2, "K1")] == ["Beta-kazein A1/A2", "Provera porekla (otac i majka)"]
+        o_ok, m_ok, zap = dnk.provera_porekla(ist2, "K1")
+        assert (o_ok, m_ok) == (False, None) and zap["lab"] == "Lab X" and osnova.prevedi_vrednost(zap["uzorak"]) == "Dlaka" and zap["fajl"] == "K1_nalaz.pdf"
+        assert dnk.provera_porekla(ist2, "nema") is None
+    finally:
+        jezik.postavi_jezik("sr")
+
+
+def test_slike_dnk_sa_telefona(tmp_path):
+    """Slika DNK nalaza poslata sa telefona se sačuva u folder dnk_nalazi; loše ime ili postojeći fajl se ne diraju."""
+    import base64
+    import dnk
+    put = str(tmp_path / "stado.csv")
+    slika = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff slika").decode()
+    assert dnk.sacuvaj_slike_sa_telefona(put, {"K1_2026-11-02_a.jpg": slika, "../zlo.jpg": slika, "x.jpg": "nije slika"}) == 2
+    f = tmp_path / "dnk_nalazi"
+    assert sorted(os.listdir(f)) == ["K1_2026-11-02_a.jpg", "zlo.jpg"]
+    assert (f / "K1_2026-11-02_a.jpg").read_bytes() == b"\xff\xd8\xff slika"
+    assert dnk.sacuvaj_slike_sa_telefona(put, {"K1_2026-11-02_a.jpg": slika}) == 0      # već postoji
+
+
+def _pdf_sa_tekstom(put, redovi):
+    """Mali pravi PDF sa tekstom (kao nalaz koji laboratorija pošalje mejlom)."""
+    sadrzaj = "BT /F1 12 Tf 50 750 Td 16 TL " + " ".join(f"({r}) Tj T*" for r in redovi) + " ET"
+    obj = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+           "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+           f"<< /Length {len(sadrzaj)} >>\nstream\n{sadrzaj}\nendstream",
+           "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    b, ofs = b"%PDF-1.4\n", []
+    for i, o in enumerate(obj, 1):
+        ofs.append(len(b))
+        b += f"{i} 0 obj\n{o}\nendobj\n".encode("latin-1")
+    xref = len(b)
+    b += f"xref\n0 {len(obj) + 1}\n0000000000 65535 f \n".encode() + "".join(f"{o:010d} 00000 n \n" for o in ofs).encode()
+    b += f"trailer\n<< /Size {len(obj) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    with open(put, "wb") as f:
+        f.write(b)
+
+
+def test_citanje_teksta_iz_nalaza(tmp_path):
+    """PDF iz laboratorije se prepisuje tačno; slika ide na prepoznavanje (OCR) i označi se za proveru."""
+    import citanje
+    pdf = str(tmp_path / "nalaz.pdf")
+    _pdf_sa_tekstom(pdf, ["Laboratorija Genetika", "Grlo: K1   Uzorak: dlaka", "Beta-kazein: A2/A2", "Otac: potvrdjen"])
+    tekst, tacno = citanje.procitaj(pdf, "sr", ocr=lambda p, j: pytest.fail("PDF sa tekstom ne ide na OCR"))
+    assert tacno and "Beta-kazein: A2/A2" in tekst and "Grlo: K1 Uzorak: dlaka" in tekst
+    # skeniran PDF (bez teksta) i slika -> OCR, rezultat nije "tačan" dok ga korisnik ne proveri
+    sken = str(tmp_path / "sken.pdf")
+    _pdf_sa_tekstom(sken, [])
+    pozivi = []
+    ocr = lambda p, j: (pozivi.append((os.path.basename(p), j)), "  Rezultat:   A1/A2  \n\n\n kraj ")[1]
+    assert citanje.procitaj(sken, "de", ocr=ocr) == ("Rezultat: A1/A2\n\nkraj", False)
+    slika = tmp_path / "nalaz.JPG"
+    slika.write_bytes(b"\xff\xd8\xff")
+    assert citanje.procitaj(str(slika), "sr", ocr=ocr)[1] is False
+    assert pozivi == [("sken.pdf", "de"), ("nalaz.JPG", "sr")]
+    with pytest.raises(citanje.GreskaCitanja):
+        citanje.procitaj(str(tmp_path / "nalaz.docx"), "sr", ocr=ocr)
+    if sys.platform != "win32":       # OCR postoji samo u Windows-u; drugde jasna greška umesto pada
+        with pytest.raises(citanje.GreskaCitanja):
+            citanje.ocr_windows(str(slika))
+    assert citanje.tekst_iz_pdf(str(slika)) == ""        # pokvaren / pogrešan fajl ne ruši program

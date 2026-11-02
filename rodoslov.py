@@ -2,6 +2,7 @@
 from datetime import date
 
 from osnova import EN
+from jezik import T
 from podaci import isti_broj_citaca, nazivi, norm, parsiraj_datum, sort_key, stare_lista
 from izgled import BAD, OK, WARN
 
@@ -15,20 +16,21 @@ class Model:
         for rb, r in enumerate(redovi):
             jid = r["id"].strip()
             if jid in self.A:
-                self.warn.append((f"Tag {jid} is entered more than once." if EN else f"Oznaka {jid} je upisana više puta."))
+                self.warn.append((T(f"Oznaka {jid} je upisana više puta.", f"Tag {jid} is entered more than once.")))
                 continue
-            self.A[jid] = dict(id=jid, markica=r.get("markica", ""), rfid=r.get("rfid", ""), vrsta=r.get("vrsta") or ("other" if EN else "drugo"),
+            self.A[jid] = dict(id=jid, markica=r.get("markica", ""), rfid=r.get("rfid", ""), vrsta=r.get("vrsta") or (T("drugo", "other")),
                                rasa=r.get("rasa", ""), namena=r.get("namena", ""), autohtona=r.get("autohtona", ""), pol=r.get("pol") or None,
                                datum=parsiraj_datum(r.get("datum_rodjenja")),
                                aktivno=r.get("status", "aktivno") == "aktivno", stado=r.get("stado", ""),
                                obrisano=r.get("status") == "obrisano",
                                osnivac=False, _otac=r.get("otac", ""), _majka=r.get("majka", ""),
                                stare=stare_lista(r), poreklo=r.get("poreklo", "").strip(),
-                               poreklo_od=r.get("poreklo_od", "").strip(), rb=rb, uneto=r.get("uneto", ""))
+                               poreklo_od=r.get("poreklo_od", "").strip(), rb=rb, uneto=r.get("uneto", ""),
+                               napomena=" ".join(str(r.get("napomena") or "").split()))
             if r.get("markica"):
                 n = norm(r["markica"])
                 if n in self.by_mark and self.by_mark[n] != jid:
-                    self.warn.append((f"Ear tag {r['markica']} is entered for both {self.by_mark[n]} and {jid}." if EN else f"Markica {r['markica']} je upisana i za {self.by_mark[n]} i za {jid}."))
+                    self.warn.append((T(f"Markica {r['markica']} je upisana i za {self.by_mark[n]} i za {jid}.", f"Ear tag {r['markica']} is entered for both {self.by_mark[n]} and {jid}.")))
                 self.by_mark[n] = jid
             if r.get("rfid"):                     # elektronski broj (RFID) takođe nalazi grlo
                 self.by_mark.setdefault(norm(r["rfid"]), jid)
@@ -44,7 +46,7 @@ class Model:
                     self.A[r] = dict(id=r, markica="", rfid="", vrsta=self.A[jid]["vrsta"], rasa="", namena="", autohtona="",
                                      pol="m" if i == 0 else "z", datum=None, aktivno=False, stado="",
                                      osnivac=True, obrisano=False, stare=[], poreklo="", poreklo_od="",
-                                     rb=-1, uneto="")
+                                     rb=-1, uneto="", napomena="")
                     self.P[r] = (None, None)
         for o, m in list(self.P.values()):
             if o and not self.A[o]["pol"]:
@@ -54,13 +56,13 @@ class Model:
         # provere
         for jid, (o, m) in list(self.P.items()):
             if jid in (o, m):
-                self.warn.append((f"{jid} is entered as its own parent." if EN else f"{jid} je upisan kao sopstveni roditelj."))
+                self.warn.append((T(f"{jid} je upisan kao sopstveni roditelj.", f"{jid} is entered as its own parent.")))
                 self.P[jid] = (None, None)
         for jid in (list(self.P) if self._ima_krug() else ()):   # brza provera; sporo traženje samo kad krug postoji
             if jid in self.preci(jid):
-                self.warn.append((f"{jid} is its own ancestor – check the parents "
-                                 "(this animal's pedigree is temporarily ignored)." if EN else f"{jid} je sam sebi predak – proveri roditelje "
-                                 "(rodoslov ovog grla je privremeno zanemaren)."))
+                self.warn.append((T(f"{jid} je sam sebi predak – proveri roditelje "
+                                 "(rodoslov ovog grla je privremeno zanemaren).", f"{jid} is its own ancestor – check the parents "
+                                 "(this animal's pedigree is temporarily ignored).")))
                 self.P[jid] = (None, None)
         for jid, (o, m) in self.P.items():
             a = self.A[jid]
@@ -69,13 +71,13 @@ class Model:
                     continue
                 p = self.A[r]
                 if p["vrsta"] != a["vrsta"] and not p["osnivac"]:
-                    self.warn.append((f"{jid} ({a['vrsta']}) has parent {r} ({p['vrsta']}) – different species." if EN else f"{jid} ({a['vrsta']}) ima roditelja {r} ({p['vrsta']}) – različite vrste."))
+                    self.warn.append((T(f"{jid} ({a['vrsta']}) ima roditelja {r} ({p['vrsta']}) – različite vrste.", f"{jid} ({a['vrsta']}) has parent {r} ({p['vrsta']}) – different species.")))
                 if p["datum"] and a["datum"] and p["datum"] >= a["datum"]:
-                    self.warn.append((f"{r} was born after its offspring {jid} – check the dates." if EN else f"{r} je rođen posle svog potomka {jid} – proveri datume."))
+                    self.warn.append((T(f"{r} je rođen posle svog potomka {jid} – proveri datume.", f"{r} was born after its offspring {jid} – check the dates.")))
             if o and self.A[o]["pol"] == "z":
-                self.warn.append((f"{o} is entered as sire of {jid}, but is marked as female." if EN else f"{o} je upisan kao otac grla {jid}, a označen je kao žensko."))
+                self.warn.append((T(f"{o} je upisan kao otac grla {jid}, a označen je kao žensko.", f"{o} is entered as sire of {jid}, but is marked as female.")))
             if m and self.A[m]["pol"] == "m":
-                self.warn.append((f"{m} is entered as dam of {jid}, but is marked as male." if EN else f"{m} je upisana kao majka grla {jid}, a označena je kao muško."))
+                self.warn.append((T(f"{m} je upisana kao majka grla {jid}, a označena je kao muško.", f"{m} is entered as dam of {jid}, but is marked as male.")))
 
     def _ima_krug(self):
         """Da li je neko grlo (preko roditelja) samo sebi predak – jedan prolaz kroz celo stado."""
@@ -133,12 +135,12 @@ class Model:
 
     @staticmethod
     def poredaj(g, redosled="Poslednje upisana prvo"):
-        if redosled == ("By tag" if EN else "Po oznaci"):
+        if redosled == (T("Po oznaci", "By tag")):
             return sorted(g, key=lambda a: sort_key(a["id"]))
-        if redosled == ("Youngest first" if EN else "Najmlađa prvo"):
+        if redosled == (T("Najmlađa prvo", "Youngest first")):
             return sorted(g, key=lambda a: (a["datum"] or date.min, a["rb"]), reverse=True)
         kljuc = lambda a: (a["uneto"] or "", a["rb"])     # bez datuma upisa -> mesto u tablici
-        return sorted(g, key=kljuc, reverse=redosled != ("First added first" if EN else "Prvo upisana prvo"))
+        return sorted(g, key=kljuc, reverse=redosled != (T("Prvo upisana prvo", "First added first")))
 
     def obrisana(self):
         return self.poredaj([a for a in self.A.values() if a.get("obrisano")])
@@ -151,6 +153,26 @@ class Model:
                     rez.add(r)
                     stek.append(r)
         return rez
+
+    def srodnici(self, ids):
+        """Sva grla u srodstvu sa grlima ids: preci, potomci i bočni srodnici (braća, sestre, rođaci…)
+        = preci i svi potomci tih predaka. Sama grla ids nisu u rezultatu."""
+        ids = {x for x in ids if x in self.A}
+        deca = {}
+        for d, (o, m) in self.P.items():
+            for r in (o, m):
+                if r:
+                    deca.setdefault(r, []).append(d)
+        koreni = set(ids)
+        for x in ids:
+            koreni |= self.preci(x)
+        rez, stek = set(koreni), list(koreni)
+        while stek:
+            for d in deca.get(stek.pop(), ()):
+                if d not in rez:
+                    rez.add(d)
+                    stek.append(d)
+        return rez - ids
 
     def gen(self, x):
         if x is None:
@@ -230,34 +252,52 @@ class Model:
     def r(self, a, b):
         return 2 * self.kinship(a, b) / ((1 + self.inbr(a)) * (1 + self.inbr(b))) ** 0.5
 
+    def muzjaci_u_stadu(self, x, min_meseci=6):
+        """Mužjaci iste vrste koji su u zapatu u istom stadu kao grlo x (pušteni sa ženkama) – oni je pare.
+        Mladi mužjaci (manje od 6 meseci) se ne računaju."""
+        a = self.A.get(x)
+        if not a or not a.get("stado"):
+            return []
+        danas = date.today()
+        rez = []
+        for b in self.A.values():
+            if b is a or b["osnivac"] or b.get("obrisano") or not b["aktivno"] or b["pol"] != "m":
+                continue
+            if b["stado"] != a["stado"] or b["vrsta"] != a["vrsta"]:
+                continue
+            if b["datum"] and (danas.year - b["datum"].year) * 12 + danas.month - b["datum"].month < min_meseci:
+                continue
+            rez.append(b["id"])
+        return sorted(rez, key=sort_key)
+
     def odnos(self, a, b):
         oa, ma = self.P.get(a, (None, None))
         ob, mb = self.P.get(b, (None, None))
         if a in (ob, mb) or b in (oa, ma):
-            return ("parent–offspring" if EN else "roditelj i potomak")
+            return (T("roditelj i potomak", "parent–offspring"))
         if oa and ma and oa == ob and ma == mb:
-            return ("full sibling" if EN else "puni brat / sestra")
+            return (T("puni brat / sestra", "full sibling"))
         if (oa and oa == ob) or (ma and ma == mb):
-            return ("half sibling" if EN else "polubrat / polusestra")
+            return (T("polubrat / polusestra", "half sibling"))
         if a in self.preci(b) or b in self.preci(a):
-            return ("ancestor and descendant" if EN else "predak i potomak")
+            return (T("predak i potomak", "ancestor and descendant"))
         r = self.r(a, b)
-        return (("closely related" if EN else "blisko srodni") if r >= 0.2 else ("distant relatives" if EN else "dalji rod") if r >= 0.06
-                else ("very distantly related" if EN else "daleko srodni") if r > 0 else ("unrelated" if EN else "nesrodni"))
+        return ((T("blisko srodni", "closely related")) if r >= 0.2 else (T("dalji rod", "distant relatives")) if r >= 0.06
+                else (T("daleko srodni", "very distantly related")) if r > 0 else (T("nesrodni", "unrelated")))
 
     def pol_naziv(self, x):
         a = self.A[x]
         n = nazivi(a["vrsta"])
-        return {"m": n[0], "z": n[1]}.get(a["pol"], ("sex unknown" if EN else "pol nepoznat"))
+        return {"m": n[0], "z": n[1]}.get(a["pol"], (T("pol nepoznat", "sex unknown")))
 
 
 def procena(f, prag):
     if f == 0:
-        return ("excellent" if EN else "odlično"), OK
+        return (T("odlično", "excellent")), OK
     if f < prag / 2:
-        return ("good" if EN else "dobro"), OK
+        return (T("dobro", "good")), OK
     if f <= prag:
-        return ("acceptable" if EN else "prihvatljivo"), WARN
+        return (T("prihvatljivo", "acceptable")), WARN
     if f < 0.125:
-        return ("risky" if EN else "rizično"), BAD
-    return ("not recommended" if EN else "ne preporučuje se"), BAD
+        return (T("rizično", "risky")), BAD
+    return (T("ne preporučuje se", "not recommended")), BAD

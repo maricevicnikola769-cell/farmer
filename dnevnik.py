@@ -13,7 +13,7 @@ from jezik import T
 
 LOG = os.path.join(APP_DIR, "farmer-greske.log")
 NAJVISE = 512 * 1024                      # posle toga stari dnevnik ide u .1 (čuva se jedan prethodni)
-PODRSKA = "herddoc1@gmail.com"            # e-pošta za prijavu problema
+PODRSKA = "herddoc7@gmail.com"            # e-pošta za prijavu problema
 
 
 def zapisi(naslov, tekst=""):
@@ -97,11 +97,11 @@ class DnevnikDeo:
             messagebox.showerror("HerdDoc", str(e))
             return
         if messagebox.askyesno(T("Izveštaj je napravljen", "Report saved"),
-                               T(f"Sačuvano:\n{put}\n\nPošalji ovaj fajl" + (f" na {PODRSKA}" if PODRSKA else " proizvođaču programa") +
+                               T(f"Sačuvano:\n{put}\n\nPošalji ovaj fajl" + ((T(f" na {PODRSKA}", f" to {PODRSKA}")) if PODRSKA else T(" proizvođaču programa", " to the program's maker")) +
                                  " (mejlom ili Viberom) i napiši ukratko šta si radio kad se problem pojavio.\n\n"
                                  "U izveštaju nisu tvoje tablice – samo zapisane greške i brojevi.\n\n"
                                  "Da otvorim novi mejl sa izveštajem?",
-                                 f"Saved:\n{put}\n\nSend this file" + (f" to {PODRSKA}" if PODRSKA else " to the program's maker") +
+                                 f"Saved:\n{put}\n\nSend this file" + ((T(f" na {PODRSKA}", f" to {PODRSKA}")) if PODRSKA else T(" proizvođaču programa", " to the program's maker")) +
                                  " and briefly describe what you were doing when the problem appeared.\n\n"
                                  "The report does not contain your tables – only recorded errors and counts.\n\n"
                                  "Open a new e-mail with the report?")):

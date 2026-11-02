@@ -50,8 +50,9 @@ def mlecno_grlo(a):
 
 
 def muzna_vrsta(a):
-    """Ženka vrste koja se muze (goveda, ovce, koze) – bez obzira na namenu."""
-    return bool(a) and a.get("pol") == "z" and not a.get("osnivac") and namene_za(a.get("vrsta")) == list(NAMENE_MALI)
+    """Ženka vrste koja se muze (goveda, ovce, koze) koja nije tovne rase. Svinje, konji i tovna grla nemaju mlečnost."""
+    return (bool(a) and a.get("pol") == "z" and not a.get("osnivac") and namene_za(a.get("vrsta")) == list(NAMENE_MALI)
+            and a.get("namena") != NAMENE_MALI[1])
 
 
 # =============================================================== indeks mužnje i telenja
@@ -351,7 +352,7 @@ class MlecnostDeo:
         """Kratak pregled laktacije na kartonu grla (samo za mlečne ženke ili grla sa upisanom mužnjom)."""
         a = self.model.A.get(x)
         ix = MlekoIndeks(self.ist, self.model)
-        if not a or not (mlecno_grlo(a) or ix.po_grlu.get(x)):
+        if not a or not muzna_vrsta(a) or not (mlecno_grlo(a) or ix.po_grlu.get(x)):
             return
         s = ix.stat(x)
         self.lbl(parent, T("Mlečnost", "Milk"), 10, "bold").pack(anchor="w", pady=(18, 6))

@@ -62,22 +62,33 @@ PODESAVANJA = (_prvi_postojeci("rodoslov_podesavanja.json", "herd_pedigree_setti
                or os.path.join(APP_DIR, "rodoslov_podesavanja.json"))
 
 
+JEZICI = (("sr", "Srpski"), ("en", "English"), ("fr", "Français"), ("de", "Deutsch"), ("es", "Español"), ("pt", "Português"))
+KODOVI_JEZIKA = tuple(k for k, _ in JEZICI)
+# Windows: primarni jezik (LANGID & 0x3FF) -> jezik programa
+_WIN_JEZICI = {0x1A: "sr", 0x09: "en", 0x0C: "fr", 0x07: "de", 0x0A: "es", 0x16: "pt"}
+
+
 def _jezik_sistema():
-    """Jezik Windows-a: srpski, hrvatski, bosanski, crnogorski -> sr, sve ostalo -> en."""
+    """Jezik Windows-a: srpski/hrvatski/bosanski -> sr, francuski, nemački, španski, portugalski -> taj jezik, ostalo -> en."""
     try:
         import ctypes
-        return "sr" if (ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF) == 0x1A else "en"
+        return _WIN_JEZICI.get(ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF, "en")
     except Exception:
         import locale
-        loc = (locale.getdefaultlocale()[0] or "").lower()
-        return "sr" if loc[:2] in ("sr", "hr", "bs", "me", "sh") else "en"
+        try:
+            loc = (locale.getlocale()[0] or "").lower()
+        except (ValueError, TypeError):
+            loc = ""
+        if loc[:2] in ("sr", "hr", "bs", "me", "sh"):
+            return "sr"
+        return loc[:2] if loc[:2] in KODOVI_JEZIKA else "en"
 
 
 def _izaberi_jezik():
     try:
         with open(PODESAVANJA, encoding="utf-8") as f:
             j = json.load(f).get("jezik")
-        if j in ("sr", "en"):
+        if j in KODOVI_JEZIKA:
             return j
     except (OSError, ValueError, AttributeError):
         pass
@@ -96,7 +107,7 @@ _ZUTI_LOGO = _engleski_exe()
 JEZIK = _izaberi_jezik()
 
 
-EN = JEZIK == "en"
+EN = JEZIK != "sr"      # svaki strani jezik: fajlovi, kolone i datumi kao na engleskom
 
 
 def _uz_tablicu(putanja_tablice, sr_nastavak, en_nastavak):
@@ -128,9 +139,56 @@ _NAMENE = {"mlečna": "dairy", "tovna": "meat breed", "kombinovana": "dual-purpo
            "Veterinar i lekovi": "Vet and medicines", "Osemenjavanje": "Insemination", "Kupovina grla": "Animal purchases",
            "Radnici": "Labour", "Gorivo i struja": "Fuel and electricity", "Oprema i popravke": "Equipment and repairs",
            "Zakup zemlje": "Land rent", "Ostali troškovi": "Other costs"}
+# DNK test: vrste testa, uzorci i rezultat provere porekla (čuvaju se u istoriji, pa se prevode i oni)
+_DNK = {"DNK test": "DNA test", "Provera porekla (otac i majka)": "Parentage verification (sire and dam)",
+        "Genomska procena": "Genomic evaluation", "Mesnatost (prirast, kvalitet mesa)": "Meat traits (growth, meat quality)",
+        "Mlečnost (mleko, mast, proteini)": "Milk traits (milk, fat, protein)",
+        "Prenos na potomstvo (priplodna vrednost)": "Transmission to offspring (breeding value)", "Genetske bolesti (nosioci)": "Genetic diseases (carriers)",
+        "Beta-kazein A1/A2": "Beta-casein A1/A2", "Kapa-kazein": "Kappa-casein", "Rogatost (šuto / rogato)": "Polled / horned",
+        "Boja dlake": "Coat colour", "Drugi test": "Other test",
+        "Dlaka": "Hair", "Krv": "Blood", "Tkivo (ušni isečak)": "Tissue (ear punch)", "Seme": "Semen",
+        "Otac i majka potvrđeni": "Sire and dam confirmed", "Otac potvrđen (majka nije testirana)": "Sire confirmed (dam not tested)",
+        "Otac isključen": "Sire excluded", "Majka isključena": "Dam excluded", "Otac i majka isključeni": "Sire and dam excluded"}
 _SR_EN.update(_NAMENE)
+_SR_EN.update(_DNK)
 _EN_SR.update({v: k for k, v in _NAMENE.items()})
+_EN_SR.update({v: k for k, v in _DNK.items()})
+
+
+_INDEKS_VREDNOSTI = {}
+_PODACI_PRVO = {"Premeštanje", "Potomak", "Uginuće", "Vakcinacija", "Lečenje", "Porođaj", "Prodaja", "Napomena", "Merenje težine",
+                "Parenje / osemenjavanje", "Tera se", "Promena u evidenciji", "Mužnja", "Sopstveni odgoj", "Kupljeno", "Uvoz",
+                "goveda", "ovce", "koze", "svinje", "konji", "drugo", "melez", "Podmladak"} | set(_NAMENE)
+
+
+def _vrednost_na(kljuc, j):
+    """Sačuvana vrednost (srpski ključ iz _SR_EN) na jeziku j."""
+    if j == "sr":
+        return kljuc
+    en = _SR_EN[kljuc]
+    if j == "en":
+        return en
+    import prevodi
+    return prevodi.PREVODI.get(j, {}).get(en, en)
+
+
+def _srpski_kljuc(v):
+    """Srpski ključ za vrednost sačuvanu na bilo kom jeziku programa (ili None)."""
+    if v in _SR_EN:
+        return v
+    if v in _EN_SR:
+        return _EN_SR[v]
+    if not _INDEKS_VREDNOSTI:
+        # prvo vrednosti koje se čuvaju u podacima (događaji, poreklo, vrste, namena…), pa ostali tekstovi
+        for k in sorted(_SR_EN, key=lambda k: k not in _PODACI_PRVO):
+            for j in KODOVI_JEZIKA[2:]:
+                _INDEKS_VREDNOSTI.setdefault(_vrednost_na(k, j), k)
+    return _INDEKS_VREDNOSTI.get(v)
 
 
 def prevedi_vrednost(v):
-    return (_SR_EN.get(v, v) if v not in _EN_SR else v) if EN else (_EN_SR.get(v, v) if v not in _SR_EN else v)
+    """Vrednost sačuvana na jednom jeziku (događaj, poreklo, namena…) -> na trenutnom jeziku programa."""
+    if (JEZIK == "sr" and v in _SR_EN) or (JEZIK == "en" and v in _EN_SR):
+        return v
+    k = _srpski_kljuc(v)
+    return v if k is None else _vrednost_na(k, JEZIK)

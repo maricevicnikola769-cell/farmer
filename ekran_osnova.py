@@ -6,7 +6,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import filedialog, messagebox, ttk
 
-from osnova import APP_DIR, EN, PODESAVANJA, _ime_stada
+from osnova import APP_DIR, EN, JEZICI, JEZIK, PODESAVANJA, _ime_stada
 from jezik import AUTO, T, postavi_jezik
 from podaci import Istorija, KOLONE, Podsetnici, Tablica, procitaj_csv, sada
 from izgled import (BAD, BAD_BG, BG, BRAND, BRAND_H, INK, INK2, LINE, LOGO, OK, OK_BG, SURF, SURF2,
@@ -14,9 +14,22 @@ from izgled import (BAD, BAD_BG, BG, BRAND, BRAND_H, INK, INK2, LINE, LOGO, OK, 
 from rodoslov import Model
 
 
-def _app_promeni_jezik(self):
+def _app_meni_jezika(self, widget):
+    """Mali meni sa svim jezicima programa (klik na 🌐 dole levo)."""
+    m = tk.Menu(self.root, tearoff=0, font=self.f(10))
+    for kod, naziv in JEZICI:
+        m.add_command(label=("✓ " if kod == JEZIK else "    ") + naziv, command=lambda k=kod: self.promeni_jezik(k))
+    try:
+        m.tk_popup(widget.winfo_rootx(), widget.winfo_rooty() - 6 * 26)
+    finally:
+        m.grab_release()
+
+
+def _app_promeni_jezik(self, novi=None):
     """Promena jezika odmah, bez ponovnog pokretanja programa."""
-    novi = "sr" if EN else "en"
+    novi = novi or T("en", "sr")
+    if novi == JEZIK:
+        return
     strana = self.strana if self.strana != "obrisana" else "grla"
     for w in (self.karton_win, getattr(self, "ist_win", None), getattr(self, "stablo_win", None)):
         try:
@@ -24,7 +37,8 @@ def _app_promeni_jezik(self):
                 w.destroy()
         except Exception:
             pass
-    for sacuvaj in (self.ist.sacuvaj, self.pods.sacuvaj):
+    fin = getattr(self, "_fin", None)
+    for sacuvaj in (self.ist.sacuvaj, self.pods.sacuvaj) + ((fin.sacuvaj,) if fin is not None else ()):
         try:
             sacuvaj()
         except Exception:
@@ -40,6 +54,7 @@ def _app_promeni_jezik(self):
     self.model = Model(self.tab.redovi)
     self.ist = Istorija(self.tab.putanja)
     self.pods = Podsetnici(self.tab.putanja)
+    self._fin = None            # finansije se ponovo čitaju (kategorije na novom jeziku)
     self.ui.update(q="", pol="", poreklo="", partner="", partner_upit="", partner_vise=[], sA="", sB="")
     self.karton_win = None
     for w in self.root.winfo_children():
@@ -47,7 +62,7 @@ def _app_promeni_jezik(self):
     self.shell()
     self.prikazi(strana)
     try:
-        self.toast(T("Jezik: srpski", "Language: English"))
+        self.toast("🌐 " + dict(JEZICI).get(novi, novi))
     except Exception:
         pass
 
@@ -96,7 +111,7 @@ class OsnovaProzora:
         try:
             self.tab = Tablica(putanja)
         except Exception as e:
-            messagebox.showerror(("The table cannot be loaded" if EN else "Tablica se ne može učitati"), str(e))
+            messagebox.showerror((T("Tablica se ne može učitati", "The table cannot be loaded")), str(e))
             novi = os.path.join(APP_DIR, _ime_stada())
             if putanja != novi and os.path.isfile(novi):
                 try:
@@ -221,13 +236,14 @@ class OsnovaProzora:
         t = tk.Frame(brand, bg=SURF)
         t.pack(side="left", padx=10)
         tk.Label(t, text="HerdDoc", bg=SURF, fg=INK, font=self.f(12, "bold")).pack(anchor="w")
-        tk.Label(t, text=("kinship & mating" if EN else "srodstvo i parenje"), bg=SURF, fg=INK2, font=self.f(9)).pack(anchor="w")
+        tk.Label(t, text=(T("srodstvo i parenje", "kinship & mating")), bg=SURF, fg=INK2, font=self.f(9),
+                 wraplength=140, justify="left").pack(anchor="w")
 
         self.nav = {}
-        for key, txt, ic in (("grla", ("Animals" if EN else "Grla"), "☰"), ("parenje", ("Mating" if EN else "Parenje"), "⚭"),
-                             ("srodstvo", ("Relationship" if EN else "Srodstvo"), "⑂"), ("istorija", ("History" if EN else "Istorija"), "◷"),
-                             ("mlecnost", ("Milk" if EN else "Mlečnost"), "◔"), ("finansije", ("Finances" if EN else "Finansije"), "¤"),
-                             ("obavestenja", ("Notifications" if EN else "Obaveštenja"), "◉"), ("pregled", ("Overview" if EN else "Pregled"), "▥"),
+        for key, txt, ic in (("grla", (T("Grla", "Animals")), "☰"), ("parenje", (T("Parenje", "Mating")), "⚭"),
+                             ("srodstvo", (T("Srodstvo", "Relationship")), "⑂"), ("istorija", (T("Istorija", "History")), "◷"),
+                             ("mlecnost", (T("Mlečnost", "Milk")), "◔"), ("finansije", (T("Finansije", "Finances")), "¤"),
+                             ("obavestenja", (T("Obaveštenja", "Notifications")), "◉"), ("pregled", (T("Pregled", "Overview")), "▥"),
                              ("statistika", T("Statistika", "Statistics"), "▤"), ("stampa", T("Štampa i PDF", "Print and PDF"), "⎙"),
                              ("telefon", T("Telefon", "Phone"), "☏")):
             row = tk.Frame(side, bg=SURF, cursor="hand2")
@@ -247,12 +263,12 @@ class OsnovaProzora:
         self.lbl_fajl = tk.Label(foot, text="", bg=SURF, fg=INK2, font=self.f(9), anchor="w", justify="left",
                                  wraplength=190)
         self.lbl_fajl.pack(anchor="w")
-        lnk = tk.Label(foot, text=("Change table…" if EN else "Promeni tablicu…"), bg=SURF, fg=BRAND, font=self.f(9, "bold"), cursor="hand2")
+        lnk = tk.Label(foot, text=(T("Promeni tablicu…", "Change table…")), bg=SURF, fg=BRAND, font=self.f(9, "bold"), cursor="hand2")
         lnk.pack(anchor="w", pady=(4, 0))
         lnk.bind("<Button-1>", lambda e: self.promeni_tablicu())
-        jez = tk.Label(foot, text=T("🌐 English", "🌐 Srpski"), bg=SURF, fg=BRAND, font=self.f(9, "bold"), cursor="hand2")
+        jez = tk.Label(foot, text="🌐 " + dict(JEZICI).get(JEZIK, JEZIK) + "  ▾", bg=SURF, fg=BRAND, font=self.f(9, "bold"), cursor="hand2")
         jez.pack(anchor="w", pady=(6, 0))
-        jez.bind("<Button-1>", lambda e: self.promeni_jezik())
+        jez.bind("<Button-1>", lambda e: self.meni_jezika(jez))
         prob = tk.Label(foot, text=T("⚠ Prijavi problem", "⚠ Report a problem"), bg=SURF, fg=INK2, font=self.f(9), cursor="hand2")
         prob.pack(anchor="w", pady=(4, 0))
         prob.bind("<Button-1>", lambda e: self.prijavi_problem())
@@ -272,7 +288,7 @@ class OsnovaProzora:
 
 
     def osvezi_fajl_label(self):
-        self.lbl_fajl.config(text=(f"Data: {os.path.basename(self.tab.putanja)}" if EN else f"Podaci: {os.path.basename(self.tab.putanja)}"))
+        self.lbl_fajl.config(text=(T(f"Podaci: {os.path.basename(self.tab.putanja)}", f"Data: {os.path.basename(self.tab.putanja)}")))
 
 
     def nav_hover(self, k, on):
@@ -318,6 +334,14 @@ class OsnovaProzora:
         hx = 17 if big else 11
         c.create_oval(hx - hr, h / 2 - hr, hx + hr, h / 2 + hr, fill=bg, outline="#A8963F" if not siv else "#AAB3AC")
         c.create_text(pl, h / 2, text=text, anchor="w", font=fnt, fill=TAG_INK if not siv else INK2)
+        nap = self.napomena_grla(text)
+        if nap:                                  # grlo ima napomenu: narandžasti znak „!“ i oblačić sa tekstom
+            rz = 10 if big else 7
+            c.configure(width=w + 2 * rz + 4)
+            cx = w + rz + 2
+            c.create_oval(cx - rz, h / 2 - rz, cx + rz, h / 2 + rz, fill="#E07B00", outline="#E07B00")
+            c.create_text(cx, h / 2, text="!", font=self.f(12 if big else 9, "bold"), fill="#FFFFFF")
+            self.savet(c, nap)
         if cmd:
             c.bind("<Button-1>", lambda e: cmd())
         return c
@@ -382,7 +406,60 @@ class OsnovaProzora:
         tv.tag_configure("ok", foreground=OK)
         tv.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        # grlo sa napomenom: znak ⚠ pored oznake, a napomena se vidi kad se miš zadrži na redu
+        upis = tv.insert
+
+        def insert(parent_, index, iid=None, **kw):
+            if iid is not None and kw.get("text") and self.napomena_grla(iid):
+                kw["text"] = kw["text"] + "  ⚠"
+            return upis(parent_, index, iid=iid, **kw)
+        tv.insert = insert
+        self.savet(tv, lambda e: self.napomena_grla(tv.identify_row(e.y)))
         return wrap, tv
+
+    # ------------------------------------------------------------ napomena o grlu
+    def napomena_grla(self, x):
+        """Napomena upisana grlu (vidi se svuda gde se grlo pojavi) ili ""."""
+        try:
+            return self.model.A.get(x, {}).get("napomena", "") if x else ""
+        except Exception:
+            return ""
+
+    def savet(self, w, tekst):
+        """Mali žuti oblačić kad se miš zadrži na elementu. tekst: string ili funkcija(event) -> string."""
+        stanje = {"win": None, "tekst": None}
+
+        def sakrij(e=None):
+            if stanje["win"] is not None:
+                try:
+                    stanje["win"].destroy()
+                except Exception:
+                    pass
+            stanje["win"] = stanje["tekst"] = None
+
+        def pokazi(e):
+            t = tekst(e) if callable(tekst) else tekst
+            if t == stanje["tekst"]:
+                if stanje["win"] is not None:
+                    stanje["win"].geometry(f"+{e.x_root + 14}+{e.y_root + 16}")
+                return
+            sakrij()
+            if not t:
+                return
+            win = tk.Toplevel(w)
+            win.wm_overrideredirect(True)
+            try:
+                win.attributes("-topmost", True)
+            except Exception:
+                pass
+            tk.Label(win, text="⚠ " + t, bg="#FCEFD2", fg="#7A4D00", font=self.f(10, "bold"), padx=10, pady=6,
+                     wraplength=360, justify="left", highlightthickness=1, highlightbackground="#E0B860").pack()
+            win.geometry(f"+{e.x_root + 14}+{e.y_root + 16}")
+            stanje["win"], stanje["tekst"] = win, t
+        w.bind("<Motion>", pokazi, add="+")
+        w.bind("<Leave>", sakrij, add="+")
+        w.bind("<Destroy>", sakrij, add="+")
+        w.bind("<ButtonPress>", sakrij, add="+")
 
 
     # ------------------------------------------------------------ podaci
@@ -398,10 +475,10 @@ class OsnovaProzora:
         try:
             self.tab.sacuvaj()
         except PermissionError:
-            messagebox.showerror(("Not saved" if EN else "Nije sačuvano"),
-                                 ("The table is open in Excel or another program.\n"
-                                 "Close it and try again." if EN else "Tablica je otvorena u Excelu ili drugom programu.\n"
-                                 "Zatvori je pa pokušaj ponovo."))
+            messagebox.showerror((T("Nije sačuvano", "Not saved")),
+                                 (T("Tablica je otvorena u Excelu ili drugom programu.\n"
+                                 "Zatvori je pa pokušaj ponovo.", "The table is open in Excel or another program.\n"
+                                 "Close it and try again.")))
             self.tab.ucitaj()
         self.model = Model(self.tab.redovi)
         self.prikazi(self.strana)
@@ -421,22 +498,22 @@ class OsnovaProzora:
             try:
                 self.tab.ucitaj()
             except Exception as ex:
-                messagebox.showerror(("Error in table" if EN else "Greška u tablici"), str(ex))
+                messagebox.showerror((T("Greška u tablici", "Error in table")), str(ex))
                 return
             self.model = Model(self.tab.redovi)
             self.prikazi(self.strana)
-            self.toast(("The table was reloaded (changed in Excel)." if EN else "Tablica je ponovo učitana (izmenjena u Excelu)."))
+            self.toast((T("Tablica je ponovo učitana (izmenjena u Excelu).", "The table was reloaded (changed in Excel).")))
 
 
     def promeni_tablicu(self):
-        p = filedialog.askopenfilename(title=("Choose the animals table" if EN else "Izaberi tablicu sa grlima"), initialdir=APP_DIR,
-                                       filetypes=[(("CSV table" if EN else "CSV tablica"), "*.csv"), (("All files" if EN else "Svi fajlovi"), "*.*")])
+        p = filedialog.askopenfilename(title=(T("Izaberi tablicu sa grlima", "Choose the animals table")), initialdir=APP_DIR,
+                                       filetypes=[((T("CSV tablica", "CSV table")), "*.csv"), ((T("Svi fajlovi", "All files")), "*.*")])
         if not p:
             return
         try:
             t = Tablica(p)
         except Exception as e:
-            messagebox.showerror(("The table cannot be loaded" if EN else "Tablica se ne može učitati"), str(e))
+            messagebox.showerror((T("Tablica se ne može učitati", "The table cannot be loaded")), str(e))
             return
         self.tab = t
         self.ist = Istorija(t.putanja)
@@ -445,29 +522,60 @@ class OsnovaProzora:
         self.sacuvaj_podesavanja()
         self.osvezi_fajl_label()
         self.prikazi(self.strana)
-        self.toast((f"Loaded {len(t.redovi)} animals." if EN else f"Učitano {len(t.redovi)} grla."))
+        self.toast((T(f"Učitano {len(t.redovi)} grla.", f"Loaded {len(t.redovi)} animals.")))
 
 
     def uvezi(self):
-        p = filedialog.askopenfilename(title=("Import table from Excel (CSV)" if EN else "Uvezi tablicu iz Excela (CSV)"),
-                                       filetypes=[(("Excel or CSV table" if EN else "Excel ili CSV tablica"), "*.xlsx *.csv"),
-                                                  (("Excel workbook" if EN else "Excel tabela"), "*.xlsx"),
-                                                  (("CSV table" if EN else "CSV tablica"), "*.csv"), (("All files" if EN else "Svi fajlovi"), "*.*")])
+        p = filedialog.askopenfilename(title=(T("Uvezi tablicu iz Excela (CSV)", "Import table from Excel (CSV)")),
+                                       filetypes=[((T("Excel ili CSV tablica", "Excel or CSV table")), "*.xlsx *.csv"),
+                                                  ((T("Excel tabela", "Excel workbook")), "*.xlsx"),
+                                                  ((T("CSV tablica", "CSV table")), "*.csv"), ((T("Svi fajlovi", "All files")), "*.*")])
         if not p:
             return
         try:
             redovi, _ = procitaj_csv(p)
         except Exception as e:
-            messagebox.showerror(("Import failed" if EN else "Uvoz nije uspeo"), str(e))
+            messagebox.showerror((T("Uvoz nije uspeo", "Import failed")), str(e))
             return
         po_id = {r["id"]: r for r in self.tab.redovi}
         nov = izm = 0
+        from izvoz import Identiteti, _ozn_markica
+        # fajl sa drugog gazdinstva (HerdDoc izvoz sa kolonom gazdinstvo): isto ime ≠ isto grlo
+        farme = {" ".join(str(r.get("gazdinstvo") or "").split()) for r in redovi} - {""}
+        moja = " ".join(str(self.pod.get("gazdinstvo", "")).split())
+        tudje = bool(farme) and not (moja and farme == {moja})
+        ident = Identiteti(self.tab.redovi, next(iter(farme)) if len(farme) == 1 else "", tudje=tudje)
+        listovi = None
+        if p.lower().endswith((".xlsx", ".xlsm")):
+            try:
+                from podaci import procitaj_xlsx
+                listovi = procitaj_xlsx(p)
+                for _, sirovo in listovi[1:]:          # markice predaka iz lista Rodovnik
+                    if sirovo and any(str(k).strip().lower() in ("otac_oca", "sire_of_sire") for k in sirovo[0]):
+                        for red_ in sirovo[1:]:
+                            for c in red_[1:]:
+                                ime_, mk_ = _ozn_markica(c)
+                                ident.zapamti_markicu(ime_, mk_)
+            except Exception:
+                listovi = None
         for r in redovi:
             farma = (r.get("gazdinstvo") or "").strip()
             r = {k: r.get(k, "") for k in KOLONE}
+            ime_u_fajlu = r["id"]
+            r["id"] = ident.id(r["id"], r.get("markica", ""), r.get("rfid", ""), r.get("stare_markice", ""))
+            for k in ("otac", "majka"):
+                if r.get(k):
+                    r[k] = ident.id(r[k])
             if farma and r["id"] not in po_id and not r.get("poreklo_od"):
                 r["poreklo_od"] = farma          # grlo sa drugog gazdinstva: zapamti odakle je
-            if r["id"] in po_id:
+            if r["id"] in po_id and tudje:
+                # isto grlo koje već imamo: dopunjava se samo ono što nedostaje (status, roditelji, stado ostaju naši)
+                nase = po_id[r["id"]]
+                for k, v in r.items():
+                    if v and not nase.get(k) and k not in ("status", "uneto", "stado"):
+                        nase[k] = v
+                izm += 1
+            elif r["id"] in po_id:
                 if not r["uneto"]:
                     r.pop("uneto")
                 po_id[r["id"]].update(r)
@@ -475,7 +583,9 @@ class OsnovaProzora:
             else:
                 r["uneto"] = r.get("uneto") or sada()
                 self.tab.redovi.append(r)
-                self.ist.dodaj(r["id"], AUTO, (f"Added by import from table {os.path.basename(p)}" if EN else f"Upisano uvozom iz tablice {os.path.basename(p)}"), automatski=True)
+                self.ist.dodaj(r["id"], AUTO, (T(f"Upisano uvozom iz tablice {os.path.basename(p)}", f"Added by import from table {os.path.basename(p)}"))
+                               + (T(f" – na gazdinstvu {farma or '?'} se zove {ime_u_fajlu}", f" – called {ime_u_fajlu} on farm {farma or '?'}")
+                                  if ime_u_fajlu != r["id"] else ""), automatski=True)
                 po_id[r["id"]] = r
                 nov += 1
         dod = ""
@@ -483,17 +593,27 @@ class OsnovaProzora:
             try:
                 from izvoz import dopuni_iz_excela
                 from podaci import procitaj_xlsx
-                n_pr, n_ist, n_pod = dopuni_iz_excela(procitaj_xlsx(p), self.tab.redovi, self.ist, self.pods, p)
+                n_pr, n_ist, n_pod = dopuni_iz_excela(listovi or procitaj_xlsx(p), self.tab.redovi, self.ist, self.pods, p,
+                                                      ident=ident if tudje else None)
                 dod = "".join(t for t in (
-                    (f", {n_pr} ancestors" if EN else f", {n_pr} predaka") if n_pr else "",
-                    (f", {n_ist} history entries" if EN else f", {n_ist} zapisa istorije") if n_ist else "",
-                    (f", {n_pod} reminders" if EN else f", {n_pod} podsetnika") if n_pod else ""))
+                    (T(f", {n_pr} predaka", f", {n_pr} ancestors")) if n_pr else "",
+                    (T(f", {n_ist} zapisa istorije", f", {n_ist} history entries")) if n_ist else "",
+                    (T(f", {n_pod} podsetnika", f", {n_pod} reminders")) if n_pod else ""))
                 if n_pod:
                     self.pods.sacuvaj()
             except Exception as e:
-                messagebox.showwarning(("Import" if EN else "Uvoz"), (("Animals were imported, but the other sheets could not be read:\n" if EN
-                                       else "Grla su uvezena, ali ostali listovi nisu mogli da se pročitaju:\n") + str(e)))
-        self.promena((f"Imported: {nov} new" if EN else f"Uvezeno: {nov} novih") + ((f", {izm} changed" if EN else f", {izm} izmenjenih") if izm else "") + (" animals" if EN else " grla") + dod + ".")
+                messagebox.showwarning((T("Uvoz", "Import")), ((T("Grla su uvezena, ali ostali listovi nisu mogli da se pročitaju:\n", "Animals were imported, but the other sheets could not be read:\n")) + str(e)))
+        self.promena((T(f"Uvezeno: {nov} novih", f"Imported: {nov} new")) + ((T(f", {izm} izmenjenih", f", {izm} changed")) if izm else "") + (T(" grla", " animals")) + dod + ".")
+        pre = ident.preimenovana()
+        if pre:
+            spisak = "\n".join(f"   {a}  →  {b}" for a, b in list(pre.items())[:15]) + (T(f"\n   … i još {len(pre) - 15}", f"\n   … and {len(pre) - 15} more") if len(pre) > 15 else "")
+            messagebox.showinfo(T("Uvoz – ista imena", "Import – same names"),
+                                T(f"Ova grla sa drugog gazdinstva se zovu isto kao vaša grla, a nisu ista grla (druga markica). "
+                                  f"Upisana su pod novim imenom, da se vaša grla ne promene:\n\n{spisak}\n\n"
+                                  f"Rodoslov je povezan ispravno. Ime možete promeniti u kartonu grla.",
+                                  f"These animals from another farm have the same names as your animals, but are different animals (different ear tag). "
+                                  f"They were entered under a new name so your animals are not changed:\n\n{spisak}\n\n"
+                                  f"The pedigree is linked correctly. You can rename them in the animal card."))
 
 
     def otvori_excel(self):
@@ -506,9 +626,9 @@ class OsnovaProzora:
                 os.system(f'open "{self.tab.putanja}"')
             else:
                 os.system(f'xdg-open "{self.tab.putanja}" &')
-            self.toast(("When you save changes in Excel, the program will reload them." if EN else "Kad sačuvaš izmene u Excelu, program će ih sam učitati."))
+            self.toast((T("Kad sačuvaš izmene u Excelu, program će ih sam učitati.", "When you save changes in Excel, the program will reload them.")))
         except OSError:
-            messagebox.showinfo(("Table" if EN else "Tablica"), self.tab.putanja)
+            messagebox.showinfo((T("Tablica", "Table")), self.tab.putanja)
 
 
     # ------------------------------------------------------------ strane
@@ -540,10 +660,39 @@ class OsnovaProzora:
             b.pack(side="right", padx=(8, 0))
         levo = tk.Frame(h, bg=BG)
         levo.pack(side="left", fill="x", expand=True)
-        self.lbl(levo, naslov, 24, "bold").pack(anchor="w")
+        nl = self.lbl(levo, naslov, 24, "bold")
+        nl.pack(anchor="w")
+        pl = None
         if podnaslov:
-            self.lbl(levo, podnaslov, 10, fg=INK2, justify="left",
-                     wraplength=620 if not akcije else 300).pack(anchor="w", pady=(2, 0))
+            pl = self.lbl(levo, podnaslov, 10, fg=INK2, justify="left",
+                          wraplength=620 if not akcije else 300)
+            pl.pack(anchor="w", pady=(2, 0))
+        if akcije:
+            stanje = {"dole": False}
+
+            def raspored(e=None):
+                """Dugi nazivi dugmadi (npr. na nemačkom): dugmad idu u red ispod naslova, da se naslov vidi."""
+                sirina = h.winfo_width()
+                if sirina <= 1:
+                    return
+                dole = desno.winfo_reqwidth() + max(nl.winfo_reqwidth(), 260) + 24 > sirina
+                if dole == stanje["dole"]:
+                    return
+                stanje["dole"] = dole
+                desno.pack_forget()
+                levo.pack_forget()
+                if dole:
+                    levo.pack(side="top", fill="x")
+                    desno.pack(side="top", anchor="w", pady=(10, 0))
+                    if pl is not None:
+                        pl.configure(wraplength=900)
+                else:
+                    desno.pack(side="right", anchor="s")
+                    levo.pack(side="left", fill="x", expand=True)
+                    if pl is not None:
+                        pl.configure(wraplength=300)
+            h.bind("<Configure>", raspored, add="+")
+            h.after_idle(raspored)
         return h
 
 
@@ -556,14 +705,14 @@ class OsnovaProzora:
             c = tk.Canvas(b, width=56, height=64, bg=SURF, highlightthickness=0)
             c.pack()
             self.crtaj_markicu(c, 4, 2, 48, 58)
-        self.lbl(b, ("The herd is still empty" if EN else "Stado je još prazno"), 16, "bold").pack(pady=(14, 4))
-        self.lbl(b, ("Add animals one by one or import an existing table from Excel.\n"
-                    "For each animal enter the sire and dam if you know them." if EN else "Dodaj grla jedno po jedno ili uvezi postojeću tablicu iz Excela.\n"
-                    "Za svako grlo upiši oca i majku ako ih znaš."), 10, fg=INK2, justify="center").pack()
+        self.lbl(b, (T("Stado je još prazno", "The herd is still empty")), 16, "bold").pack(pady=(14, 4))
+        self.lbl(b, (T("Dodaj grla jedno po jedno ili uvezi postojeću tablicu iz Excela.\n"
+                    "Za svako grlo upiši oca i majku ako ih znaš.", "Add animals one by one or import an existing table from Excel.\n"
+                    "For each animal enter the sire and dam if you know them.")), 10, fg=INK2, justify="center").pack()
         r = tk.Frame(b, bg=SURF)
         r.pack(pady=(18, 0))
-        self.btn(r, ("+  Add first animal" if EN else "+  Dodaj prvo grlo"), lambda: self.forma(), "Primary").pack(side="left", padx=4)
-        self.btn(r, ("Import table from Excel" if EN else "Uvezi tablicu iz Excela"), self.uvezi).pack(side="left", padx=4)
+        self.btn(r, (T("+  Dodaj prvo grlo", "+  Add first animal")), lambda: self.forma(), "Primary").pack(side="left", padx=4)
+        self.btn(r, (T("Uvezi tablicu iz Excela", "Import table from Excel")), self.uvezi).pack(side="left", padx=4)
 
 
     def strana_okvir(self, scroll=True):
@@ -592,3 +741,4 @@ class OsnovaProzora:
                      f"+{r.winfo_rooty() + max(10, (r.winfo_height() - win.winfo_height()) // 3)}")
 
     promeni_jezik = _app_promeni_jezik
+    meni_jezika = _app_meni_jezika

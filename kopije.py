@@ -219,6 +219,9 @@ class KopijeDeo:
                 os.makedirs(f, exist_ok=True)
                 for p in fajlovi:
                     shutil.copy2(p, os.path.join(f, os.path.basename(p)))
+                nal = os.path.join(os.path.dirname(os.path.abspath(self.tab.putanja)), "dnk_nalazi")
+                if os.path.isdir(nal):                          # nalazi DNK testova (PDF, slike)
+                    shutil.copytree(nal, os.path.join(f, "dnk_nalazi"), dirs_exist_ok=True)
                 self.ocisti_stare_kopije(grupa)
                 if druga:
                     self.pod["poslednja_kopija2"] = sada()
@@ -452,6 +455,8 @@ class KopijeDeo:
                     izvor = os.path.join(k["put"], ime)
                     if os.path.isfile(izvor) and ime.lower().endswith(".csv"):
                         shutil.copy2(izvor, os.path.join(folder, ime))
+                    elif ime == "dnk_nalazi" and os.path.isdir(izvor):
+                        shutil.copytree(izvor, os.path.join(folder, ime), dirs_exist_ok=True)
                 self.tab = Tablica(os.path.join(folder, os.path.basename(k["tab"])))
                 self.ist = Istorija(self.tab.putanja)
                 self.pods = Podsetnici(self.tab.putanja)

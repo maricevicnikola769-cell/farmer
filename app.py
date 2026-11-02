@@ -6,8 +6,8 @@ import tkinter as tk
 import traceback
 from tkinter import messagebox
 
-from osnova import EN, PODESAVANJA, _engleski_exe, _jezik_sistema, _prvi_postojeci
-from jezik import postavi_jezik
+from osnova import EN, JEZICI, PODESAVANJA, _engleski_exe, _jezik_sistema, _prvi_postojeci
+from jezik import T, postavi_jezik
 from izgled import BG, BRAND, BRAND_H, INK, INK2, LINE, LOGO, SURF2
 from ekran_osnova import OsnovaProzora
 from ekran_grla import GrlaEkran
@@ -23,6 +23,8 @@ from mlecnost import MlecnostDeo
 from citac import CitacDeo
 from finansije import FinansijeDeo
 from oblak_kopija import OblakKopijaDeo
+from prirast import PrirastDeo
+from dnk import DnkDeo
 from telefon_prenos import TelefonDeo
 from sinhronizacija import SinhronizacijaDeo
 import dnevnik
@@ -30,7 +32,7 @@ from dnevnik import DnevnikDeo
 
 
 class App(OsnovaProzora, GrlaEkran, ParenjeEkran, KartonEkran, GravidnostDeo, IstorijaDeo, KopijeDeo, ObavestenjaDeo, StampaDeo, TelefonDeo,
-          SinhronizacijaDeo, DnevnikDeo, IzvozDeo, MlecnostDeo, CitacDeo, FinansijeDeo, OblakKopijaDeo):
+          SinhronizacijaDeo, DnevnikDeo, IzvozDeo, MlecnostDeo, CitacDeo, FinansijeDeo, OblakKopijaDeo, PrirastDeo, DnkDeo):
     """Glavni prozor programa, sklopljen iz delova (svaki deo je u svom fajlu)."""
 
 
@@ -40,12 +42,12 @@ def prvo_pokretanje():
 
 
 def izbor_jezika_na_startu(root):
-    """Mali prozor pri prvom pokretanju: Srpski / English. Izbor se pamti; kasnije se menja dole levo (🌐)."""
+    """Mali prozor pri prvom pokretanju: izbor jezika. Izbor se pamti; kasnije se menja dole levo (🌐)."""
     predlog = _jezik_sistema()
     izbor = tk.StringVar(value="")
     root.title("HerdDoc")
     root.configure(bg="#FFFFFF")
-    root.geometry("460x300")
+    root.geometry("560x340")
     okvir = tk.Frame(root, bg="#FFFFFF")
     okvir.place(relx=0.5, rely=0.5, anchor="center")
     try:
@@ -56,16 +58,16 @@ def izbor_jezika_na_startu(root):
         root._logo_izbor = slika
         tk.Label(okvir, image=slika, bg="#FFFFFF").pack(pady=(0, 10))
     tk.Label(okvir, text="HerdDoc", font=("Segoe UI", 20, "bold"), bg="#FFFFFF", fg=INK).pack()
-    tk.Label(okvir, text="Izaberi jezik  ·  Choose language", font=("Segoe UI", 11), bg="#FFFFFF", fg=INK2).pack(pady=(4, 18))
+    tk.Label(okvir, text="Izaberi jezik  ·  Choose language  ·  Langue  ·  Sprache  ·  Idioma", font=("Segoe UI", 11), bg="#FFFFFF", fg=INK2).pack(pady=(4, 18))
     dugmad = tk.Frame(okvir, bg="#FFFFFF")
     dugmad.pack()
-    for kod, naziv in (("sr", "Srpski"), ("en", "English")):
+    for i, (kod, naziv) in enumerate(JEZICI):
         glavno = kod == predlog
-        tk.Button(dugmad, text=naziv, width=12, font=("Segoe UI", 12, "bold"), relief="flat", cursor="hand2",
+        tk.Button(dugmad, text=naziv, width=11, font=("Segoe UI", 12, "bold"), relief="flat", cursor="hand2",
                   bg=BRAND if glavno else SURF2, fg="#FFFFFF" if glavno else INK,
                   activebackground=BRAND_H if glavno else LINE, activeforeground="#FFFFFF" if glavno else INK,
-                  command=lambda k=kod: izbor.set(k)).pack(side="left", padx=8, ipady=6)
-    tk.Label(okvir, text="Kasnije se menja dole levo (🌐)  ·  Can be changed later, bottom left (🌐)",
+                  command=lambda k=kod: izbor.set(k)).grid(row=i // 3, column=i % 3, padx=6, pady=5, ipady=5)
+    tk.Label(okvir, text="🌐  Kasnije se menja dole levo  ·  Can be changed later, bottom left",
              font=("Segoe UI", 8), bg="#FFFFFF", fg="#8A968F").pack(pady=(18, 0))
     root.protocol("WM_DELETE_WINDOW", lambda: izbor.set(predlog))
     root.bind("<Return>", lambda e: izbor.set(predlog))
@@ -101,7 +103,7 @@ def main():
 
     def greska(exc, val, tb):
         dnevnik.zapisi_izuzetak(exc, val, tb, "greška pri pokretanju")
-        messagebox.showerror(("Error" if EN else "Greška"), ("An error occurred:\n\n" if EN else "Došlo je do greške:\n\n") + "".join(traceback.format_exception_only(exc, val)))
+        messagebox.showerror((T("Greška", "Error")), (T("Došlo je do greške:\n\n", "An error occurred:\n\n")) + "".join(traceback.format_exception_only(exc, val)))
     root.report_callback_exception = greska
     if prvo_pokretanje():
         izbor_jezika_na_startu(root)

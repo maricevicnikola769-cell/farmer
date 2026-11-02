@@ -16,14 +16,14 @@ class ParenjeEkran:
     # ---------- Parenje
     def s_parenje(self):
         body = self.strana_okvir()
-        self.zaglavlje(body, ("Mating" if EN else "Parenje"), ("The program chooses partners so that the offspring have as little inbreeding as possible. "
-                                            f"The risk limit is {pct(self.prag)} (changed on the Overview page)." if EN else "Program bira partnere tako da potomstvo ima što manji inbriding. "
-                                            f"Granica rizika je {pct(self.prag)} (menja se na strani Pregled)."))
+        self.zaglavlje(body, (T("Parenje", "Mating")), (T("Program bira partnere tako da potomstvo ima što manji inbriding. "
+                                            f"Granica rizika je {pct(self.prag)} (menja se na strani Pregled).", "The program chooses partners so that the offspring have as little inbreeding as possible. "
+                                            f"The risk limit is {pct(self.prag)} (changed on the Overview page).")))
         segw = tk.Frame(body, bg=BG)
         segw.pack(fill="x", pady=(0, 16))
         seg = tk.Frame(segw, bg=SURF2)
         seg.pack(side="left")
-        for k, t in (("partner", ("Partner search" if EN else "Pretraga partnera")), ("plan", ("Plan for the whole herd" if EN else "Plan za celo stado"))):
+        for k, t in (("partner", (T("Pretraga partnera", "Partner search"))), ("plan", (T("Plan za celo stado", "Plan for the whole herd")))):
             akt = self.ui["par_tab"] == k
             b = tk.Label(seg, text=t, font=self.f(10, "bold"), bg=SURF if akt else SURF2, fg=INK if akt else INK2,
                          padx=14, pady=7, cursor="hand2")
@@ -44,10 +44,10 @@ class ParenjeEkran:
         akt = m.grla(True)
         o, c = self.card(body)
         o.pack(fill="x")
-        self.lbl(c, ("Partner search" if EN else "Pretraga partnera"), 13, "bold").pack(anchor="w")
-        self.lbl(c, ("Type the tag or ear tag of an animal and press Enter. The program finds partners of the opposite sex, "
-                    "with the least related ones at the top." if EN else "Upiši oznaku ili ušnu markicu grla i pritisni Enter. Program nalazi partnere suprotnog pola, "
-                    "a na vrhu su oni sa najmanjim srodstvom."), 9, fg=INK2, wraplength=760,
+        self.lbl(c, (T("Pretraga partnera", "Partner search")), 13, "bold").pack(anchor="w")
+        self.lbl(c, (T("Upiši oznaku ili ušnu markicu grla i pritisni Enter. Program nalazi partnere suprotnog pola, "
+                    "a na vrhu su oni sa najmanjim srodstvom.", "Type the tag or ear tag of an animal and press Enter. The program finds partners of the opposite sex, "
+                    "with the least related ones at the top.")), 9, fg=INK2, wraplength=760,
                  justify="left").pack(anchor="w", pady=(2, 10))
         row = tk.Frame(c, bg=SURF)
         row.pack(fill="x")
@@ -55,7 +55,7 @@ class ParenjeEkran:
         svi_opisi = [self.opis_grla(g) for g in akt]
         e = ttk.Combobox(row, textvariable=var, values=svi_opisi, width=34, font=self.f(11))
         e.pack(side="left")
-        ph = self.lbl(row, ("e.g. K12 or UK 123456 700123" if EN else "npr. K12 ili RS 1234-5678"), 10, fg="#98A39B", bg=SURF)
+        ph = self.lbl(row, (T("npr. K12 ili RS 1234-5678", "e.g. K12 or UK 123456 700123")), 10, fg="#98A39B", bg=SURF)
 
         def ph_show(*_):
             if var.get():
@@ -104,15 +104,15 @@ class ParenjeEkran:
         e.bind("<Return>", trazi)
         e.bind("<KP_Enter>", trazi)
         e.bind("<<ComboboxSelected>>", trazi)
-        self.btn(row, ("Find partners" if EN else "Pronađi partnere"), trazi, "Primary").pack(side="left", padx=10)
+        self.btn(row, (T("Pronađi partnere", "Find partners")), trazi, "Primary").pack(side="left", padx=10)
         row2 = tk.Frame(c, bg=SURF)
         row2.pack(fill="x", pady=(10, 0))
         rv = tk.BooleanVar(value=self.ui["ista_rasa"])
-        ttk.Checkbutton(row2, text=("Same breed only" if EN else "Samo ista rasa"), variable=rv, style="Card.TCheckbutton",
+        ttk.Checkbutton(row2, text=(T("Samo ista rasa", "Same breed only")), variable=rv, style="Card.TCheckbutton",
                         command=lambda: (self.ui.update(ista_rasa=rv.get()), self.prikazi("parenje"))).pack(
             side="left")
         uv = tk.BooleanVar(value=self.ui.get("partner_svi", False))
-        ttk.Checkbutton(row2, text=("Include animals out of herd" if EN else "Uključi i grla van zapata"), variable=uv, style="Card.TCheckbutton",
+        ttk.Checkbutton(row2, text=(T("Uključi i grla van zapata", "Include animals out of herd")), variable=uv, style="Card.TCheckbutton",
                         command=lambda: (self.ui.update(partner_svi=uv.get()), self.prikazi("parenje"))).pack(
             side="left", padx=18)
         if not self.ui["partner"]:
@@ -124,7 +124,7 @@ class ParenjeEkran:
             vise = self.ui.get("partner_vise", [])
             if upit and vise:
                 tk.Frame(c, bg=SURF, height=12).pack()
-                self.lbl(c, (f"Several animals match \"{upit}\". Choose one:" if EN else f"Više grla odgovara upitu „{upit}“. Izaberi jedno:"), 10, fg=INK2).pack(anchor="w")
+                self.lbl(c, (T(f"Više grla odgovara upitu „{upit}“. Izaberi jedno:", f"Several animals match \"{upit}\". Choose one:")), 10, fg=INK2).pack(anchor="w")
                 ch = tk.Frame(c, bg=SURF)
                 ch.pack(anchor="w", pady=(6, 0))
                 for i, g in enumerate(vise):
@@ -135,19 +135,19 @@ class ParenjeEkran:
                                                   self.prikazi("parenje"))).pack(side="left", padx=(0, 6))
             elif upit and self.ui.get("partner_obrisano"):
                 tk.Frame(c, bg=SURF, height=12).pack()
-                self.napomena(c, (f"Animal {self.ui['partner_obrisano']} is deleted. You can restore it on the page "
-                                 "Animals → Deleted animals." if EN else f"Grlo {self.ui['partner_obrisano']} je obrisano. Možeš ga vratiti na strani "
-                                 "Grla → Obrisana grla."))
+                self.napomena(c, (T(f"Grlo {self.ui['partner_obrisano']} je obrisano. Možeš ga vratiti na strani "
+                                 "Grla → Obrisana grla.", f"Animal {self.ui['partner_obrisano']} is deleted. You can restore it on the page "
+                                 "Animals → Deleted animals.")))
             elif upit:
                 tk.Frame(c, bg=SURF, height=12).pack()
-                self.napomena(c, (f"Animal \"{upit}\" was not found by tag or ear tag." if EN else f"Grlo „{upit}“ nije pronađeno ni po oznaci ni po ušnoj markici."))
+                self.napomena(c, (T(f"Grlo „{upit}“ nije pronađeno ni po oznaci ni po ušnoj markici.", f"Animal \"{upit}\" was not found by tag or ear tag.")))
             return
         if x not in m.A or m.A[x]["osnivac"]:
             return
         a = m.A[x]
         if not a["pol"]:
             tk.Frame(body, bg=BG, height=16).pack()
-            self.napomena(body, (f"Animal {x} has no sex entered. Enter the sex in the animal card and try again." if EN else f"Grlu {x} nije upisan pol. Upiši pol u kartonu grla pa pokušaj ponovo."))
+            self.napomena(body, (T(f"Grlu {x} nije upisan pol. Upiši pol u kartonu grla pa pokušaj ponovo.", f"Animal {x} has no sex entered. Enter the sex in the animal card and try again.")))
             return
 
         # izabrano grlo
@@ -161,9 +161,9 @@ class ParenjeEkran:
         t.pack(side="left", padx=14)
         self.lbl(t, f"{m.pol_naziv(x)}{', ' + a['rasa'] if a['rasa'] else ''}", 12, "bold").pack(anchor="w")
         o_, mj = m.P[x]
-        self.lbl(t, (f"ear tag {a['markica'] or '–'}   ·   sire {o_ or '–'}   ·   dam {mj or '–'}"
-                    f"   ·   inbreeding {pct(m.inbr(x))}" if EN else f"markica {a['markica'] or '–'}   ·   otac {o_ or '–'}   ·   majka {mj or '–'}"
-                    f"   ·   inbriding {pct(m.inbr(x))}"), 9, fg=INK2).pack(anchor="w")
+        self.lbl(t, (T(f"markica {a['markica'] or '–'}   ·   otac {o_ or '–'}   ·   majka {mj or '–'}"
+                    f"   ·   inbriding {pct(m.inbr(x))}", f"ear tag {a['markica'] or '–'}   ·   sire {o_ or '–'}   ·   dam {mj or '–'}"
+                    f"   ·   inbreeding {pct(m.inbr(x))}")), 9, fg=INK2).pack(anchor="w")
 
         izvor = m.grla(not self.ui.get("partner_svi", False))
         kand = [(m.kinship(x, k["id"]), m.r(x, k["id"]), k) for k in izvor
@@ -171,28 +171,25 @@ class ParenjeEkran:
                 and (not self.ui["ista_rasa"] or k["rasa"] == a["rasa"])]
         kand.sort(key=lambda t: (t[0], t[1], sort_key(t[2]["id"])))   # najmanje srodni na vrhu
         tk.Frame(body, bg=BG, height=16).pack()
-        suprotni = ("female" if EN else "ženskih") if a["pol"] == "m" else ("male" if EN else "muških")
+        suprotni = (T("ženskih", "female")) if a["pol"] == "m" else (T("muških", "male"))
         if not kand:
-            self.napomena(body, (f"There are no {suprotni} animals of the same species" if EN else f"Nema {suprotni} grla iste vrste") +
-                          ((" and breed" if EN else " i rase") if self.ui["ista_rasa"] else "") + (" in the herd." if EN else " u zapatu."))
+            self.napomena(body, (T(f"Nema {suprotni} grla iste vrste", f"There are no {suprotni} animals of the same species")) +
+                          ((T(" i rase", " and breed")) if self.ui["ista_rasa"] else "") + (T(" u zapatu.", " in the herd.")))
             return
         nesrodni = sum(1 for f, r, k in kand if f == 0)
         dobri = sum(1 for f, r, k in kand if f <= self.prag)
         if kand[0][0] > self.prag:
-            self.napomena(body, (f"No partner in the herd is below the limit of {pct(self.prag)}. "
-                                "Consider buying an unrelated animal or semen." if EN else f"Ni jedan partner u stadu nije ispod granice od {pct(self.prag)}. "
-                                "Razmisli o nabavci nesrodnog grla ili semena."))
+            self.napomena(body, (T(f"Ni jedan partner u stadu nije ispod granice od {pct(self.prag)}. "
+                                "Razmisli o nabavci nesrodnog grla ili semena.", f"No partner in the herd is below the limit of {pct(self.prag)}. "
+                                "Consider buying an unrelated animal or semen.")))
         else:
-            self.napomena(body, (f"Found {len(kand)} {suprotni} animals: {nesrodni} completely unrelated, "
-                                f"{dobri} below the limit of {pct(self.prag)}. The best choice is at the top." if EN else f"Pronađeno {len(kand)} {suprotni} grla: {nesrodni} potpuno nesrodnih, "
-                                f"{dobri} ispod granice od {pct(self.prag)}. Najbolji izbor je na vrhu."), ok=True)
-        if EN:
-            pass
-        else:
-            mlad = nazivi(a["vrsta"])[3]
-        wrap, tv = self.tabela(body, [("id", "Partner", 100), ("mk", ("Ear tag" if EN else "Markica"), 115), ("rasa", ("Breed" if EN else "Rasa"), 90),
-                                      ("st", ("Age" if EN else "Starost"), 80), ("odnos", ("Relation" if EN else "Odnos"), 130), ("r", ("Shared genes" if EN else "Zajednički geni"), 125, "e"),
-                                      ("f", ("Offspring F" if EN else f"Inbriding za {mlad}"), 125, "e"), ("pr", ("Rating" if EN else "Procena"), 150)],
+            self.napomena(body, (T(f"Pronađeno {len(kand)} {suprotni} grla: {nesrodni} potpuno nesrodnih, "
+                                f"{dobri} ispod granice od {pct(self.prag)}. Najbolji izbor je na vrhu.", f"Found {len(kand)} {suprotni} animals: {nesrodni} completely unrelated, "
+                                f"{dobri} below the limit of {pct(self.prag)}. The best choice is at the top.")), ok=True)
+        mlad = nazivi(a["vrsta"])[3]
+        wrap, tv = self.tabela(body, [("id", "Partner", 100), ("mk", (T("Markica", "Ear tag")), 115), ("rasa", (T("Rasa", "Breed")), 90),
+                                      ("st", (T("Starost", "Age")), 80), ("odnos", (T("Odnos", "Relation")), 130), ("r", (T("Zajednički geni", "Shared genes")), 125, "e"),
+                                      ("f", (T(f"Inbriding za {mlad}", "Offspring F")), 125, "e"), ("pr", (T("Procena", "Rating")), 150)],
                                visina=min(len(kand), 14))
         wrap.pack(fill="x")
         for i, (f, r, k) in enumerate(kand):
@@ -203,11 +200,11 @@ class ParenjeEkran:
                       tags=(["odd"] if i % 2 else []) + [{OK: "", WARN: "warn", BAD: "bad"}[boja]]
                            + ([] if k["aktivno"] else ["off"]))
         tv.bind("<Double-1>", lambda e: self.otvori_iz(tv))
-        self.lbl(body, ("Double-click a partner to open its card.  Shared genes = the share of genes two animals "
-                       "have from the same ancestors (parent and offspring or full sibling ≈ 50%, half sibling ≈ 25%, "
-                       "unrelated 0%)." if EN else "Dvoklik na partnera otvara njegov karton.  Zajednički geni = koliki deo gena dva grla "
+        self.lbl(body, (T("Dvoklik na partnera otvara njegov karton.  Zajednički geni = koliki deo gena dva grla "
                        "imaju od istih predaka (roditelj i potomak ili pun brat/sestra ≈ 50%, polubrat ≈ 25%, "
-                       "nesrodni 0%)."), 9, fg=INK2, wraplength=900, justify="left").pack(anchor="w", pady=(8, 0))
+                       "nesrodni 0%).", "Double-click a partner to open its card.  Shared genes = the share of genes two animals "
+                       "have from the same ancestors (parent and offspring or full sibling ≈ 50%, half sibling ≈ 25%, "
+                       "unrelated 0%).")), 9, fg=INK2, wraplength=900, justify="left").pack(anchor="w", pady=(8, 0))
 
 
     def plan_view(self, body):
@@ -218,13 +215,13 @@ class ParenjeEkran:
         row = tk.Frame(c, bg=SURF)
         row.pack(fill="x")
         self.btn(row, T("🖨 Štampaj plan", "🖨 Print plan"), self.stampaj_plan).pack(side="right")
-        self.lbl(row, ("Max. females per male:" if EN else "Najviše ženki po mužjaku:"), 10, "bold", fg=INK2).pack(side="left")
+        self.lbl(row, (T("Najviše ženki po mužjaku:", "Max. females per male:")), 10, "bold", fg=INK2).pack(side="left")
         mv = tk.StringVar(value=str(self.ui["plan_max"] or ""))
         sp = ttk.Spinbox(row, from_=0, to=999, textvariable=mv, width=6, font=self.f(10))
         sp.pack(side="left", padx=8)
-        self.lbl(row, ("(empty = no limit)" if EN else "(prazno = bez ograničenja)"), 9, fg=INK2).pack(side="left")
+        self.lbl(row, (T("(prazno = bez ograničenja)", "(empty = no limit)")), 9, fg=INK2).pack(side="left")
         rv = tk.BooleanVar(value=self.ui["ista_rasa"])
-        ttk.Checkbutton(row, text=("Same breed only" if EN else "Samo ista rasa"), variable=rv, style="Card.TCheckbutton",
+        ttk.Checkbutton(row, text=(T("Samo ista rasa", "Same breed only")), variable=rv, style="Card.TCheckbutton",
                         command=lambda: (self.ui.update(ista_rasa=rv.get()), self.prikazi("parenje"))).pack(
             side="left", padx=18)
 
@@ -242,9 +239,9 @@ class ParenjeEkran:
         zenke = [a for a in akt if a["pol"] == "z"]
         muz = [a for a in akt if a["pol"] == "m"]
         if not zenke or not muz:
-            self.napomena(body, (f"The plan needs both female and male animals in the herd "
-                                f"(now: {len(zenke)} female, {len(muz)} male)." if EN else f"Za plan su potrebna i ženska i muška grla u zapatu "
-                                f"(sada: {len(zenke)} ženskih, {len(muz)} muških)."))
+            self.napomena(body, (T(f"Za plan su potrebna i ženska i muška grla u zapatu "
+                                f"(sada: {len(zenke)} ženskih, {len(muz)} muških).", f"The plan needs both female and male animals in the herd "
+                                f"(now: {len(zenke)} female, {len(muz)} male).")))
             return
         mx = self.ui["plan_max"]
         opc = {z["id"]: sorted((m.kinship(z["id"], x["id"]), x["id"]) for x in muz
@@ -273,18 +270,18 @@ class ParenjeEkran:
 
         st = tk.Frame(body, bg=BG)
         st.pack(fill="x", pady=(0, 14))
-        for i, (b, t, boja) in enumerate(((str(len(zenke)), ("female animals" if EN else "ženskih grla"), INK), (str(len(muz)), ("male animals" if EN else "muških grla"), INK),
-                                          (pct(sum(fs) / len(fs)) if fs else "–", ("average inbreeding of offspring" if EN else "prosečan inbriding potomstva"), INK),
-                                          (str(prob), ("matings above the limit" if EN else "parenja iznad granice"), BAD if prob else OK))):
+        for i, (b, t, boja) in enumerate(((str(len(zenke)), (T("ženskih grla", "female animals")), INK), (str(len(muz)), (T("muških grla", "male animals")), INK),
+                                          (pct(sum(fs) / len(fs)) if fs else "–", (T("prosečan inbriding potomstva", "average inbreeding of offspring")), INK),
+                                          (str(prob), (T("parenja iznad granice", "matings above the limit")), BAD if prob else OK))):
             self.stat(st, b, t, boja).grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
             st.columnconfigure(i, weight=1, uniform="s")
         if prob:
-            self.napomena(body, (f"{prob} matings are above the limit or without a partner. "
-                                "Consider buying a new unrelated male or semen." if EN else f"{prob} parenja je iznad granice ili bez partnera. "
-                                "Razmisli o nabavci novog nesrodnog muškog grla ili semena."))
-        wrap, tv = self.tabela(body, [("z", ("Female" if EN else "Ženka"), 120), ("rasa", ("Breed" if EN else "Rasa"), 120), ("stado", ("Herd" if EN else "Stado"), 90),
-                                      ("x", "Partner", 110), ("rx", ("Partner breed" if EN else "Rasa partnera"), 120),
-                                      ("f", ("Offspring inbreeding" if EN else "Inbriding potomka"), 150, "e"), ("pr", ("Rating" if EN else "Procena"), 150)],
+            self.napomena(body, (T(f"{prob} parenja je iznad granice ili bez partnera. "
+                                "Razmisli o nabavci novog nesrodnog muškog grla ili semena.", f"{prob} matings are above the limit or without a partner. "
+                                "Consider buying a new unrelated male or semen.")))
+        wrap, tv = self.tabela(body, [("z", (T("Ženka", "Female")), 120), ("rasa", (T("Rasa", "Breed")), 120), ("stado", (T("Stado", "Herd")), 90),
+                                      ("x", "Partner", 110), ("rx", (T("Rasa partnera", "Partner breed")), 120),
+                                      ("f", (T("Inbriding potomka", "Offspring inbreeding")), 150, "e"), ("pr", (T("Procena", "Rating")), 150)],
                                visina=min(len(plan), 14))
         wrap.pack(fill="x")
         for i, (z, x, f) in enumerate(plan):
@@ -293,7 +290,7 @@ class ParenjeEkran:
                 t, boja = procena(f, self.prag)
                 tag = {OK: "", WARN: "warn", BAD: "bad"}[boja]
             else:
-                t, tag = ("no free partner" if EN else "nema slobodnog partnera"), "bad"
+                t, tag = (T("nema slobodnog partnera", "no free partner")), "bad"
             tv.insert("", "end", iid=z, text="  " + z, image=self.img_tag,
                       values=(a["rasa"] or "–", a["stado"] or "–", x or "–", m.A[x]["rasa"] if x else "",
                               pct(f) if x else "", t), tags=(["odd"] if i % 2 else []) + [tag])
@@ -302,36 +299,24 @@ class ParenjeEkran:
         tk.Frame(body, bg=BG, height=16).pack()
         o, c = self.card(body)
         o.pack(fill="x")
-        self.lbl(c, ("Load on males" if EN else "Opterećenje muških grla"), 13, "bold").pack(anchor="w")
-        self.lbl(c, ("How many females are assigned to each male in this plan." if EN else "Koliko ženki je dodeljeno svakom mužjaku u ovom planu."), 9, fg=INK2).pack(anchor="w", pady=(0, 10))
-        if EN:
-            for x in sorted(muz, key=lambda a: -kor[a["id"]]):
-                r = tk.Frame(c, bg=SURF)
-                r.pack(fill="x", pady=4)
-                self.cip(r, x["id"], lambda i=x["id"]: self.karton(i)).pack(side="left")
-                self.lbl(r, x["rasa"], 9, fg=INK2, width=14, anchor="w").pack(side="left", padx=8)
-                n = kor[x["id"]]
-                self.lbl(r, f"{n} " + ("female" if n == 1 else "females"), 10, "bold",
-                         width=10, anchor="e").pack(side="right")
-                pb = ttk.Progressbar(r, style="Green.Horizontal.TProgressbar", maximum=len(zenke), value=n)
-                pb.pack(side="left", fill="x", expand=True, padx=8)
-        else:
-            for x in sorted(muz, key=lambda a: -kor[a["id"]]):
-                r = tk.Frame(c, bg=SURF)
-                r.pack(fill="x", pady=4)
-                self.cip(r, x["id"], lambda i=x["id"]: self.karton(i)).pack(side="left")
-                self.lbl(r, x["rasa"], 9, fg=INK2, width=14, anchor="w").pack(side="left", padx=8)
-                n = kor[x["id"]]
-                self.lbl(r, f"{n} " + ("ženka" if n == 1 else "ženke" if 2 <= n <= 4 else "ženki"), 10, "bold",
-                         width=10, anchor="e").pack(side="right")
-                pb = ttk.Progressbar(r, style="Green.Horizontal.TProgressbar", maximum=len(zenke), value=n)
-                pb.pack(side="left", fill="x", expand=True, padx=8)
+        self.lbl(c, (T("Opterećenje muških grla", "Load on males")), 13, "bold").pack(anchor="w")
+        self.lbl(c, (T("Koliko ženki je dodeljeno svakom mužjaku u ovom planu.", "How many females are assigned to each male in this plan.")), 9, fg=INK2).pack(anchor="w", pady=(0, 10))
+        for x in sorted(muz, key=lambda a: -kor[a["id"]]):
+            r = tk.Frame(c, bg=SURF)
+            r.pack(fill="x", pady=4)
+            self.cip(r, x["id"], lambda i=x["id"]: self.karton(i)).pack(side="left")
+            self.lbl(r, x["rasa"], 9, fg=INK2, width=14, anchor="w").pack(side="left", padx=8)
+            n = kor[x["id"]]
+            self.lbl(r, f"{n} " + (T("ženka", "female") if n == 1 else T("ženke", "females") if 2 <= n <= 4 else T("ženki", "females")), 10, "bold",
+                     width=10, anchor="e").pack(side="right")
+            pb = ttk.Progressbar(r, style="Green.Horizontal.TProgressbar", maximum=len(zenke), value=n)
+            pb.pack(side="left", fill="x", expand=True, padx=8)
 
 
     # ---------- Srodstvo
     def s_srodstvo(self):
         body = self.strana_okvir()
-        self.zaglavlje(body, ("Relationship" if EN else "Srodstvo"), ("Choose two animals and see how related they are and what their offspring would be like." if EN else "Izaberi dva grla i vidi koliko su srodna i kakvo bi bilo njihovo potomstvo."))
+        self.zaglavlje(body, (T("Srodstvo", "Relationship")), (T("Izaberi dva grla i vidi koliko su srodna i kakvo bi bilo njihovo potomstvo.", "Choose two animals and see how related they are and what their offspring would be like.")))
         m = self.model
         sva = m.grla()
         if not sva:
@@ -343,7 +328,7 @@ class ParenjeEkran:
         row = tk.Frame(c, bg=SURF)
         row.pack(fill="x")
         vars_ = {}
-        for i, (k, t) in enumerate((("sA", ("First animal" if EN else "Prvo grlo")), ("sB", ("Second animal" if EN else "Drugo grlo")))):
+        for i, (k, t) in enumerate((("sA", (T("Prvo grlo", "First animal"))), ("sB", (T("Drugo grlo", "Second animal"))))):
             f = tk.Frame(row, bg=SURF)
             f.grid(row=0, column=i, sticky="ew", padx=(0 if i == 0 else 16, 0))
             row.columnconfigure(i, weight=1)
@@ -355,78 +340,47 @@ class ParenjeEkran:
                     lambda e, k=k, v=v: (self.ui.update({k: sva[opisi.index(v.get())]["id"]}), self.prikazi("srodstvo")))
             vars_[k] = v
         a, b = self.ui["sA"], self.ui["sB"]
-        if EN:
-            if a in m.A and b in m.A and a != b:
-                A, B = m.A[a], m.A[b]
-                if A["vrsta"] != B["vrsta"]:
-                    tk.Frame(c, bg=SURF, height=14).pack()
-                    self.napomena(c, f"{a} is {A['vrsta']}, and {b} is {B['vrsta']} – different species.")
+        if a in m.A and b in m.A and a != b:
+            A, B = m.A[a], m.A[b]
+            if A["vrsta"] != B["vrsta"]:
+                tk.Frame(c, bg=SURF, height=14).pack()
+                self.napomena(c, T(f"{a} je {A['vrsta']}, a {b} {B['vrsta']} – različite vrste.", f"{a} is {A['vrsta']} and {b} is {B['vrsta']} – different species."))
+            else:
+                f, r = m.kinship(a, b), m.r(a, b)
+                v = tk.Frame(c, bg=SURF)
+                v.pack(fill="x", pady=(18, 0))
+                t, boja = procena(f, self.prag)
+                for i, (big, small, col) in enumerate(((pct(r), T(f"zajedničkih gena (r = {r:.3f})".replace(".", ","), f"shared genes (r = {r:.3f})"), INK),
+                                                       (m.odnos(a, b), T("odnos", "relation"), INK),
+                                                       (pct(f), T(f"inbriding {nazivi(A['vrsta'])[2]}ta", f"inbreeding of the {nazivi(A['vrsta'])[2]}"), boja))):
+                    fr = tk.Frame(v, bg=SURF2)
+                    fr.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
+                    v.columnconfigure(i, weight=1, uniform="v")
+                    self.lbl(fr, big, 22 if i != 1 else 15, "bold", fg=col).pack(anchor="w", padx=16, pady=(12, 0))
+                    self.lbl(fr, small, 9, fg=INK2).pack(anchor="w", padx=16, pady=(0, 12 if i != 2 else 4))
+                    if i == 2:
+                        self.badge(fr, t, boja).pack(anchor="w", padx=16, pady=(0, 12))
+                self.lbl(c, T("Zajednički preci", "Common ancestors"), 10, "bold").pack(anchor="w", pady=(16, 6))
+                zaj = sorted((m.preci(a) | {a}) & (m.preci(b) | {b}), key=sort_key)
+                ch = tk.Frame(c, bg=SURF)
+                ch.pack(anchor="w")
+                if zaj:
+                    for z in zaj:
+                        self.cip(ch, z, lambda z=z: self.karton(z), siv=m.A[z]["osnivac"]).pack(side="left", padx=(0, 6))
                 else:
-                    f, r = m.kinship(a, b), m.r(a, b)
-                    v = tk.Frame(c, bg=SURF)
-                    v.pack(fill="x", pady=(18, 0))
-                    t, boja = procena(f, self.prag)
-                    for i, (big, small, col) in enumerate(((pct(r), f"shared genes (r = {r:.3f})", INK),
-                                                           (m.odnos(a, b), "odnos", INK),
-                                                           (pct(f), f"inbreeding of the {nazivi(A['vrsta'])[2]}", boja))):
-                        fr = tk.Frame(v, bg=SURF2)
-                        fr.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
-                        v.columnconfigure(i, weight=1, uniform="v")
-                        self.lbl(fr, big, 22 if i != 1 else 15, "bold", fg=col).pack(anchor="w", padx=16, pady=(12, 0))
-                        self.lbl(fr, small, 9, fg=INK2).pack(anchor="w", padx=16, pady=(0, 12 if i != 2 else 4))
-                        if i == 2:
-                            self.badge(fr, t, boja).pack(anchor="w", padx=16, pady=(0, 12))
-                    self.lbl(c, "Common ancestors", 10, "bold").pack(anchor="w", pady=(16, 6))
-                    zaj = sorted((m.preci(a) | {a}) & (m.preci(b) | {b}), key=sort_key)
-                    ch = tk.Frame(c, bg=SURF)
-                    ch.pack(anchor="w")
-                    if zaj:
-                        for z in zaj:
-                            self.cip(ch, z, lambda z=z: self.karton(z), siv=m.A[z]["osnivac"]).pack(side="left", padx=(0, 6))
-                    else:
-                        self.lbl(ch, "no known common ancestors", 10, fg=INK2).pack(side="left")
-        else:
-            if a in m.A and b in m.A and a != b:
-                A, B = m.A[a], m.A[b]
-                if A["vrsta"] != B["vrsta"]:
-                    tk.Frame(c, bg=SURF, height=14).pack()
-                    self.napomena(c, f"{a} je {A['vrsta']}, a {b} {B['vrsta']} – različite vrste.")
-                else:
-                    f, r = m.kinship(a, b), m.r(a, b)
-                    v = tk.Frame(c, bg=SURF)
-                    v.pack(fill="x", pady=(18, 0))
-                    t, boja = procena(f, self.prag)
-                    for i, (big, small, col) in enumerate(((pct(r), f"zajedničkih gena (r = {r:.3f})".replace(".", ","), INK),
-                                                           (m.odnos(a, b), "odnos", INK),
-                                                           (pct(f), f"inbriding {nazivi(A['vrsta'])[2]}ta", boja))):
-                        fr = tk.Frame(v, bg=SURF2)
-                        fr.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
-                        v.columnconfigure(i, weight=1, uniform="v")
-                        self.lbl(fr, big, 22 if i != 1 else 15, "bold", fg=col).pack(anchor="w", padx=16, pady=(12, 0))
-                        self.lbl(fr, small, 9, fg=INK2).pack(anchor="w", padx=16, pady=(0, 12 if i != 2 else 4))
-                        if i == 2:
-                            self.badge(fr, t, boja).pack(anchor="w", padx=16, pady=(0, 12))
-                    self.lbl(c, "Zajednički preci", 10, "bold").pack(anchor="w", pady=(16, 6))
-                    zaj = sorted((m.preci(a) | {a}) & (m.preci(b) | {b}), key=sort_key)
-                    ch = tk.Frame(c, bg=SURF)
-                    ch.pack(anchor="w")
-                    if zaj:
-                        for z in zaj:
-                            self.cip(ch, z, lambda z=z: self.karton(z), siv=m.A[z]["osnivac"]).pack(side="left", padx=(0, 6))
-                    else:
-                        self.lbl(ch, "nema poznatih zajedničkih predaka", 10, fg=INK2).pack(side="left")
+                    self.lbl(ch, T("nema poznatih zajedničkih predaka", "no known common ancestors"), 10, fg=INK2).pack(side="left")
 
         tk.Frame(body, bg=BG, height=16).pack()
         o, c = self.card(body)
         o.pack(fill="x")
-        self.lbl(c, ("Most related pairs in the herd" if EN else "Najsrodniji parovi u zapatu"), 13, "bold").pack(anchor="w")
-        self.lbl(c, ("Animals that should be kept apart when mating." if EN else "Grla koja treba držati odvojeno pri parenju."), 9, fg=INK2).pack(anchor="w", pady=(0, 10))
+        self.lbl(c, (T("Najsrodniji parovi u zapatu", "Most related pairs in the herd")), 13, "bold").pack(anchor="w")
+        self.lbl(c, (T("Grla koja treba držati odvojeno pri parenju.", "Animals that should be kept apart when mating.")), 9, fg=INK2).pack(anchor="w", pady=(0, 10))
         akt = m.grla(True)
         kes = getattr(self, "_kes_parovi", None)
         if kes and kes[0] is m:                      # isti podaci – ne računa se ponovo
             parovi = list(kes[1])
         elif len(akt) > 1500:                        # veliko stado: računa se u pozadini, strana odmah radi
-            self.lbl(c, ("⏳ Calculating… (large herd, a few seconds)" if EN else "⏳ Računam… (veliko stado, par sekundi)"), 10, fg=INK2).pack(anchor="w")
+            self.lbl(c, (T("⏳ Računam… (veliko stado, par sekundi)", "⏳ Calculating… (large herd, a few seconds)")), 10, fg=INK2).pack(anchor="w")
             if getattr(self, "_parovi_racuna", None) is not m:
                 self._parovi_racuna = m
 
@@ -449,10 +403,10 @@ class ParenjeEkran:
             parovi = izracunaj_parove(m, akt)
             self._kes_parovi = (m, parovi[:200])
         if not parovi:
-            self.lbl(c, ("No related pairs according to the recorded pedigree." if EN else "Nema srodnih parova prema upisanom rodoslovu."), 10, fg=INK2).pack(anchor="w")
+            self.lbl(c, (T("Nema srodnih parova prema upisanom rodoslovu.", "No related pairs according to the recorded pedigree.")), 10, fg=INK2).pack(anchor="w")
             return
-        wrap, tv = self.tabela(c, [("a", ("Animal A" if EN else "Grlo A"), 120), ("b", ("Animal B" if EN else "Grlo B"), 120), ("od", ("Relation" if EN else "Odnos"), 200),
-                                   ("r", ("Shared genes" if EN else "Zajednički geni"), 120, "e")], visina=min(len(parovi), 12))
+        wrap, tv = self.tabela(c, [("a", (T("Grlo A", "Animal A")), 120), ("b", (T("Grlo B", "Animal B")), 120), ("od", (T("Odnos", "Relation")), 200),
+                                   ("r", (T("Zajednički geni", "Shared genes")), 120, "e")], visina=min(len(parovi), 12))
         wrap.pack(fill="x")
         for i, (r, x, y) in enumerate(parovi[:40]):
             tv.insert("", "end", text="  " + x, image=self.img_tag,
@@ -462,12 +416,12 @@ class ParenjeEkran:
     # ---------- Pregled
     def s_pregled(self):
         body = self.strana_okvir()
-        h = self.zaglavlje(body, ("Herd overview" if EN else "Pregled stada"), ("Inbreeding status, most common sires and data errors." if EN else "Stanje inbridinga, najčešći očevi i greške u podacima."))
+        h = self.zaglavlje(body, (T("Pregled stada", "Herd overview")), (T("Stanje inbridinga, najčešći očevi i greške u podacima.", "Inbreeding status, most common sires and data errors.")))
         pf = tk.Frame(h, bg=BG)
         pf.pack(side="right", anchor="s")
-        self.lbl(pf, ("Risk limit" if EN else "Granica rizika"), 9, "bold", fg=INK2).pack(anchor="w")
-        opcije = {("3.125% – strict" if EN else "3,125% – strogo"): 0.03125, ("6.25% – recommended" if EN else "6,25% – preporučeno"): 0.0625, ("12.5% – mild" if EN else "12,5% – blago"): 0.125}
-        pv = tk.StringVar(value=next((k for k, v in opcije.items() if abs(v - self.prag) < 1e-9), ("6.25% – recommended" if EN else "6,25% – preporučeno")))
+        self.lbl(pf, (T("Granica rizika", "Risk limit")), 9, "bold", fg=INK2).pack(anchor="w")
+        opcije = {(T("3,125% – strogo", "3.125% – strict")): 0.03125, (T("6,25% – preporučeno", "6.25% – recommended")): 0.0625, (T("12,5% – blago", "12.5% – mild")): 0.125}
+        pv = tk.StringVar(value=next((k for k, v in opcije.items() if abs(v - self.prag) < 1e-9), (T("6,25% – preporučeno", "6.25% – recommended"))))
         cb = ttk.Combobox(pf, textvariable=pv, values=list(opcije), state="readonly", width=22, font=self.f(10))
         cb.pack()
         cb.bind("<<ComboboxSelected>>", lambda e: (setattr(self, "prag", opcije[pv.get()]),
@@ -482,11 +436,11 @@ class ParenjeEkran:
         iznad = sum(f > self.prag for f in F)
         st = tk.Frame(body, bg=BG)
         st.pack(fill="x", pady=(0, 16))
-        for i, (b, t, col) in enumerate(((str(len(akt)), ("animals in herd" if EN else "grla u zapatu"), INK),
-                                         (str(sum(a["pol"] == "z" for a in akt)), ("female" if EN else "ženskih"), INK),
-                                         (str(sum(a["pol"] == "m" for a in akt)), ("male" if EN else "muških"), INK),
-                                         (pct(sum(F) / len(F)) if F else "–", ("average inbreeding" if EN else "prosečan inbriding"), INK),
-                                         (str(iznad), ("above the limit" if EN else "grla iznad granice"), BAD if iznad else OK))):
+        for i, (b, t, col) in enumerate(((str(len(akt)), (T("grla u zapatu", "animals in herd")), INK),
+                                         (str(sum(a["pol"] == "z" for a in akt)), (T("ženskih", "female")), INK),
+                                         (str(sum(a["pol"] == "m" for a in akt)), (T("muških", "male")), INK),
+                                         (pct(sum(F) / len(F)) if F else "–", (T("prosečan inbriding", "average inbreeding")), INK),
+                                         (str(iznad), (T("grla iznad granice", "above the limit")), BAD if iznad else OK))):
             self.stat(st, b, t, col).grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
             st.columnconfigure(i, weight=1, uniform="s")
 
@@ -496,8 +450,8 @@ class ParenjeEkran:
         dva.columnconfigure(1, weight=1, uniform="d")
         o, c = self.card(dva)
         o.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self.lbl(c, ("Most common sires" if EN else "Najčešći očevi"), 13, "bold").pack(anchor="w")
-        self.lbl(c, ("When one male has too many offspring, the next generation becomes related." if EN else "Kad jedan mužjak ima previše potomaka, sledeća generacija postaje srodna."), 9, fg=INK2,
+        self.lbl(c, (T("Najčešći očevi", "Most common sires")), 13, "bold").pack(anchor="w")
+        self.lbl(c, (T("Kad jedan mužjak ima previše potomaka, sledeća generacija postaje srodna.", "When one male has too many offspring, the next generation becomes related.")), 9, fg=INK2,
                  wraplength=380, justify="left").pack(anchor="w", pady=(0, 10))
         oc = {}
         for a in akt:
@@ -506,9 +460,9 @@ class ParenjeEkran:
                 oc[o_] = oc.get(o_, 0) + 1
         ocl = sorted(oc.items(), key=lambda t: -t[1])[:8]
         if ocl and ocl[0][1] / len(akt) > 0.3:
-            self.napomena(c, ("One sire has more than 30% of the offspring in the herd." if EN else "Jedan otac ima više od 30% potomaka u zapatu."))
+            self.napomena(c, (T("Jedan otac ima više od 30% potomaka u zapatu.", "One sire has more than 30% of the offspring in the herd.")))
         if not ocl:
-            self.lbl(c, ("No sires entered yet." if EN else "Očevi još nisu upisani."), 10, fg=INK2).pack(anchor="w")
+            self.lbl(c, (T("Očevi još nisu upisani.", "No sires entered yet.")), 10, fg=INK2).pack(anchor="w")
         for x, n in ocl:
             r = tk.Frame(c, bg=SURF)
             r.pack(fill="x", pady=4)
@@ -519,11 +473,11 @@ class ParenjeEkran:
 
         o, c = self.card(dva)
         o.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        self.lbl(c, ("Animals with the highest inbreeding" if EN else "Grla sa najvećim inbridingom"), 13, "bold").pack(anchor="w")
-        self.lbl(c, ("These animals come from related parents." if EN else "Ova grla potiču od srodnih roditelja."), 9, fg=INK2).pack(anchor="w", pady=(0, 10))
+        self.lbl(c, (T("Grla sa najvećim inbridingom", "Animals with the highest inbreeding")), 13, "bold").pack(anchor="w")
+        self.lbl(c, (T("Ova grla potiču od srodnih roditelja.", "These animals come from related parents.")), 9, fg=INK2).pack(anchor="w", pady=(0, 10))
         inb = sorted(((f, a) for f, a in zip(F, akt) if f > 0), key=lambda t: -t[0])[:10]
         if not inb:
-            self.napomena(c, ("No animal in the herd is inbred." if EN else "Nijedno grlo u zapatu nema inbriding."), ok=True)
+            self.napomena(c, (T("Nijedno grlo u zapatu nema inbriding.", "No animal in the herd is inbred.")), ok=True)
         for f, a in inb:
             r = tk.Frame(c, bg=SURF)
             r.pack(fill="x", pady=4)
@@ -536,9 +490,9 @@ class ParenjeEkran:
         grupe = {}
         for a in akt:
             grupe.setdefault((a["vrsta"], a["rasa"] or "–", a["stado"] or "–"), []).append(a)
-        wrap, tv = self.tabela(body, [("v", ("Species" if EN else "Vrsta"), 100), ("r", ("Breed" if EN else "Rasa"), 130), ("s", ("Herd" if EN else "Stado"), 100),
-                                      ("n", ("Animals" if EN else "Grla"), 70, "e"), ("m", ("Males" if EN else "Muških"), 70, "e"), ("z", ("Females" if EN else "Ženskih"), 70, "e"),
-                                      ("pf", ("Average F" if EN else "Prosečan F"), 100, "e"), ("mf", ("Highest F" if EN else "Najveći F"), 100, "e")],
+        wrap, tv = self.tabela(body, [("v", (T("Vrsta", "Species")), 100), ("r", (T("Rasa", "Breed")), 130), ("s", (T("Stado", "Herd")), 100),
+                                      ("n", (T("Grla", "Animals")), 70, "e"), ("m", (T("Muških", "Males")), 70, "e"), ("z", (T("Ženskih", "Females")), 70, "e"),
+                                      ("pf", (T("Prosečan F", "Average F")), 100, "e"), ("mf", (T("Najveći F", "Highest F")), 100, "e")],
                                visina=min(len(grupe), 8), tree=False)
         wrap.pack(fill="x")
         for i, ((v, r, s), g) in enumerate(sorted(grupe.items(), key=lambda t: -len(t[1]))):
@@ -550,9 +504,9 @@ class ParenjeEkran:
         tk.Frame(body, bg=BG, height=16).pack()
         o, c = self.card(body)
         o.pack(fill="x")
-        self.lbl(c, ("Data check" if EN else "Provera podataka"), 13, "bold").pack(anchor="w", pady=(0, 8))
+        self.lbl(c, (T("Provera podataka", "Data check")), 13, "bold").pack(anchor="w", pady=(0, 8))
         if not m.warn:
-            self.napomena(c, ("No errors found in the pedigree." if EN else "Nisu pronađene greške u rodoslovu."), ok=True)
+            self.napomena(c, (T("Nisu pronađene greške u rodoslovu.", "No errors found in the pedigree.")), ok=True)
         for w in m.warn[:40]:
             r = tk.Frame(c, bg=SURF)
             r.pack(fill="x", pady=3)
@@ -574,10 +528,10 @@ class ParenjeEkran:
         red_.pack(fill="x", padx=20, pady=16)
         lev = tk.Frame(red_, bg=SURF)
         lev.pack(side="left", fill="x", expand=True)
-        self.lbl(lev, ("Danger zone" if EN else "Opasna zona"), 13, "bold", fg=BAD).pack(anchor="w")
-        self.lbl(lev, ("Delete all animals from the records. Done in 5 steps, with an automatic backup." if EN else "Brisanje svih grla iz evidencije. Radi se u 5 koraka, uz automatsku rezervnu kopiju."),
+        self.lbl(lev, (T("Opasna zona", "Danger zone")), 13, "bold", fg=BAD).pack(anchor="w")
+        self.lbl(lev, (T("Brisanje svih grla iz evidencije. Radi se u 5 koraka, uz automatsku rezervnu kopiju.", "Delete all animals from the records. Done in 5 steps, with an automatic backup.")),
                  9, fg=INK2).pack(anchor="w")
-        self.btn(red_, ("Delete all animals…" if EN else "Obriši sva grla…"), self.brisanje_svih, "Danger").pack(side="right")
+        self.btn(red_, (T("Obriši sva grla…", "Delete all animals…")), self.brisanje_svih, "Danger").pack(side="right")
 
 
 def izracunaj_parove(m, akt):
