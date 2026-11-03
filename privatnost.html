@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="sr" data-lang="sr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Politika privatnosti – HerdDoc</title>
+<meta name="description" content="Politika privatnosti programa HerdDoc i sajta getherddoc.com. Privacy policy of HerdDoc.">
+<meta name="theme-color" content="#2E5E45">
+<link rel="icon" href="assets/logo/herddoc-znak.svg" type="image/svg+xml">
+
+<style>
+:root{--zelena:#2E5E45;--zuta:#F4C400;--pozadina:#F3F5F1;--povrs:#FFFFFF;--tekst:#18221C;--tekst2:#56645A;--linija:#DDE3DA;
+  --font:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--pozadina);color:var(--tekst);font-family:var(--font);font-size:16.5px;line-height:1.65}
+html[data-lang="sr"] [lang="en"]:not(html), html[data-lang="en"] [lang="sr"]:not(html){display:none !important}
+.vrh{border-bottom:1px solid var(--linija);background:var(--pozadina)}
+.vrh .u{max-width:860px;margin:0 auto;padding:0 20px;height:64px;display:flex;align-items:center;gap:16px}
+.marka{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--tekst);font-weight:800;font-size:20px}
+.marka img{width:32px;height:32px}
+.jezik{margin-left:auto;display:flex;border:1px solid var(--linija);border-radius:999px;overflow:hidden;background:var(--povrs)}
+.jezik button{border:0;background:none;font:600 13px var(--font);padding:7px 12px;cursor:pointer;color:var(--tekst2)}
+.jezik button[aria-pressed="true"]{background:var(--zelena);color:#fff}
+main{max-width:860px;margin:0 auto;padding:40px 20px 60px}
+article{background:var(--povrs);border:1px solid var(--linija);border-radius:16px;padding:36px clamp(20px,5vw,48px)}
+h1{font-size:clamp(28px,4vw,38px);letter-spacing:-.02em;margin:0 0 6px;line-height:1.15}
+.datum{color:var(--tekst2);margin:0 0 26px;font-size:15px}
+h2{font-size:20px;margin:30px 0 8px;letter-spacing:-.01em}
+p,li{color:#2B3830}
+ul{padding-left:22px}
+li{margin:4px 0}
+a{color:var(--zelena)}
+.istaknuto{background:#E7EFE9;border-left:4px solid var(--zelena);border-radius:8px;padding:14px 18px;margin:18px 0}
+footer{max-width:860px;margin:0 auto;padding:0 20px 40px;color:var(--tekst2);font-size:14px}
+</style>
+</head>
+<body>
+<header class="vrh"><div class="u">
+  <a class="marka" href="https://maricevicnikola769-cell.github.io/farmer/privatnost.html"><img src="assets/logo/herddoc-znak.svg" alt="">HerdDoc</a>
+  <div class="jezik" role="group" aria-label="Jezik / Language">
+    <button type="button" data-jezik="sr" aria-pressed="true">SR</button>
+    <button type="button" data-jezik="en" aria-pressed="false">EN</button>
+  </div>
+</div></header>
+
+<main>
+<!-- ======================== SRPSKI ======================== -->
+<article lang="sr">
+  <h1>Politika privatnosti</h1>
+  <p class="datum">Poslednja izmena: 3. novembar 2026.</p>
+
+  <div class="istaknuto"><b>Ukratko:</b> podaci o tvom stadu čuvaju se na tvom računaru i telefonu. Ako koristiš usklađivanje preko interneta, podaci se pre slanja šifruju ključem koji postoji samo na tvojim uređajima, pa ih mi ne možemo pročitati. Sajt ne koristi kolačiće niti praćenje.</div>
+
+  <h2>1. Ko smo</h2>
+  <p>HerdDoc (program za računar i aplikacija za telefon) i sajt getherddoc.com izrađuje i održava Nikola Marićević, Srbija. Za sva pitanja o privatnosti piši na <a href="mailto:herddoc7@gmail.com">herddoc7@gmail.com</a>.</p>
+
+  <h2>2. Podaci o stadu</h2>
+  <p>Podaci koje upisuješ (grla, rodoslov, događaji, podsetnici, podešavanja) čuvaju se:</p>
+  <ul>
+    <li>na tvom računaru, u folderu Dokumenti\HerdDoc (ili Dokumenti\Farmer kod starijih instalacija), zajedno sa rezervnim kopijama;</li>
+    <li>na telefonu, u memoriji aplikacije;</li>
+    <li>na drugoj lokaciji za rezervne kopije koju sam izabereš (npr. OneDrive, Google Drive ili USB), ako je izabereš.</li>
+  </ul>
+  <p>Mi ove podatke ne primamo, ne vidimo i ne prodajemo.</p>
+
+  <h2>3. Usklađivanje računara i telefona (nije obavezno)</h2>
+  <p>Ako upariš telefon sa računarom, podaci se prenose preko servisa Google Firebase (Firestore), koji pruža Google. Pri tome:</p>
+  <ul>
+    <li>podaci se <b>pre slanja šifruju</b> (AES-256-GCM) na tvom uređaju; ključ je u QR kodu za uparivanje i postoji samo na tvom računaru i uparenim telefonima;</li>
+    <li>prijava na servis je <b>anonimna</b> – ne traži se ime, mejl ni broj telefona;</li>
+    <li>nešifrovani su samo tehnički podaci potrebni za prenos (npr. redni broj verzije, broj delova i vreme poslednjeg slanja);</li>
+    <li>izmene sa telefona se brišu iz oblaka kad ih računar preuzme; u oblaku ostaje šifrovana kopija poslednjeg stanja, da bi je telefon mogao preuzeti i kad je računar ugašen;</li>
+    <li>Google kao pružalac servisa obrađuje tehničke podatke o konekciji (npr. IP adresu) prema svojim uslovima: <a href="https://firebase.google.com/support/privacy" rel="noopener">firebase.google.com/support/privacy</a>.</li>
+  </ul>
+  <p>Ako ne upariš telefon, podaci o stadu se ne šalju na internet.</p>
+
+  <h2>4. Prijava problema</h2>
+  <p>Kad sam klikneš „Prijavi problem“, program napravi izveštaj sa zapisanim greškama, verzijom programa, vrstom operativnog sistema i brojem grla i zapisa. <b>Izveštaj ne sadrži podatke o grlima.</b> Izveštaj se šalje samo ako ga ti pošalješ mejlom ili porukom, i koristimo ga isključivo za ispravljanje grešaka.</p>
+
+  <h2>5. Licenca i kupovina</h2>
+  <p>Paketi se kupuju na sajtu preko servisa <a href="https://www.lemonsqueezy.com/privacy" rel="noopener">Lemon Squeezy</a>, koji je prodavac i naplaćuje umesto nas. Podatke o plaćanju (kartica, adresa za račun) unosiš kod njih; mi ih ne vidimo i ne čuvamo. Od Lemon Squeezy-ja dobijamo samo podatke o kupovini: ime, mejl, paket i iznos.</p>
+  <p>Kad upišeš ključ licence, program šalje Lemon Squeezy-ju ključ i ime računara (da bi ključ radio samo na jednom računaru), a zatim jednom nedeljno proverava da li ključ važi. Podaci o stadu se pri tome ne šalju.</p>
+
+  <h2>6. Čitanje teksta iz nalaza</h2>
+  <p>Tekst iz PDF nalaza i sa slike nalaza čita se na tvom uređaju. Na računaru se koristi prepoznavanje teksta ugrađeno u Windows. Na telefonu se pri prvom korišćenju preuzima alat za prepoznavanje teksta (Tesseract.js) sa servisa jsDelivr; slika nalaza se ne šalje na internet.</p>
+
+  <h2>7. Mejl</h2>
+  <p>Kad nam pišeš, tvoju adresu i poruku koristimo samo da ti odgovorimo i pomognemo. Ne šaljemo reklame i ne delimo adrese sa drugima.</p>
+
+  <h2>8. Ovaj sajt</h2>
+  <p>Sajt getherddoc.com ne koristi kolačiće, analitiku ni reklame i ne učitava sadržaj sa drugih servisa. Sajt se nalazi na servisu GitHub Pages, koji može da beleži tehničke podatke o posetama (npr. IP adresu) radi bezbednosti: <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub izjava o privatnosti</a>. Preuzimanje programa ide preko servisa GitHub.</p>
+
+  <h2>9. Tvoja prava</h2>
+  <p>Podatke o stadu brišeš sam: deinstaliraj program i obriši folder sa podacima, a na telefonu obriši aplikaciju ili njene podatke. Ako želiš da obrišemo šifrovanu kopiju u oblaku ili imaš bilo kakvo pitanje o svojim podacima, piši nam na <a href="mailto:herddoc7@gmail.com">herddoc7@gmail.com</a>. Imaš pravo i da se obratiš nadležnom organu za zaštitu podataka (u Srbiji: Poverenik za informacije od javnog značaja i zaštitu podataka o ličnosti).</p>
+
+  <h2>10. Deca</h2>
+  <p>HerdDoc je namenjen poljoprivrednicima i odgajivačima i nije namenjen deci.</p>
+
+  <h2>11. Izmene</h2>
+  <p>Ako izmenimo ovu politiku, novu verziju ćemo objaviti na ovoj stranici sa novim datumom.</p>
+</article>
+
+<!-- ======================== ENGLISH ======================== -->
+<article lang="en">
+  <h1>Privacy policy</h1>
+  <p class="datum">Last updated: 3 November 2026</p>
+
+  <div class="istaknuto"><b>In short:</b> your herd data is stored on your computer and phone. If you use sync over the internet, the data is encrypted before sending with a key that exists only on your devices, so we cannot read it. This website uses no cookies and no tracking.</div>
+
+  <h2>1. Who we are</h2>
+  <p>HerdDoc (the computer program and the phone app) and the website getherddoc.com are made and maintained by Nikola Marićević, Serbia. For any privacy question, write to <a href="mailto:herddoc7@gmail.com">herddoc7@gmail.com</a>.</p>
+
+  <h2>2. Herd data</h2>
+  <p>The data you enter (animals, pedigree, events, reminders, settings) is stored:</p>
+  <ul>
+    <li>on your computer, in the folder Documents\HerdDoc (or Documents\Farmer for older installations), together with backups;</li>
+    <li>on your phone, in the app's storage;</li>
+    <li>in a second backup location you choose yourself (e.g. OneDrive, Google Drive or USB), if you choose one.</li>
+  </ul>
+  <p>We do not receive, see or sell this data.</p>
+
+  <h2>3. Syncing the computer and phone (optional)</h2>
+  <p>If you pair a phone with your computer, data is transferred through Google Firebase (Firestore), a service provided by Google. In doing so:</p>
+  <ul>
+    <li>data is <b>encrypted before sending</b> (AES-256-GCM) on your device; the key is in the pairing QR code and exists only on your computer and paired phones;</li>
+    <li>sign-in to the service is <b>anonymous</b> – no name, e-mail or phone number is required;</li>
+    <li>only technical data needed for the transfer is not encrypted (e.g. a version number, the number of parts and the time of the last upload);</li>
+    <li>changes from the phone are deleted from the cloud once the computer picks them up; an encrypted copy of the latest state stays in the cloud so the phone can download it even when the computer is off;</li>
+    <li>Google, as the service provider, processes technical connection data (e.g. IP address) under its own terms: <a href="https://firebase.google.com/support/privacy" rel="noopener">firebase.google.com/support/privacy</a>.</li>
+  </ul>
+  <p>If you do not pair a phone, no herd data is sent over the internet.</p>
+
+  <h2>4. Problem reports</h2>
+  <p>When you click “Report a problem”, the program creates a report with recorded errors, the program version, the type of operating system and the number of animals and records. <b>The report contains no data about your animals.</b> It is sent only if you send it by e-mail or message, and we use it only to fix errors.</p>
+
+  <h2>5. Licence and purchases</h2>
+  <p>Packages are bought on the website through <a href="https://www.lemonsqueezy.com/privacy" rel="noopener">Lemon Squeezy</a>, which is the seller and handles payment on our behalf. You enter payment details (card, billing address) with them; we do not see or store them. From Lemon Squeezy we receive only purchase details: name, e-mail, package and amount.</p>
+  <p>When you enter a licence key, the program sends Lemon Squeezy the key and the computer name (so the key works on one computer only), and then checks once a week that the key is valid. No herd data is sent.</p>
+
+  <h2>6. Reading text from lab reports</h2>
+  <p>Text from a PDF report or a picture of a report is read on your device. On the computer, the text recognition built into Windows is used. On the phone, the text-recognition tool (Tesseract.js) is downloaded from jsDelivr the first time it is used; the picture of the report is not sent to the internet.</p>
+
+  <h2>7. E-mail</h2>
+  <p>When you write to us, we use your address and message only to reply and help you. We do not send advertising and do not share addresses with anyone.</p>
+
+  <h2>8. This website</h2>
+  <p>getherddoc.com uses no cookies, analytics or ads and loads no content from other services. The site is hosted on GitHub Pages, which may log technical data about visits (e.g. IP address) for security: <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub Privacy Statement</a>. Program downloads are served by GitHub.</p>
+
+  <h2>9. Your rights</h2>
+  <p>You delete your herd data yourself: uninstall the program and delete the data folder, and on the phone remove the app or its data. If you want us to delete the encrypted copy in the cloud, or you have any question about your data, write to <a href="mailto:herddoc7@gmail.com">herddoc7@gmail.com</a>. You also have the right to complain to your data protection authority.</p>
+
+  <h2>10. Children</h2>
+  <p>HerdDoc is intended for farmers and breeders and is not intended for children.</p>
+
+  <h2>11. Changes</h2>
+  <p>If we change this policy, we will publish the new version on this page with a new date.</p>
+</article>
+</main>
+<footer>© 2026 HerdDoc · HerdDoc · <a href="mailto:herddoc7@gmail.com">herddoc7@gmail.com</a></footer>
+
+<script>
+(function () {
+  var j = "";
+  try { j = localStorage.getItem("herddoc-jezik") || ""; } catch (e) {}
+  if (j !== "sr" && j !== "en") j = /^(sr|hr|bs|sh|cnr|me)/.test((navigator.language || "en").toLowerCase()) ? "sr" : "en";
+  function postavi(n) {
+    document.documentElement.setAttribute("data-lang", n); document.documentElement.lang = n;
+    document.title = n === "en" ? "Privacy policy – HerdDoc" : "Politika privatnosti – HerdDoc";
+    document.querySelectorAll("[data-jezik]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.jezik === n ? "true" : "false"); });
+    try { localStorage.setItem("herddoc-jezik", n); } catch (e) {}
+  }
+  document.querySelectorAll("[data-jezik]").forEach(function (b) { b.addEventListener("click", function () { postavi(b.dataset.jezik); }); });
+  postavi(j);
+})();
+</script>
+</body>
+</html>
