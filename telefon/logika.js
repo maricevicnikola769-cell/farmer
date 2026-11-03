@@ -669,6 +669,7 @@ function upisUListu(z, mladi, stado, ostaliCekaju) {
       poreklo: K().SOPSTVENI, poreklo_od: "", stare_markice: "", uneto: sada() });
   }
   if (!novi.length) return t("Upiši bar jedno mladunče.", "Enter at least one young animal.");
+  const pl = porukaLimita(novi.length); if (pl) return pl;
   for (const x of novi) {
     S.grla.push(x);
     dodaj(x.id, K().AUTO, { opis: t(`Rođeno ${dstr} od ${majka || "?"} × ${otac || "?"} – upisano u listu (stado ${stado})`, `Born ${dstr} from ${majka || "?"} × ${otac || "?"} – entered in the list (herd ${stado})`), automatski: true });
@@ -714,6 +715,15 @@ function slobodnaOznaka(nid, postojece) {
   return `${osnova} ${n}`;
 }
 
+// licenca: paket i broj grla stižu sa računara; null = bez ograničenja
+function aktivnihGrla() { return S.grla.filter(r => (r.status || "aktivno") === "aktivno").length; }
+function porukaLimita(novih) {
+  const l = S.licenca, akt = aktivnihGrla();
+  if (!l || l.limit == null || akt + novih <= l.limit) return "";
+  return t(`Paket „${l.naziv}“ dozvoljava ${l.limit} aktivnih grla, a sada ih imaš ${akt}. Sva grla i podaci ostaju. Za nova grla izaberi veći paket na računaru (levi meni → 🔑).`,
+    `The “${l.naziv}” package allows ${l.limit} active animals, and you now have ${akt}. All animals and data stay. For new animals choose a larger package on the computer (left menu → 🔑).`);
+}
+
 // vraća poruku o grešci (tekst) ili {id} sačuvanog grla
 function novoGrlo(v) {
   const en = EN(), uneto = (v.id || "").trim();
@@ -736,6 +746,7 @@ function novoGrlo(v) {
     datum_rodjenja: dat ? fmtD(parsirajDatum(dat)) : "", otac: o, majka: mj, status: v.status, stado: (v.stado || "").trim(),
     poreklo: (v.poreklo || "").trim(), poreklo_od: (v.poreklo_od || "").trim(), stare_markice: "", uneto: sada(),
     napomena: String(v.napomena || "").trim().split(/\s+/).join(" ") };
+  if (novi.status === "aktivno") { const pl = porukaLimita(1); if (pl) return pl; }
   S.grla.push(novi);
   dodaj(nid, K().AUTO, { opis: (t("Grlo upisano u evidenciju", "Animal added to the records")) + (novi.poreklo ? ` (${novi.poreklo}${novi.poreklo_od ? " – " + novi.poreklo_od : ""})` : ""), automatski: true });
   if (dat) for (const [rod, drugi] of [[mj, o], [o, mj]]) {
@@ -853,6 +864,7 @@ function ucitajSaRacunara(obj) {
   S.grla = (obj.grla || []).map(normalizovan); S.istorija = (obj.istorija || []).map(normalizovan); S.podsetnici = (obj.podsetnici || []).map(normalizovan);
   S.osnova = JSON.parse(JSON.stringify({ grla: S.grla, istorija: S.istorija, podsetnici: S.podsetnici }));
   S.izvoz = { id: obj.id, datum: obj.izvezeno, stada: obj.stada || [] };
+  S.licenca = obj.licenca || null;      // paket licence sa računara (telefon ne kupuje posebno)
   S.promene = [];
   osveziModel();
 }

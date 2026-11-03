@@ -895,6 +895,9 @@ class KartonEkran:
                                                   else status.get()),
                         stado=vars_["stado"].get().strip(), poreklo=vars_["poreklo"].get().strip(),
                         poreklo_od=vars_["poreklo_od"].get().strip(), napomena=" ".join(nap_var.get().split()))
+            if red and novi["status"] == "aktivno" and (red.get("status") or "aktivno") != "aktivno" \
+                    and not self.ima_mesta_za_grla(1, win):            # neaktivno -> aktivno: računa se kao novo grlo u paketu
+                return
             if red:
                 staro = red["id"]
                 if staro != nid:
@@ -920,6 +923,8 @@ class KartonEkran:
                         if r.get("majka") == staro:
                             r["majka"] = nid
             else:
+                if novi.get("status", "aktivno") == "aktivno" and not self.ima_mesta_za_grla(1, win):
+                    return
                 novi["uneto"] = sada()
                 self.tab.redovi.append(novi)
                 self.ist.dodaj(nid, AUTO, (T("Grlo upisano u evidenciju", "Animal added to the records")) +

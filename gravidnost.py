@@ -603,6 +603,8 @@ class GravidnostDeo:
                 novi.append(dict(id=nid, markica=mk, vrsta=vrsta, rasa=rasa, namena=namena_majke, autohtona=autoh_majke, pol=pol, datum_rodjenja=dstr,
                                  otac=otac or "", majka=majka or "", status="aktivno", stado=stado,
                                  poreklo=(T("Sopstveni odgoj", "Home bred")), poreklo_od="", stare_markice="", uneto=sada()))
+            if not self.ima_mesta_za_grla(len(novi), win):
+                return
             for x in novi:
                 self.tab.redovi.append(x)
                 self.ist.dodaj(x["id"], AUTO, (T(f"Rođeno {dstr} od {majka or '?'} × {otac or '?'} – upisano u listu "

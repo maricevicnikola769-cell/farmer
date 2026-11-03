@@ -133,6 +133,7 @@ class OsnovaProzora:
         self.prikazi("grla")
         root.after(700, self.obavestenja_na_startu)
         root.after(1500, self.dnevna_kopija)
+        root.after(2500, self.licenca_na_startu)
         root.after(60000, self.dnevna_kopija_u_oblak)     # kopija u oblaku jednom dnevno (ako je telefon uparen)
         self.pokreni_sinhronizaciju()
         root.bind("<FocusIn>", self.proveri_promenu)
@@ -269,6 +270,9 @@ class OsnovaProzora:
         jez = tk.Label(foot, text="🌐 " + dict(JEZICI).get(JEZIK, JEZIK) + "  ▾", bg=SURF, fg=BRAND, font=self.f(9, "bold"), cursor="hand2")
         jez.pack(anchor="w", pady=(6, 0))
         jez.bind("<Button-1>", lambda e: self.meni_jezika(jez))
+        self.lbl_licenca = tk.Label(foot, text="", bg=SURF, fg=INK2, font=self.f(9, "bold"), cursor="hand2", anchor="w")
+        self.lbl_licenca.pack(anchor="w", pady=(6, 0))
+        self.lbl_licenca.bind("<Button-1>", lambda e: self.prozor_licence())
         prob = tk.Label(foot, text=T("⚠ Prijavi problem", "⚠ Report a problem"), bg=SURF, fg=INK2, font=self.f(9), cursor="hand2")
         prob.pack(anchor="w", pady=(4, 0))
         prob.bind("<Button-1>", lambda e: self.prijavi_problem())
@@ -281,6 +285,7 @@ class OsnovaProzora:
         self.lbl_sinh.bind("<Button-1>", lambda e: self.prikazi("telefon"))
         self.osvezi_fajl_label()
         self.osvezi_kopija_label()
+        self.osvezi_licenca_label()
 
         self.main = tk.Frame(self.root, bg=BG)
         self.main.pack(side="left", fill="both", expand=True)
@@ -465,6 +470,7 @@ class OsnovaProzora:
     # ------------------------------------------------------------ podaci
     def promena(self, poruka=None):
         self._ver_podataka = getattr(self, "_ver_podataka", 0) + 1     # brišu se zapamćeni proračuni
+        self.osvezi_licenca_label()
         try:
             self.ist.sacuvaj()
             self.pods.sacuvaj()
@@ -538,6 +544,8 @@ class OsnovaProzora:
             messagebox.showerror((T("Uvoz nije uspeo", "Import failed")), str(e))
             return
         po_id = {r["id"]: r for r in self.tab.redovi}
+        import licenca
+        lic_s, lic_akt, preko = self.lic_stanje(), licenca.aktivnih_grla(self.tab.redovi), 0
         nov = izm = 0
         from izvoz import Identiteti, _ozn_markica
         # fajl sa drugog gazdinstva (HerdDoc izvoz sa kolonom gazdinstvo): isto ime ≠ isto grlo
@@ -581,6 +589,12 @@ class OsnovaProzora:
                 po_id[r["id"]].update(r)
                 izm += 1
             else:
+                if (r.get("status") or "aktivno") == "aktivno":       # paket pun: grlo se uvozi kao neaktivno (podaci i rodoslov ostaju)
+                    if licenca.ima_mesta(lic_s, lic_akt):
+                        lic_akt += 1
+                    else:
+                        r["status"] = "neaktivno"
+                        preko += 1
                 r["uneto"] = r.get("uneto") or sada()
                 self.tab.redovi.append(r)
                 self.ist.dodaj(r["id"], AUTO, (T(f"Upisano uvozom iz tablice {os.path.basename(p)}", f"Added by import from table {os.path.basename(p)}"))
@@ -604,6 +618,15 @@ class OsnovaProzora:
             except Exception as e:
                 messagebox.showwarning((T("Uvoz", "Import")), ((T("Grla su uvezena, ali ostali listovi nisu mogli da se pročitaju:\n", "Animals were imported, but the other sheets could not be read:\n")) + str(e)))
         self.promena((T(f"Uvezeno: {nov} novih", f"Imported: {nov} new")) + ((T(f", {izm} izmenjenih", f", {izm} changed")) if izm else "") + (T(" grla", " animals")) + dod + ".")
+        if preko:
+            messagebox.showinfo(T("Uvoz – broj grla", "Import – number of animals"),
+                                T(f"Paket „{licenca.naziv_paketa(lic_s['paket'])}“ dozvoljava {lic_s['limit']} aktivnih grla. "
+                                  f"{preko} grla je uvezeno kao neaktivno – podaci i rodoslov su sačuvani.\n\n"
+                                  f"Za više aktivnih grla izaberi veći paket (levi meni → 🔑).",
+                                  f"The “{licenca.naziv_paketa(lic_s['paket'])}” package allows {lic_s['limit']} active animals. "
+                                  f"{preko} animals were imported as inactive – their data and pedigree are kept.\n\n"
+                                  f"For more active animals choose a larger package (left menu → 🔑)."))
+        self.osvezi_licenca_label()
         pre = ident.preimenovana()
         if pre:
             spisak = "\n".join(f"   {a}  →  {b}" for a, b in list(pre.items())[:15]) + (T(f"\n   … i još {len(pre) - 15}", f"\n   … and {len(pre) - 15} more") if len(pre) > 15 else "")

@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "4.4";
+const VERZIJA_TEL = "4.5";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -38,7 +38,7 @@ const bazaBrisi = k => bazaRadnja("readwrite", st => st.delete(k));
 const kopija = o => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 const stanjeZaCuvanje = () => ({ jezik: S.jezik, jezikIzabran: S.jezikIzabran || null, prag: S.prag, grav: S.grav, grla: S.grla, istorija: S.istorija,
   podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false,
-  sinh: S.sinh || null, poslato: S.poslato || [], slike: S.slike || {} });
+  sinh: S.sinh || null, poslato: S.poslato || [], slike: S.slike || {}, licenca: S.licenca || null });
 function sacuvajStaro(podaci) {
   try { localStorage.setItem(KLJUC, JSON.stringify(podaci)); return true; }
   catch (e) { poruka(t("Podaci nisu sačuvani u telefonu: ", "Data was not saved on the phone: ") + e.message); return false; }
@@ -852,6 +852,7 @@ function ekranVise() {
       <select class="dug puno" id="jezikV" style="margin-top:6px">${JEZICI_TEL.map(([k, n]) => `<option value="${k}"${k === S.jezik ? " selected" : ""}>${n}</option>`).join("")}</select>
       <div class="mali" style="margin-top:6px">${t("Telefon ostaje na jeziku koji izabereš, bez obzira na jezik računara.", "The phone keeps the language you choose, whatever the computer's language.")}</div></div>
     <div class="kart mali">HerdDoc ${t("za telefon", "for phone")} ${VERZIJA_TEL}<br>
+    ${S.licenca ? `🔑 ${t("Licenca", "Licence")}: ${h(S.licenca.naziv)}${S.licenca.limit == null ? "" : " – " + t(`do ${S.licenca.limit} grla`, `up to ${S.licenca.limit} animals`)}<br>` : ""}
     ${S.izvoz ? t(`Podaci sa računara od ${h(S.izvoz.datum || "")}`, `Data from computer of ${h(S.izvoz.datum || "")}`) : t("Podaci su upisani samo na telefonu.", "Data entered on the phone only.")}<br>
     ${t("Podrška", "Support")}: <a href="mailto:${PODRSKA}">${PODRSKA}</a></div>`;
   $("#problem").onclick = ev => { ev.preventDefault(); prijaviProblem(); };

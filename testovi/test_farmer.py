@@ -756,3 +756,64 @@ def test_citanje_teksta_iz_nalaza(tmp_path):
         with pytest.raises(citanje.GreskaCitanja):
             citanje.ocr_windows(str(slika))
     assert citanje.tekst_iz_pdf(str(slika)) == ""        # pokvaren / pogrešan fajl ne ruši program
+
+
+def test_licenca(tmp_path):
+    """Proba 30 dana, besplatno 20 grla, aktivacija ključa (Lemon Squeezy), istek, rad bez interneta, zaštita fajla."""
+    import licenca
+    from datetime import date
+    put = str(tmp_path / "lic.json")
+    d0 = date(2027, 1, 1)
+    d = licenca.ucitaj(put, danas=d0)
+    s = licenca.stanje(d, d0)
+    assert s["paket"] == "proba" and s["limit"] is None and s["proba_dana"] == 30
+    s = licenca.stanje(d, date(2027, 2, 1))                     # proba istekla -> besplatno do 20 grla
+    assert s["paket"] == "probni" and s["limit"] == 20
+    assert licenca.ima_mesta(s, 19) and not licenca.ima_mesta(s, 20) and not licenca.ima_mesta(s, 18, novih=3)
+    assert licenca.aktivnih_grla([{"status": "aktivno"}, {"status": ""}, {"status": "neaktivno"}, {}]) == 3
+
+    odgovor = {"activated": True, "valid": True, "error": None, "instance": {"id": "inst-1"},
+               "license_key": {"status": "active", "expires_at": "2028-02-01T10:00:00.000000Z"},
+               "meta": {"store_id": 1, "variant_id": 9, "product_name": "HerdDoc", "variant_name": "Pro – godišnje",
+                        "customer_email": "farma@example.com"}}
+    pozivi = []
+    post = lambda akcija, polja: (pozivi.append((akcija, dict(polja))), odgovor)[1]
+    nova = licenca.aktiviraj(d, " HD-7K2F-91QX\n-ZP4M ", danas=date(2027, 2, 1), post=post)
+    assert pozivi[0][0] == "activate" and pozivi[0][1]["license_key"] == "HD-7K2F-91QX-ZP4M"
+    assert nova["paket"] == "pro" and nova["instanca"] == "inst-1" and nova["istice"] == "2028-02-01" and nova["email"] == "farma@example.com"
+    licenca.sacuvaj(nova, put)
+    d = licenca.ucitaj(put)
+    s = licenca.stanje(d, date(2027, 2, 10))
+    assert s["paket"] == "pro" and s["limit"] == 500 and s["do"] == date(2028, 2, 1)
+    assert licenca.stanje(d, date(2027, 3, 20))["razlog"] == "bez_provere"          # 30+ dana bez interneta
+    assert licenca.stanje(d, date(2028, 2, 2))["razlog"] == "isteklo"
+    # ručno prepravljen fajl ne važi (ni ključ ni proba)
+    import json as _j
+    sirovo = _j.load(open(put, encoding="utf-8"))
+    sirovo["paket"] = "farma"
+    _j.dump(sirovo, open(put, "w", encoding="utf-8"))
+    assert licenca.stanje(licenca.ucitaj(put), date(2027, 2, 10))["paket"] == "probni"
+
+    # paket po imenu proizvoda, tuđa prodavnica, greške
+    assert licenca.paket_iz_odgovora({"product_name": "HerdDoc Farma"}) == "farma"
+    assert licenca.paket_iz_odgovora({"product_name": "HerdDoc", "variant_name": "Osnovni"}) == "osnovni"
+    with pytest.raises(licenca.GreskaLicence):
+        licenca.paket_iz_odgovora({"product_name": "HerdDoc Probni"})
+    stari = licenca.LS_STORE_ID
+    try:
+        licenca.LS_STORE_ID = 77
+        with pytest.raises(licenca.GreskaLicence) as g:
+            licenca.aktiviraj({}, "AAAA-BBBB-CCCC", post=post)
+        assert g.value.kod == "prodavnica"
+    finally:
+        licenca.LS_STORE_ID = stari
+    with pytest.raises(licenca.GreskaLicence) as g:
+        licenca.aktiviraj({}, "AAAA-BBBB-CCCC", post=lambda a, p: {"activated": False, "error": "This license key has reached the activation limit."})
+    assert g.value.kod == "limit"
+    with pytest.raises(licenca.GreskaLicence) as g:
+        licenca.aktiviraj({}, "AAAA-BBBB-CCCC", post=lambda a, p: {"activated": False, "error": "license_key not found."})
+    assert g.value.kod == "nema"
+    # provera: pretplata istekla; prebacivanje na drugi računar
+    ist = dict(odgovor, valid=False, license_key={"status": "expired", "expires_at": "2027-05-01T00:00:00Z"})
+    assert licenca.proveri(nova, danas=date(2027, 6, 1), post=lambda a, p: ist)["istice"] == "2027-05-01"
+    assert licenca.deaktiviraj(dict(nova, prvi_start="2027-01-01"), post=lambda a, p: {"deactivated": True}) == {"prvi_start": "2027-01-01"}
