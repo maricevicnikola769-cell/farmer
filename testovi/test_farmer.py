@@ -785,7 +785,7 @@ def test_licenca(tmp_path):
     d = licenca.ucitaj(put)
     s = licenca.stanje(d, date(2027, 2, 10))
     assert s["paket"] == "pro" and s["limit"] == 500 and s["do"] == date(2028, 2, 1)
-    assert licenca.stanje(d, date(2027, 3, 20))["razlog"] == "bez_provere"          # 30+ dana bez interneta
+    assert licenca.stanje(d, date(2027, 5, 20))["razlog"] == "bez_provere"          # 90+ dana bez interneta
     assert licenca.stanje(d, date(2028, 2, 2))["razlog"] == "isteklo"
     # ručno prepravljen fajl ne važi (ni ključ ni proba)
     import json as _j
@@ -817,3 +817,22 @@ def test_licenca(tmp_path):
     ist = dict(odgovor, valid=False, license_key={"status": "expired", "expires_at": "2027-05-01T00:00:00Z"})
     assert licenca.proveri(nova, danas=date(2027, 6, 1), post=lambda a, p: ist)["istice"] == "2027-05-01"
     assert licenca.deaktiviraj(dict(nova, prvi_start="2027-01-01"), post=lambda a, p: {"deactivated": True}) == {"prvi_start": "2027-01-01"}
+
+
+def test_licenca_udruzenje_i_tablica(tmp_path):
+    """Paket Udruženje (bez ograničenja), 90 dana bez interneta, besplatna verzija pamti jednu tablicu."""
+    import licenca
+    from datetime import date
+    assert licenca.paket_iz_odgovora({"product_name": "HerdDoc", "variant_name": "Udruženje"}) == "udruzenje"
+    assert licenca.paket_iz_odgovora({"product_name": "HerdDoc Association"}) == "udruzenje"
+    assert licenca.paket_iz_odgovora({"product_name": "HerdDoc Farma"}) == "farma"
+    d = {"prvi_start": "2026-01-01", "tablica": "/x/stado.csv", "kljuc": "AAAA-BBBB", "paket": "udruzenje",
+         "istice": "2027-12-31", "provereno": "2027-01-01"}
+    s = licenca.stanje(d, date(2027, 3, 31))                 # 89 dana bez provere – i dalje radi
+    assert s["paket"] == "udruzenje" and s["limit"] is None
+    assert licenca.stanje(d, date(2027, 4, 2))["razlog"] == "bez_provere"
+    odg = {"activated": True, "instance": {"id": "i"}, "license_key": {"status": "active", "expires_at": None},
+           "meta": {"product_name": "HerdDoc", "variant_name": "Pro"}}
+    nova = licenca.aktiviraj({"prvi_start": "2026-01-01", "tablica": "/x/stado.csv"}, "KEY-12345678", post=lambda a, p: odg)
+    assert nova["tablica"] == "/x/stado.csv" and nova["paket"] == "pro"     # zapamćena tablica ostaje
+    assert licenca.deaktiviraj(nova, post=lambda a, p: {"deactivated": True}) == {"prvi_start": "2026-01-01", "tablica": "/x/stado.csv"}

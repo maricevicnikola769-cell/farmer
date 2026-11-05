@@ -270,7 +270,8 @@ class OsnovaProzora:
         jez = tk.Label(foot, text="🌐 " + dict(JEZICI).get(JEZIK, JEZIK) + "  ▾", bg=SURF, fg=BRAND, font=self.f(9, "bold"), cursor="hand2")
         jez.pack(anchor="w", pady=(6, 0))
         jez.bind("<Button-1>", lambda e: self.meni_jezika(jez))
-        self.lbl_licenca = tk.Label(foot, text="", bg=SURF, fg=INK2, font=self.f(9, "bold"), cursor="hand2", anchor="w")
+        self.lbl_licenca = tk.Label(foot, text="", bg=SURF, fg=INK2, font=self.f(9, "bold"), cursor="hand2", anchor="w",
+                                    justify="left", wraplength=190)
         self.lbl_licenca.pack(anchor="w", pady=(6, 0))
         self.lbl_licenca.bind("<Button-1>", lambda e: self.prozor_licence())
         prob = tk.Label(foot, text=T("⚠ Prijavi problem", "⚠ Report a problem"), bg=SURF, fg=INK2, font=self.f(9), cursor="hand2")
@@ -515,6 +516,8 @@ class OsnovaProzora:
         p = filedialog.askopenfilename(title=(T("Izaberi tablicu sa grlima", "Choose the animals table")), initialdir=APP_DIR,
                                        filetypes=[((T("CSV tablica", "CSV table")), "*.csv"), ((T("Svi fajlovi", "All files")), "*.*")])
         if not p:
+            return
+        if not self.sme_tablicu(p):
             return
         try:
             t = Tablica(p)
