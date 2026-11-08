@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "4.5";
+const VERZIJA_TEL = "4.6";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -38,7 +38,7 @@ const bazaBrisi = k => bazaRadnja("readwrite", st => st.delete(k));
 const kopija = o => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 const stanjeZaCuvanje = () => ({ jezik: S.jezik, jezikIzabran: S.jezikIzabran || null, prag: S.prag, grav: S.grav, grla: S.grla, istorija: S.istorija,
   podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false,
-  sinh: S.sinh || null, poslato: S.poslato || [], slike: S.slike || {}, licenca: S.licenca || null });
+  sinh: S.sinh || null, poslato: S.poslato || [], slike: S.slike || {}, licenca: S.licenca || null, vrste: S.vrste || [] });
 function sacuvajStaro(podaci) {
   try { localStorage.setItem(KLJUC, JSON.stringify(podaci)); return true; }
   catch (e) { poruka(t("Podaci nisu sačuvani u telefonu: ", "Data was not saved on the phone: ") + e.message); return false; }
@@ -239,9 +239,9 @@ function trakaVrsta(sva) {
   for (const a of sva) { const k = vrstaKanon(a.vrsta) || "drugo"; broj[k] = (broj[k] || 0) + (a.aktivno ? 1 : 0); }
   if (filt.vrsta && !(filt.vrsta in broj)) filt.vrsta = "";
   const imena = ["goveda", "ovce", "koze", "svinje", "konji"];
-  const naziv = k => { const i = imena.indexOf(k); const n = i >= 0 ? K().VRSTE[i] : t("ostalo", "other"); return n.charAt(0).toUpperCase() + n.slice(1); };
+  const naziv = k => { const i = imena.indexOf(k); const n = i >= 0 ? K().VRSTE[i] : k === "drugo" ? t("ostalo", "other") : k; return n.charAt(0).toUpperCase() + n.slice(1); };
   const opcije = [["", t("Sve vrste", "All species"), Object.values(broj).reduce((x, y) => x + y, 0)]]
-    .concat(imena.concat(["drugo"]).filter(k => k in broj).map(k => [k, naziv(k), broj[k]]));
+    .concat(imena.concat(mojeVrste().map(x => x.ime), ["drugo"]).filter(k => k in broj).map(k => [k, naziv(k), broj[k]]));
   return `<div class="filteri">${opcije.map(([k, n, c]) => `<button data-vr="${k}" class="${filt.vrsta === k ? "akt" : ""}">${h(n)} <span style="opacity:.7">${c}</span></button>`).join("")}</div>`;
 }
 function ekranGrla() {

@@ -7,6 +7,7 @@ from datetime import date, datetime
 from tkinter import messagebox, ttk
 
 from osnova import EN
+import jezik
 from jezik import AUTO, POREKLA, REDOSLEDI, T, vrsta_kanon, vrsta_na_jeziku
 from podaci import (Istorija, Podsetnici, fmt_starost, fmt_upis, norm, parsiraj_datum, pct, sort_key,
     stare_lista, starost_meseci)
@@ -125,7 +126,7 @@ class GrlaEkran:
             self.pod["vrsta_grla"] = k
             self.sacuvaj_podesavanja()
             self.prikazi("grla")
-        redosled = ("goveda", "ovce", "koze", "svinje", "konji", "drugo")
+        redosled = ("goveda", "ovce", "koze", "svinje", "konji") + tuple(v["ime"] for v in jezik.MOJE_VRSTE) + ("drugo",)
         opcije = [("", T("Sve vrste", "All species"), sum(broj.values()))] + \
                  [(k, (vrsta_na_jeziku(k) if k != "drugo" else T("ostalo", "other")).capitalize(), broj[k]) for k in redosled if k in broj]
         for k, naziv, n in opcije:

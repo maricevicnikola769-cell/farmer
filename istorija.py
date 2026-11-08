@@ -77,7 +77,8 @@ class IstorijaDeo:
     def s_istorija(self):
         body = self.strana_okvir(scroll=False)
         self.zaglavlje(body, (T("Istorija", "History")), (T("Svi događaji u stadu – od najnovijeg ka starijim.", "All events in the herd – from newest to oldest.")),
-                       [((T("Nosivost", "Gestation")), self.podesavanje_gravidnosti, "Secondary"),
+                       [((T("Moje vrste", "My species")), self.prozor_vrsta, "Secondary"),
+                        ((T("Nosivost", "Gestation")), self.podesavanje_gravidnosti, "Secondary"),
                         ((T("+  Dodaj događaj", "+  Add event")), lambda: self.dogadjaj_forma(None), "Primary")])
         self.istorija_lista(body, None)
 

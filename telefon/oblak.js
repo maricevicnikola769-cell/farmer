@@ -191,6 +191,7 @@ function primeniSnimak(snap) {
   S.grav = gravNaJeziku(snap.gravidnost) || S.grav;
   S.izvoz = { id: snap.id, datum: snap.izvezeno, stada: snap.stada || [] };
   if (snap.licenca) S.licenca = snap.licenca;
+  if (Array.isArray(snap.vrste)) S.vrste = snap.vrste;
   if (S.sinh) S.sinh.spisak = snap.telefoni || null;   // računar zna za ove telefone
   osveziModel();
 }

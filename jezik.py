@@ -123,6 +123,67 @@ def _jezicke_konstante():
     GRUPE = [((T("Parenja", "Matings")), ((T("Parenje / osemenjavanje", "Mating / insemination")), (T("Tera se", "In heat")))),
              ((T("Lečenja", "Treatments")), ((T("Lečenje", "Treatment")), (T("Vakcinacija", "Vaccination")))),
              ((T("Porođaji", "Births")), ((T("Porođaj", "Birth")), (T("Potomak", "Offspring"))))]
+    _primeni_moje_vrste()
+
+
+# ---------------- vrste koje korisnik sam doda (magarci, bivoli, psi…) ----------------
+# čuvaju se u podešavanjima ("vrste_moje"); naziv vrste se ne prevodi – piše se kako ga je korisnik upisao
+MOJE_VRSTE = []            # [{"ime", "m", "z", "ml", "mlm", "gmin", "gmax", "gpr", "ciklus"}]
+_DODATE = []               # imena koja su trenutno ubačena u VRSTE / NAZIVI / TER_CIKLUS / GRAVIDNOST_PROFILI
+
+
+def ocisti_vrstu(v):
+    """Proverena vrsta iz podešavanja ili None. Brojevi: gravidnost 10–500 dana, ciklus 0–120 (0 = bez podsetnika za teranje)."""
+    try:
+        ime = " ".join(str(v.get("ime", "")).split()).lower()[:30]
+        gmin, gmax, gpr, cik = (int(v.get(x) or 0) for x in ("gmin", "gmax", "gpr", "ciklus"))
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if not ime or not (10 <= gmin <= gpr <= gmax <= 500) or not (0 <= cik <= 120):
+        return None
+    tekst = lambda k, d: " ".join(str(v.get(k) or "").split())[:30] or d
+    return dict(ime=ime, m=tekst("m", T("mužjak", "male")), z=tekst("z", T("ženka", "female")),
+                ml=tekst("ml", T("mladunče", "young")), mlm=tekst("mlm", T("mladunčad", "young")),
+                gmin=gmin, gmax=gmax, gpr=gpr, ciklus=cik)
+
+
+def _primeni_moje_vrste():
+    g = globals()
+    for ime in _DODATE:
+        if ime in g["VRSTE"]:
+            g["VRSTE"].remove(ime)
+        g["NAZIVI"].pop(ime, None)
+        g["TER_CIKLUS"].pop(ime, None)
+        g["GRAVIDNOST_PROFILI"].pop("moja:" + ime, None)
+    _DODATE.clear()
+    for v in MOJE_VRSTE:
+        ime = v["ime"]
+        if ime in _VRSTE_SR or ime in g["VRSTE"]:
+            continue                                    # već postoji (npr. "ovce") – ne dupliraj
+        g["VRSTE"].append(ime)
+        g["NAZIVI"][ime] = (v["m"], v["z"], v["ml"], v["mlm"])
+        if v["ciklus"]:
+            g["TER_CIKLUS"][ime] = v["ciklus"]
+        g["GRAVIDNOST_PROFILI"]["moja:" + ime] = (ime.capitalize(), ime, (), v["gmin"], v["gmax"], v["gpr"])
+        _DODATE.append(ime)
+
+
+def postavi_moje_vrste(lista):
+    """Upisuje vrste korisnika (iz podešavanja) u spiskove programa. Vraća očišćen spisak."""
+    cist, vidjeno = [], set()
+    for v in lista or []:
+        c = ocisti_vrstu(v) if isinstance(v, dict) else None
+        if c and c["ime"] not in vidjeno:
+            vidjeno.add(c["ime"])
+            cist.append(c)
+    MOJE_VRSTE[:] = cist
+    _primeni_moje_vrste()
+    return cist
+
+
+def je_moja_vrsta(v):
+    v = " ".join(str(v or "").split()).lower()
+    return any(x["ime"] == v for x in MOJE_VRSTE)
 
 
 _jezicke_konstante()
@@ -147,6 +208,8 @@ def vrsta_kanon(vrsta):
     v = " ".join(str(vrsta or "").split()).lower()
     if not v:
         return ""
+    if any(x["ime"] == v for x in MOJE_VRSTE):
+        return v                                         # vrsta koju je korisnik dodao: ključ je njen naziv
     if not _RECI_VRSTA:
         for sr, en in zip(_VRSTE_SR, _VRSTE_EN):
             _RECI_VRSTA[sr] = _RECI_VRSTA[en] = sr

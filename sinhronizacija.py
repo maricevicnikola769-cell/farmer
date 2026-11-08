@@ -117,7 +117,8 @@ class SinhronizacijaDeo:
 
     def _sinh_hes(self):
         return hashlib.sha256(json.dumps([self.tab.redovi, self.ist.zapisi, self.pods.zapisi, self.prag, EN,
-                                          self.pod.get("gravidnost2", {}), self.spisak_telefona_za_snimak()],
+                                          self.pod.get("gravidnost2", {}), self.spisak_telefona_za_snimak(),
+                                          self.pod.get("vrste_moje", [])],
                                          ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
     # ---------------------------------------------------------- spisak uparenih telefona

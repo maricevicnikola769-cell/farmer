@@ -12,6 +12,7 @@ from podaci import Istorija, KOLONE, Podsetnici, Tablica, procitaj_csv, sada
 from izgled import (BAD, BAD_BG, BG, BRAND, BRAND_H, INK, INK2, LINE, LOGO, OK, OK_BG, SURF, SURF2,
     ScrollFrame, TAG, TAG_INK, WARN, WARN_BG, ikonica_markice, izaberi_font, postavi_win_ikonicu)
 from rodoslov import Model
+import precica
 
 
 def _app_meni_jezika(self, widget):
@@ -73,6 +74,7 @@ class OsnovaProzora:
     def __init__(self, root):
         self.root = root
         self.pod = self.ucitaj_podesavanja()
+        self.ucitaj_moje_vrste()                       # vrste koje je korisnik dodao (magarci, psi…)
         self.prag = self.pod.get("prag", 0.0625)
         self.F = izaberi_font()
         root.title("HerdDoc")
@@ -134,6 +136,7 @@ class OsnovaProzora:
         root.after(700, self.obavestenja_na_startu)
         root.after(1500, self.dnevna_kopija)
         root.after(2500, self.licenca_na_startu)
+        root.after(4500, lambda: precica.ponudi(self))   # samo verzija iz prodavnice, samo jednom
         root.after(60000, self.dnevna_kopija_u_oblak)     # kopija u oblaku jednom dnevno (ako je telefon uparen)
         self.pokreni_sinhronizaciju()
         root.bind("<FocusIn>", self.proveri_promenu)

@@ -140,7 +140,8 @@ class TelefonDeo:
         return dict(format="farmer-telefon", verzija=1, jezik=JEZIK, id=uuid.uuid4().hex, izvezeno=sada(),
                     prag=self.prag, gravidnost=grav, stada=self.sva_stada(),
                     grla=[dict(r) for r in self.tab.redovi], istorija=[dict(z) for z in self.ist.zapisi],
-                    podsetnici=[dict(z) for z in self.pods.zapisi], licenca=self.licenca_za_telefon())
+                    podsetnici=[dict(z) for z in self.pods.zapisi], licenca=self.licenca_za_telefon(),
+                    vrste=self.pod.get("vrste_moje", []))
 
     def posalji_na_telefon(self):
         pocetni = self.pod.get("kopija2") if self.pod.get("kopija2") and os.path.isdir(self.pod.get("kopija2")) else APP_DIR

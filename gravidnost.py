@@ -111,9 +111,9 @@ class GravidnostDeo:
         self.lbl(b, (T("Nosivost se uvek određuje po rasi MAJKE: romanovska ovca × bilo koji ovan = 138–143 dana; "
                     "druga ovca × romanovski ovan = kao obična ovca.", "Gestation is always determined by the breed of the DAM: Romanov ewe × any ram = 138–143 days; "
                     "other ewe × Romanov ram = as a common sheep.")), 8, fg="#8A968D").grid(
-            row=19, column=0, columnspan=5, sticky="w", pady=(6, 0))
+            row=len(GRAVIDNOST_PROFILI) + 3, column=0, columnspan=5, sticky="w", pady=(6, 0))
         err = self.lbl(b, "", 10, "bold", fg=BAD, wraplength=520, justify="left")
-        err.grid(row=20, column=0, columnspan=5, sticky="w", pady=(8, 0))
+        err.grid(row=len(GRAVIDNOST_PROFILI) + 4, column=0, columnspan=5, sticky="w", pady=(8, 0))
 
         def sacuvaj(ev=None):
             novo = {}
@@ -124,8 +124,8 @@ class GravidnostDeo:
                 except ValueError:
                     err.config(text=(T(f"{naziv}: upiši cele brojeve dana.", f"{naziv}: enter whole numbers of days.")))
                     return
-                if not (30 <= mn <= pr <= mx <= 500):
-                    err.config(text=(T(f"{naziv}: mora biti najmanje ≤ prosek ≤ najviše (30–500 dana).", f"{naziv}: must be minimum ≤ average ≤ maximum (30–500 days).")))
+                if not (10 <= mn <= pr <= mx <= 500):
+                    err.config(text=(T(f"{naziv}: mora biti najmanje ≤ prosek ≤ najviše (10–500 dana).", f"{naziv}: must be minimum ≤ average ≤ maximum (10–500 days).")))
                     return
                 novo[k] = [mn, mx, pr]
             self.pod["gravidnost2"] = novo
@@ -142,8 +142,9 @@ class GravidnostDeo:
                     v.set(str(x))
 
         fb = tk.Frame(b, bg=SURF)
-        fb.grid(row=21, column=0, columnspan=5, sticky="ew", pady=(16, 0))
+        fb.grid(row=len(GRAVIDNOST_PROFILI) + 5, column=0, columnspan=5, sticky="ew", pady=(16, 0))
         self.btn(fb, (T("Podrazumevano", "Defaults")), vrati).pack(side="left")
+        self.btn(fb, T("Moje vrste…", "My species…"), lambda: (win.grab_release(), win.destroy(), self.prozor_vrsta())).pack(side="left", padx=8)
         self.btn(fb, (T("Sačuvaj", "Save")), sacuvaj, "Primary").pack(side="right")
         self.btn(fb, (T("Otkaži", "Cancel")), win.destroy).pack(side="right", padx=8)
         win.bind("<Return>", sacuvaj)

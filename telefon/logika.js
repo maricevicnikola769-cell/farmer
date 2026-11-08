@@ -57,14 +57,25 @@ const t = (sr, en) => (S.jezik === "sr" ? sr : (S.jezik === "en" || typeof en !=
 const PREFIKSI_VRSTA = { gov: "goveda", bik: "goveda", kra: "goveda", cat: "goveda", cow: "goveda", bul: "goveda",
   ovc: "ovce", ova: "ovce", she: "ovce", ewe: "ovce", ram: "ovce", koz: "koze", jar: "koze", goa: "koze",
   svi: "svinje", pig: "svinje", swi: "svinje", sow: "svinje", boa: "svinje", ner: "svinje", kon: "konji", hor: "konji", mar: "konji" };
+// vrste koje je korisnik dodao na računaru (magarci, psi…): ključ je njihov naziv
+const mojeVrste = () => (Array.isArray(S.vrste) ? S.vrste : []);
 function vrstaKanon(v) {
   v = String(v || "").trim().split(/\s+/).join(" ").toLowerCase();
   if (!v) return "";
+  if (mojeVrste().some(x => x.ime === v)) return v;
   return (KONST.VRSTE_RECI || {})[v] || PREFIKSI_VRSTA[v.slice(0, 3)] || "";
 }
 const K = () => {
-  const k = KONST[S.jezik];
-  return S.grav ? Object.assign({}, k, { GRAVIDNOST: S.grav }) : k;
+  const k = KONST[S.jezik], moje = mojeVrste().filter(x => x && x.ime && !k.VRSTE.includes(x.ime));
+  if (!S.grav && !moje.length) return k;
+  const d = Object.assign({}, k);
+  if (S.grav) d.GRAVIDNOST = S.grav;
+  if (moje.length) {
+    d.VRSTE = k.VRSTE.concat(moje.map(x => x.ime));
+    d.NAZIVI = Object.assign({}, k.NAZIVI, Object.fromEntries(moje.map(x => [x.ime, [x.m, x.z, x.ml, x.mlm]])));
+    d.TER_CIKLUS = Object.assign({}, k.TER_CIKLUS, Object.fromEntries(moje.filter(x => +x.ciklus > 0).map(x => [x.ime, +x.ciklus])));
+  }
+  return d;
 };
 
 // ---------------------------------------------------------------- pomoćne
@@ -865,6 +876,7 @@ function ucitajSaRacunara(obj) {
   S.osnova = JSON.parse(JSON.stringify({ grla: S.grla, istorija: S.istorija, podsetnici: S.podsetnici }));
   S.izvoz = { id: obj.id, datum: obj.izvezeno, stada: obj.stada || [] };
   S.licenca = obj.licenca || null;      // paket licence sa računara (telefon ne kupuje posebno)
+  S.vrste = Array.isArray(obj.vrste) ? obj.vrste : [];
   S.promene = [];
   osveziModel();
 }

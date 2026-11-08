@@ -836,3 +836,49 @@ def test_licenca_udruzenje_i_tablica(tmp_path):
     nova = licenca.aktiviraj({"prvi_start": "2026-01-01", "tablica": "/x/stado.csv"}, "KEY-12345678", post=lambda a, p: odg)
     assert nova["tablica"] == "/x/stado.csv" and nova["paket"] == "pro"     # zapamćena tablica ostaje
     assert licenca.deaktiviraj(nova, post=lambda a, p: {"deactivated": True}) == {"prvi_start": "2026-01-01", "tablica": "/x/stado.csv"}
+
+
+def test_precica_van_prodavnice():
+    """Van Microsoft prodavnice (Setup.exe, Linux) program ne pita za ikonicu i ništa ne pamti."""
+    import precica
+
+    class A:
+        pod = {}
+        def sacuvaj_podesavanja(self):
+            raise AssertionError("ne treba čuvati")
+
+    a = A()
+    assert precica.ime_paketa() is None
+    precica.ponudi(a)
+    assert "precica_pitano" not in a.pod
+    assert precica._ps_tekst("it's") == "'it''s'"
+
+
+def test_moje_vrste():
+    """Korisnik doda vrstu (magarci): nazivi, gravidnost, teranje i filter rade; posle promene jezika vrsta ostaje."""
+    import jezik
+    import podaci
+    jezik.postavi_jezik("sr")
+    try:
+        cist = jezik.postavi_moje_vrste([
+            dict(ime="  Magarci ", m="magarac", z="magarica", ml="magare", mlm="magarad", gmin=355, gmax=380, gpr=365, ciklus=23),
+            dict(ime="ovčarski psi", m="pas", z="kuja", ml="štene", mlm="štenad", gmin="58", gmax="68", gpr="63", ciklus=""),
+            dict(ime="loše", gmin=200, gmax=100, gpr=150, ciklus=0),          # neispravno – ne ulazi
+            dict(ime="ovce", gmin=145, gmax=152, gpr=150, ciklus=17),         # već postoji – ne duplira se
+        ])
+        assert [v["ime"] for v in cist] == ["magarci", "ovčarski psi", "ovce"]
+        assert jezik.vrsta_kanon("Magarci") == "magarci"
+        assert jezik.vrsta_kanon("ovčarski psi") == "ovčarski psi"           # ne meša se sa "ovce" (isti početak)
+        assert podaci.nazivi("magarci") == ("magarac", "magarica", "magare", "magarad")
+        assert jezik.VRSTE.count("ovce") == 1 and "magarci" in jezik.VRSTE
+        assert jezik.TER_CIKLUS["magarci"] == 23 and "ovčarski psi" not in jezik.TER_CIKLUS
+        assert jezik.GRAVIDNOST_PROFILI["moja:magarci"][3:] == (355, 380, 365)
+        jezik.postavi_jezik("en")
+        assert "magarci" in jezik.VRSTE and jezik.GRAVIDNOST_PROFILI["moja:magarci"][1] == "magarci"
+        jezik.postavi_jezik("sr")
+        jezik.postavi_moje_vrste([])
+        assert "magarci" not in jezik.VRSTE and "moja:magarci" not in jezik.GRAVIDNOST_PROFILI
+        assert jezik.vrsta_kanon("magarci") == ""
+    finally:
+        jezik.postavi_moje_vrste([])
+        jezik.postavi_jezik("sr")
