@@ -4,7 +4,7 @@
 const DEO = 900000;
 const AAD = new TextEncoder().encode("farmer1");
 const KOLONE_GRLA = ["id", "markica", "rfid", "vrsta", "rasa", "namena", "autohtona", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
-  "poreklo", "poreklo_od", "stare_markice", "uneto", "napomena"];
+  "poreklo", "poreklo_od", "stare_markice", "uneto", "napomena", "udeo_krvi"];
 
 function oblakKonfig() {
   let test = {};

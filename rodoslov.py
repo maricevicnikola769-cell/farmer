@@ -26,7 +26,8 @@ class Model:
                                osnivac=False, _otac=r.get("otac", ""), _majka=r.get("majka", ""),
                                stare=stare_lista(r), poreklo=r.get("poreklo", "").strip(),
                                poreklo_od=r.get("poreklo_od", "").strip(), rb=rb, uneto=r.get("uneto", ""),
-                               napomena=" ".join(str(r.get("napomena") or "").split()))
+                               napomena=" ".join(str(r.get("napomena") or "").split()),
+                               udeo=procitaj_udeo(r.get("udeo_krvi")))
             if r.get("markica"):
                 n = norm(r["markica"])
                 if n in self.by_mark and self.by_mark[n] != jid:
@@ -46,7 +47,7 @@ class Model:
                     self.A[r] = dict(id=r, markica="", rfid="", vrsta=self.A[jid]["vrsta"], rasa="", namena="", autohtona="",
                                      pol="m" if i == 0 else "z", datum=None, aktivno=False, stado="",
                                      osnivac=True, obrisano=False, stare=[], poreklo="", poreklo_od="",
-                                     rb=-1, uneto="", napomena="")
+                                     rb=-1, uneto="", napomena="", udeo={})
                     self.P[r] = (None, None)
         for o, m in list(self.P.values()):
             if o and not self.A[o]["pol"]:
@@ -285,10 +286,131 @@ class Model:
         return ((T("blisko srodni", "closely related")) if r >= 0.2 else (T("dalji rod", "distant relatives")) if r >= 0.06
                 else (T("daleko srodni", "very distantly related")) if r > 0 else (T("nesrodni", "unrelated")))
 
+    # ---------------------------------------------------------- udeo krvi (razvoj nove rase)
+    def sastav(self, x):
+        """Udeo krvi grla po rasama {rasa: deo od 1}; "?" = nepoznato. Čistokrvno grlo bez roditelja = 100 % svoje rase;
+        potomak = prosek roditelja; ručno upisan udeo (osnivač) ima prednost. Nepoznat deo popunjava sopstvena čista rasa."""
+        if x is None:
+            return {NEPOZNATO: 1.0}
+        if not hasattr(self, "_sast"):
+            self._sast = {}
+        if x in self._sast:
+            return self._sast[x]
+        a = self.A.get(x) or {}
+        if a.get("udeo"):
+            rez = dict(a["udeo"])
+        else:
+            o, m = self.P.get(x, (None, None))
+            rez = {}
+            if o or m:
+                for p in (o, m):
+                    for k, v in self.sastav(p).items():
+                        rez[k] = rez.get(k, 0.0) + v / 2
+            cista = cista_rasa(a.get("rasa", ""))
+            nep = rez.pop(NEPOZNATO, 0.0) if rez else 1.0
+            if nep > 1e-9:
+                if cista:
+                    rez[cista] = rez.get(cista, 0.0) + nep
+                else:
+                    rez[NEPOZNATO] = nep
+        self._sast[x] = rez
+        return rez
+
+    def generacija_ukrstanja(self, x):
+        """(oznaka, broj): čistokrvno (0), F1, F2…, povratno ukrštanje, ukršteno (osnivač) ili nepoznato."""
+        if not hasattr(self, "_gu"):
+            self._gu = {}
+        if x in self._gu:
+            return self._gu[x]
+        s = self.sastav(x)
+        if s.get(NEPOZNATO, 0) >= 0.5:
+            rez = (T("nepoznato", "unknown"), None)
+        elif max(s.values()) >= 0.999:
+            rez = (T("čistokrvno", "purebred"), 0)
+        else:
+            o, m = self.P.get(x, (None, None))
+            go = self.generacija_ukrstanja(o)[1] if o else None
+            gm = self.generacija_ukrstanja(m)[1] if m else None
+            if go is None or gm is None:
+                rez = (T("ukršteno", "crossbred"), None)
+            elif go == 0 and gm == 0:
+                rez = ("F1", 1)
+            elif go == 0 or gm == 0:
+                rez = (T("povratno ukrštanje", "backcross"), max(go, gm) + 1)
+            else:
+                rez = (f"F{max(go, gm) + 1}", max(go, gm) + 1)
+        self._gu[x] = rez
+        return rez
+
     def pol_naziv(self, x):
         a = self.A[x]
         n = nazivi(a["vrsta"])
         return {"m": n[0], "z": n[1]}.get(a["pol"], (T("pol nepoznat", "sex unknown")))
+
+
+NEPOZNATO = "?"
+
+
+def _je_melez(rasa):
+    r = " ".join(str(rasa or "").split()).lower()
+    return (not r or r.startswith(("hibrid", "hybrid", "melez", "crossbred", "mešanac", "mesanac")) or "×" in r
+            or " x " in f" {r} ")
+
+
+def cista_rasa(rasa):
+    """Naziv rase malim slovima ako je to čista rasa (ne hibrid / melez / prazno), inače ""."""
+    return "" if _je_melez(rasa) else " ".join(str(rasa).split()).lower()
+
+
+def procitaj_udeo(tekst):
+    """'romanovska=50;pramenka=50' (ili 'romanovska 50%, pramenka 50') -> {rasa: deo od 1}. Neispravno -> {}."""
+    import re
+    rez = {}
+    for deo in re.split(r";|\n|,(?=\s*[^\d\s])", str(tekst or "")):
+        mt = re.match(r"^\s*(.+?)\s*[=:]?\s*(\d+(?:[.,]\d+)?)\s*%?\s*$", deo)
+        if not mt:
+            continue
+        ime = " ".join(mt.group(1).strip(" =:").split()).lower()
+        broj = float(mt.group(2).replace(",", "."))
+        if ime and broj > 0:
+            rez[ime] = rez.get(ime, 0.0) + broj
+    ukupno = sum(rez.values())
+    if not rez or ukupno > 100.5:
+        return {}
+    rez = {k: v / 100 for k, v in rez.items()}
+    if ukupno < 99.5:
+        rez[NEPOZNATO] = (100 - ukupno) / 100
+    return rez
+
+
+def zapisi_udeo(sastav):
+    """{rasa: deo} -> 'rasa=50;rasa2=50' (bez nepoznatog dela)."""
+    return ";".join(f"{k}={round(v * 100, 2):g}" for k, v in sorted(sastav.items(), key=lambda t: -t[1]) if k != NEPOZNATO)
+
+
+def sastav_potomka(a, b):
+    rez = {}
+    for s in (a, b):
+        for k, v in s.items():
+            rez[k] = rez.get(k, 0.0) + v / 2
+    return rez
+
+
+def odstupanje(sastav, cilj):
+    """Koliko se udeo krvi razlikuje od cilja (0 = isto, 1 = potpuno drugačije); nepoznat deo se računa kao razlika."""
+    if not cilj:
+        return None
+    kljucevi = set(sastav) | set(cilj)
+    return sum(abs(sastav.get(k, 0.0) - (cilj.get(k, 0.0) if k != NEPOZNATO else 0.0)) for k in kljucevi) / 2
+
+
+def tekst_udela(sastav, pct_f, najvise=4):
+    """'romanovska 62,5% · pramenka 37,5%' (najveći udeli prvi)."""
+    redom = sorted(((v, k) for k, v in sastav.items() if v > 1e-9), key=lambda t: (t[1] == NEPOZNATO, -t[0], t[1]))
+    delovi = [f"{(T('nepoznato', 'unknown') if k == NEPOZNATO else k)} {pct_f(v)}" for v, k in redom[:najvise]]
+    if len(redom) > najvise:
+        delovi.append(T("ostalo", "other") + " " + pct_f(sum(v for v, _ in redom[najvise:])))
+    return " · ".join(delovi)
 
 
 def procena(f, prag):

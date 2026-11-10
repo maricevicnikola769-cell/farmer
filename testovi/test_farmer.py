@@ -898,3 +898,32 @@ def test_licenca_prodavnica():
     with pytest.raises(licenca.GreskaLicence) as g:
         licenca.paket_iz_odgovora({"store_id": 12345, "product_name": "HerdDoc", "variant_name": "Pro"})
     assert g.value.kod == "prodavnica"
+
+
+def test_udeo_krvi_nova_rasa():
+    """Udeo krvi kroz generacije (F1, povratno, F2), ručni udeo osnivača, razlika od cilja i kolona u tablici."""
+    import podaci
+    import rodoslov as r
+    assert "udeo_krvi" in podaci.KOLONE
+    assert r.procitaj_udeo("Romanovska 62,5%, pramenka 37,5") == {"romanovska": 0.625, "pramenka": 0.375}
+    assert r.procitaj_udeo("a=60;b=50") == {} and r.procitaj_udeo("") == {}
+    assert r.procitaj_udeo("a 75")[r.NEPOZNATO] == 0.25
+    redovi = [dict(id="RO", rasa="romanovska", pol="m"), dict(id="PR", rasa="pramenka", pol="z"),
+              dict(id="F1", otac="RO", majka="PR", pol="z", rasa="hibrid romanovska×pramenka"),
+              dict(id="F1m", otac="RO", majka="PR", pol="m"),
+              dict(id="BC", otac="RO", majka="F1", pol="z"),
+              dict(id="F2", otac="F1m", majka="F1", pol="z"),
+              dict(id="KUP", pol="m", rasa="melez", udeo_krvi="romanovska=75;pramenka=25"),
+              dict(id="NN", pol="z")]
+    m = r.Model(redovi)
+    assert m.sastav("F1") == {"romanovska": 0.5, "pramenka": 0.5} and m.generacija_ukrstanja("F1")[1] == 1
+    assert m.sastav("BC") == {"romanovska": 0.75, "pramenka": 0.25} and m.generacija_ukrstanja("BC")[1] == 2
+    assert m.generacija_ukrstanja("F2")[0] == "F2"
+    assert m.generacija_ukrstanja("RO")[1] == 0 and m.generacija_ukrstanja("NN")[1] is None
+    assert m.sastav("KUP") == {"romanovska": 0.75, "pramenka": 0.25}
+    cilj = {"romanovska": 0.625, "pramenka": 0.375}
+    assert r.odstupanje(m.sastav("BC"), cilj) == 0.125
+    pot = r.sastav_potomka(m.sastav("KUP"), m.sastav("F1"))          # 62,5 / 37,5 – tačno cilj
+    assert abs(r.odstupanje(pot, cilj)) < 1e-9
+    assert r.odstupanje({r.NEPOZNATO: 1.0}, cilj) == 1.0
+    assert r.zapisi_udeo({"romanovska": 0.625, "pramenka": 0.375}) == "romanovska=62.5;pramenka=37.5"

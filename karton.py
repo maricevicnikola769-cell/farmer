@@ -53,6 +53,11 @@ class KartonEkran:
             rm_ = m.A[m_h]["rasa"] if m_h in m.A else ""
             if ro_ or rm_:
                 self.lbl(t, (T(f"otac {ro_ or '?'} × majka {rm_ or '?'}", f"sire {ro_ or '?'} × dam {rm_ or '?'}")), 9, fg=INK2).pack(anchor="w")
+        sast = m.sastav(x)
+        if not a["osnivac"] and (len(sast) > 1 or a.get("udeo")):     # melez: udeo krvi po rasama i generacija ukrštanja
+            from rodoslov import tekst_udela
+            self.lbl(t, T("Udeo krvi: ", "Breed share: ") + tekst_udela(sast, pct) + f" · {m.generacija_ukrstanja(x)[0]}",
+                     9, fg=INK2, wraplength=280, justify="left").pack(anchor="w")
         self.lbl(t, (T("poznat samo kao roditelj", "known only as a parent")) if a["osnivac"] else (T("obrisano (čuva se u rodoslovu)", "deleted (kept in the pedigree)"))
                  if a.get("obrisano") else (T("u zapatu", "in herd")) if a["aktivno"] else (T("nije u zapatu", "not in herd")),
                  9, fg=BAD if a.get("obrisano") else INK2).pack(anchor="w")

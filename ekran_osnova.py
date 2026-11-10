@@ -245,7 +245,8 @@ class OsnovaProzora:
 
         self.nav = {}
         for key, txt, ic in (("grla", (T("Grla", "Animals")), "☰"), ("parenje", (T("Parenje", "Mating")), "⚭"),
-                             ("srodstvo", (T("Srodstvo", "Relationship")), "⑂"), ("istorija", (T("Istorija", "History")), "◷"),
+                             ("srodstvo", (T("Srodstvo", "Relationship")), "⑂"),
+                             ("rasa", T("Nova rasa", "New breed"), "✦"), ("istorija", (T("Istorija", "History")), "◷"),
                              ("mlecnost", (T("Mlečnost", "Milk")), "◔"), ("finansije", (T("Finansije", "Finances")), "¤"),
                              ("obavestenja", (T("Obaveštenja", "Notifications")), "◉"), ("pregled", (T("Pregled", "Overview")), "▥"),
                              ("statistika", T("Statistika", "Statistics"), "▤"), ("stampa", T("Štampa i PDF", "Print and PDF"), "⎙"),
