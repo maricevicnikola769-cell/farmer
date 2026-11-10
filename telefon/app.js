@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "4.6";
+const VERZIJA_TEL = "4.7";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -938,12 +938,41 @@ function ekranPrenos() {
   };
 }
 
+// ---------------------------------------------------------------- obaveštenje pri ulasku u aplikaciju
+// Kad se aplikacija otvori (ili vrati iz pozadine posle 3 sata), hitne stvari iskoče odmah na ekranu.
+let obavestenoU = 0;
+function obavestiPriUlasku() {
+  if (!imaPodatke() || document.querySelector(".obavesti") || delovi().ekran === "danas") return;
+  const ob = obavestenja().filter(o => o.nivo <= 1);
+  obavestenoU = Date.now();
+  if (!ob.length) return;
+  const hitno = ob.filter(o => o.nivo === 0).length;
+  const d = document.createElement("div");
+  d.className = "obavesti";
+  d.innerHTML = `<div class="okvir"><h2>🔔 ${ob.length === 1 ? t("1 stvar traži pažnju", "1 thing needs attention") : t(`${ob.length} stvari traže pažnju`, `${ob.length} things need attention`)}</h2>
+    <p class="mali" style="margin:0 0 12px">${[hitno ? `<b style="color:var(--bad)">${t(`${hitno} hitno`, `${hitno} urgent`)}</b>` : "", ob.length - hitno ? t(`${ob.length - hitno} uskoro`, `${ob.length - hitno} soon`) : ""].filter(Boolean).join(" · ")}</p>
+    ${ob.slice(0, 3).map(o => `<div class="ob"><div class="traka n${o.nivo}"></div><div class="tekst">${o.grlo ? `<b style="margin:0">${h(o.grlo)}</b>` : ""}<b>${h(o.naslov)}</b><div class="mali">${h(o.opis)}</div></div></div>`).join("")}
+    ${ob.length > 3 ? `<p class="mali">${t(`… i još ${ob.length - 3}`, `… and ${ob.length - 3} more`)}</p>` : ""}
+    <div class="dugmad" style="display:flex;gap:8px;margin-top:6px"><button class="dug" id="obK">${t("Kasnije", "Later")}</button>
+    <button class="dug glavno" id="obP">${t("Pogledaj", "View")}</button></div></div>`;
+  document.body.appendChild(d);
+  const zatvori = () => d.remove();
+  d.onclick = e => { if (e.target === d) zatvori(); };
+  d.querySelector("#obK").onclick = zatvori;
+  d.querySelector("#obP").onclick = () => { zatvori(); idi("danas"); };
+  try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* */ }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && Date.now() - obavestenoU > 3 * 3600 * 1000) obavestiPriUlasku();
+});
+
 // ---------------------------------------------------------------- start
 ekran.innerHTML = `<div class="prazno">${t("Učitavam…", "Loading…")}</div>`;
 ucitajIzTelefona().then(() => {
   window.addEventListener("hashchange", prikazi);
   prikazi();
   pokreniUsaglasavanje();
+  setTimeout(obavestiPriUlasku, 600);
 });
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});

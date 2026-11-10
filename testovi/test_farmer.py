@@ -941,3 +941,47 @@ def test_neodredjena_rasa():
                  dict(id="T", otac="B", majka="K", rasa=n), dict(id="X", rasa=n)])
     assert m.sastav("T") == {"angus": 0.5, "holštajn": 0.5} and m.generacija_ukrstanja("T")[0] == "F1"
     assert m.sastav("X") == {r.NEPOZNATO: 1.0}
+
+
+def test_iskacuca_poruka_jednom_dnevno():
+    """Hitno obaveštenje iskoči kao poruka najviše jednom dnevno; isključeno – ne iskače."""
+    import iskacuce
+
+    class A(iskacuce.IskacuceDeo):
+        def __init__(self):
+            self.pod, self.prikazano = {}, []
+        def obavestenja(self):
+            return [dict(nivo=0, grlo="K1", naslov="Termin porođaja je prošao"), dict(nivo=3, grlo="K2", naslov="Vakcinacija za 20 d.")]
+        def sacuvaj_podesavanja(self):
+            pass
+    a = A()
+    nova = a.nova_za_poruku()
+    assert [o["grlo"] for o in nova] == ["K1"]                      # samo hitno/skoro, ne zakazano
+    a.zapamti_prikazana(nova)
+    assert a.nova_za_poruku() == []                                 # isti dan – ne ponavlja se
+    a.pod["iskaceno"]["datum"] = "2000-01-01"
+    assert len(a.nova_za_poruku()) == 1                             # novi dan – ponovo
+    assert a.iskacuce_ukljuceno() and not (a.pod.update(iskacuce=False) or a.iskacuce_ukljuceno())
+
+
+def test_dogadjaj_zatvara_podsetnik(tmp_path):
+    """Upis vakcinacije zatvara podsetnik 'Vakcinacija' tog grla; ponavljajući dobija sledeći termin; drugi ostaju."""
+    from datetime import date, timedelta
+    import obavestenja
+    import podaci
+
+    class A(obavestenja.ObavestenjaDeo):
+        pass
+    a = A()
+    a.pods = podaci.Podsetnici(str(tmp_path / "stado.csv"))
+    f = lambda d: d.strftime("%d.%m.%Y")
+    d0 = date.today()
+    a.pods.dodaj("Mina", f(d0 - timedelta(days=3)), "Vakcinacija", "bruceloza", 180)
+    a.pods.dodaj("Mina", f(d0 + timedelta(days=60)), "Vakcinacija", "", 0)          # daleko u budućnosti – ostaje
+    a.pods.dodaj("Mina", f(d0), "Lečenje", "", 0)                                    # druga vrsta – ostaje
+    a.pods.dodaj("Lola", f(d0), "Vakcinacija", "", 0)                                # drugo grlo – ostaje
+    n = a.zatvori_podsetnike(dict(grlo="Mina", dogadjaj="Vakcinacija", datum=f(d0)))
+    assert n == 1
+    akt = a.pods.aktivni()
+    assert len(akt) == 4                                                             # 3 ostala + novi za 180 d.
+    assert any(p["grlo"] == "Mina" and p["tip"] == "Vakcinacija" and podaci.parsiraj_datum(p["datum"]) > d0 + timedelta(days=170) for p in akt)

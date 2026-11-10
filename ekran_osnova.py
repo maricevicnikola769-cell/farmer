@@ -134,6 +134,7 @@ class OsnovaProzora:
         self.shell()
         self.prikazi("grla")
         root.after(700, self.obavestenja_na_startu)
+        root.after(10 * 60 * 1000, self.iskacuce_provera)   # zatim na svakih 30 min: nova hitna obaveštenja kao poruka u uglu ekrana
         root.after(1500, self.dnevna_kopija)
         root.after(2500, self.licenca_na_startu)
         root.after(4500, lambda: precica.ponudi(self))   # samo verzija iz prodavnice, samo jednom

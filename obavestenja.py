@@ -40,6 +40,7 @@ class ObavestenjaDeo:
     def posle_novog_zapisa(self, nz):
         """Zajedničko posle svakog ručno upisanog događaja."""
         self.zatvori_stara_parenja(nz)
+        self.zatvori_podsetnike(nz)
         if nz.get("dogadjaj") == TER:
             for z in self.cekaju_porodjaj(nz["grlo"]):
                 majka, _ = self.roditelji_parenja(z)
@@ -48,6 +49,29 @@ class ObavestenjaDeo:
                     z["ter"] = "da"
                     self.ist.dodaj(majka, AUTO, (T(f"Parenje od {z['datum']} označeno kao neuspelo (ženka se ponovo tera)", f"Mating of {z['datum']} marked as failed (the female is in heat again)")),
                                    datum=nz["datum"], automatski=True)
+
+
+    def zatvori_podsetnike(self, nz):
+        """Upisan događaj (npr. Vakcinacija) zatvara podsetnik iste vrste za to grlo koji je bio na redu (do 14 dana unapred).
+        Podsetnik koji se ponavlja dobija sledeći termin. Vraća broj zatvorenih."""
+        x, tip = nz.get("grlo"), " ".join(str(nz.get("dogadjaj") or "").split()).lower()
+        d = parsiraj_datum(nz.get("datum")) or date.today()
+        n = 0
+        for p in list(self.pods.aktivni(x)) if x else []:
+            if " ".join(str(p.get("tip") or "").split()).lower() != tip:
+                continue
+            pd = parsiraj_datum(p["datum"]) or d
+            if pd > d + timedelta(days=14):
+                continue
+            p["gotovo"] = d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y"))
+            pon = int(p.get("ponavljanje") or 0)
+            if pon:
+                sl = pd + timedelta(days=pon)
+                while sl <= d:
+                    sl += timedelta(days=pon)
+                self.pods.dodaj(p["grlo"], sl.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), p["tip"], p["tekst"], pon)
+            n += 1
+        return n
 
 
     def obavestenja_ter(self, x=None):
@@ -413,6 +437,14 @@ class ObavestenjaDeo:
                        ((T(f"{n} stvar traži pažnju.", f"{n} thing needs attention.") if n == 1 else T(f"{n} stvari traže pažnju.", f"{n} things need attention.")) if n else
                         (T("Nema ničeg hitnog.", "Nothing urgent."))) + (T(" Program sam prati porođaje, ter, karencu, mlade bez minđuše i podsetnike.", " The program tracks births, heat, withdrawal periods, untagged young and reminders.")),
                        [((T("+  Novi podsetnik", "+  New reminder")), lambda: self.podsetnik_forma(), "Primary")])
+        v_isk = tk.BooleanVar(value=self.iskacuce_ukljuceno())
+
+        def promena_isk():
+            self.pod["iskacuce"] = bool(v_isk.get())
+            self.sacuvaj_podesavanja()
+        ttk.Checkbutton(body, text=T("Prikaži hitna obaveštenja kao poruku u uglu ekrana (i kad je HerdDoc umanjen)",
+                                     "Show urgent notifications as a message in the corner of the screen (even when HerdDoc is minimised)"),
+                        variable=v_isk, command=promena_isk).pack(anchor="w", pady=(0, 14))
         if not aktivna and not zakazano:
             self.napomena(body, (T("Sve je u redu – nema obaveštenja. Dodaj podsetnik za grlo (vakcinacija, "
                                 "lečenje, prodaja…) dugmetom „Novi podsetnik“.", "All is well – no notifications. Add a reminder for an animal (vaccination, "
@@ -448,6 +480,11 @@ class ObavestenjaDeo:
         sva = [o for o in self.obavestenja() if o["nivo"] <= 1]
         if not sva:
             return
+        try:
+            self.zapamti_prikazana(sva)              # ne iskaču ponovo kao poruka u uglu istog dana
+            self.sacuvaj_podesavanja()
+        except Exception:
+            pass
         win = tk.Toplevel(self.root, bg=SURF)
         win.title((T("Obaveštenja", "Notifications")))
         win.transient(self.root)

@@ -490,8 +490,28 @@ function podaciLegla(z) {
 
 // ---------------------------------------------------------------- ter i karenca (obavestenja.py)
 const ciklusTera = vrsta => K().TER_CIKLUS[vrstaNorm(vrsta)] || 21;
+// upisan događaj (npr. Vakcinacija) zatvara podsetnik iste vrste za to grlo koji je bio na redu (do 14 dana unapred)
+function zatvoriPodsetnike(nz) {
+  const tip = String(nz.dogadjaj || "").trim().toLowerCase(), d = parsirajDatum(nz.datum) || danas();
+  let n = 0;
+  for (const p of S.podsetnici.filter(p => !p.gotovo && p.grlo && p.grlo === nz.grlo)) {
+    if (String(p.tip || "").trim().toLowerCase() !== tip) continue;
+    const pd = parsirajDatum(p.datum) || d;
+    if (pd > dodajDane(d, 14)) continue;
+    p.gotovo = fmtD(d);
+    const pon = parseInt(p.ponavljanje || "0", 10) || 0;
+    if (pon) {
+      let sl = dodajDane(pd, pon);
+      while (sl <= d) sl = dodajDane(sl, pon);
+      S.podsetnici.push({ grlo: p.grlo, datum: fmtD(sl), tip: p.tip, tekst: p.tekst, ponavljanje: String(pon), gotovo: "", uneto: sada() });
+    }
+    n++;
+  }
+  return n;
+}
 function posleNovogZapisa(nz) {
   zatvoriStaraParenja(nz);
+  zatvoriPodsetnike(nz);
   if (nz.dogadjaj === K().TER) {
     for (const z of cekajuPorodjaj(nz.grlo)) {
       const [majka] = roditeljiParenja(z);
