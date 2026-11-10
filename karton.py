@@ -5,7 +5,7 @@ from tkinter import messagebox, ttk
 
 from osnova import EN
 from jezik import AUTO, GRUPE, POREKLA, T, VRSTE, namene_za
-from podaci import (fmt_datum, fmt_starost, nazivi, norm, norm_rasa, parsiraj_datum, pct, rasa_potomka, sada,
+from podaci import (je_neodredjena, neodredjena_rasa, fmt_datum, fmt_starost, nazivi, norm, norm_rasa, parsiraj_datum, pct, rasa_potomka, sada,
     autohtona_rasa, slobodna_oznaka, sort_key, starost_meseci, vrsta_norm)
 from izgled import BAD, BAD_BG, BG, BRAND, INK, INK2, LINE, OK, SURF, SURF2, ScrollFrame, TAG, WARN
 from rodoslov import procena
@@ -718,7 +718,8 @@ class KartonEkran:
         e_id = polje(1, 0, (T("Oznaka grla *", "Animal tag *")), "id", hint=(T("npr. K12 ili ime", "e.g. K12 or a name")))
         polje(1, 1, (T("Ušna markica", "Ear tag")), "markica", hint=(T("npr. RS 1234-5678", "e.g. UK 123456 700123")))
         vr = polje(2, 0, (T("Vrsta", "Species")), "vrsta", "combo", VRSTE)
-        polje(2, 1, (T("Rasa", "Breed")), "rasa", "combo", sorted({a["rasa"] for a in sva if a["rasa"]}))
+        polje(2, 1, (T("Rasa", "Breed")), "rasa", "combo",
+              [neodredjena_rasa()] + sorted({a["rasa"] for a in sva if a["rasa"] and not je_neodredjena(a["rasa"])}))
 
         pf = tk.Frame(b, bg=SURF)
         pf.grid(row=3, column=0, sticky="w", pady=6)

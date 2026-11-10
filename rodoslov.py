@@ -3,7 +3,7 @@ from datetime import date
 
 from osnova import EN
 from jezik import T
-from podaci import isti_broj_citaca, nazivi, norm, parsiraj_datum, sort_key, stare_lista
+from podaci import isti_broj_citaca, je_neodredjena, nazivi, norm, parsiraj_datum, sort_key, stare_lista
 from izgled import BAD, OK, WARN
 
 
@@ -353,7 +353,7 @@ NEPOZNATO = "?"
 
 def _je_melez(rasa):
     r = " ".join(str(rasa or "").split()).lower()
-    return (not r or r.startswith(("hibrid", "hybrid", "melez", "crossbred", "mešanac", "mesanac")) or "×" in r
+    return (not r or je_neodredjena(r) or r.startswith(("hibrid", "hybrid", "melez", "crossbred", "mešanac", "mesanac")) or "×" in r
             or " x " in f" {r} ")
 
 

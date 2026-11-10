@@ -927,3 +927,17 @@ def test_udeo_krvi_nova_rasa():
     assert abs(r.odstupanje(pot, cilj)) < 1e-9
     assert r.odstupanje({r.NEPOZNATO: 1.0}, cilj) == 1.0
     assert r.zapisi_udeo({"romanovska": 0.625, "pramenka": 0.375}) == "romanovska=62.5;pramenka=37.5"
+
+
+def test_neodredjena_rasa():
+    """Mladunče dve rase može da ostane 'neodređena – čeka DNK test'; udeo krvi se i dalje računa iz roditelja."""
+    import podaci
+    import rodoslov as r
+    n = podaci.neodredjena_rasa()
+    assert podaci.je_neodredjena(n) and podaci.je_neodredjena("Undetermined – awaiting DNA test")
+    assert podaci.norm_rasa("  NEODREĐENA – čeka DNK test ") == n
+    assert r.cista_rasa(n) == ""
+    m = r.Model([dict(id="B", rasa="angus", pol="m"), dict(id="K", rasa="holštajn", pol="z"),
+                 dict(id="T", otac="B", majka="K", rasa=n), dict(id="X", rasa=n)])
+    assert m.sastav("T") == {"angus": 0.5, "holštajn": 0.5} and m.generacija_ukrstanja("T")[0] == "F1"
+    assert m.sastav("X") == {r.NEPOZNATO: 1.0}

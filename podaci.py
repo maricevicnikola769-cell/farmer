@@ -224,9 +224,23 @@ def slobodna_oznaka(nid, postojece):
     return f"{osnova} {n}"
 
 
+_NEODREDJENA = ("neodređ", "neodredj", "undetermined", "indéterminée", "indeterminee", "unbestimmt", "indeterminada", "por determinar")
+
+
+def neodredjena_rasa():
+    """Rasa mladunčeta dve različite rase dok se ne uradi DNK test."""
+    return T("neodređena – čeka DNK test", "undetermined – awaiting DNA test")
+
+
+def je_neodredjena(r):
+    return " ".join(str(r or "").split()).lower().startswith(_NEODREDJENA)
+
+
 def norm_rasa(r):
     """Rase se pišu malim slovima, osim oznake hibrida: 'hibrid L×J'."""
     r = " ".join(str(r or "").split())
+    if je_neodredjena(r):
+        return neodredjena_rasa()
     if r.lower().startswith(("hybrid" if EN else "hibrid")):
         kod = r[6:].strip().upper().replace("X", "×").replace("*", "×").replace(" ", "")
         return (f"hybrid {kod}" if EN else f"hibrid {kod}") if kod else ("hybrid" if EN else "hibrid")
