@@ -90,6 +90,10 @@ class VrsteDeo:
         def zapamti(lista, poruka):
             self.pod["vrste_moje"] = jezik.postavi_moje_vrste(lista)
             self.sacuvaj_podesavanja()
+            try:
+                self.sinh_uskoro()                       # telefoni dobijaju novu vrstu za par sekundi
+            except Exception:
+                pass
             osvezi_spisak()
             prazno()
             self.toast(poruka)

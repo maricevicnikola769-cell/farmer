@@ -30,7 +30,7 @@ from izgled import BAD, BRAND, INK, INK2, OK, SURF, SURF2, WARN
 # ---------------- podešavanja prodaje (posle otvaranja prodavnice na Lemon Squeezy-ju upisati ID-jeve) ----------------
 KUPI_URL = "https://herddoc.com/#cene"
 LS_API = "https://api.lemonsqueezy.com/v1/licenses/"
-LS_STORE_ID = None            # broj prodavnice (Settings → Stores); dok je None, prodavnica se ne proverava
+LS_STORE_ID = 516191          # HerdDoc prodavnica na Lemon Squeezy-ju (isti broj u test i pravom režimu)
 LS_VARIJANTE = {}             # {variant_id: "osnovni" | "pro" | "farma"}; dok je prazno, paket se prepoznaje po imenu
 PROBA_DANA = 30
 PROVERA_DANA = 7

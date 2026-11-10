@@ -758,9 +758,10 @@ def test_citanje_teksta_iz_nalaza(tmp_path):
     assert citanje.tekst_iz_pdf(str(slika)) == ""        # pokvaren / pogrešan fajl ne ruši program
 
 
-def test_licenca(tmp_path):
+def test_licenca(tmp_path, monkeypatch):
     """Proba 30 dana, besplatno 20 grla, aktivacija ključa (Lemon Squeezy), istek, rad bez interneta, zaštita fajla."""
     import licenca
+    monkeypatch.setattr(licenca, "LS_STORE_ID", None)          # prava prodavnica se proverava u test_licenca_prodavnica
     from datetime import date
     put = str(tmp_path / "lic.json")
     d0 = date(2027, 1, 1)
@@ -819,9 +820,10 @@ def test_licenca(tmp_path):
     assert licenca.deaktiviraj(dict(nova, prvi_start="2027-01-01"), post=lambda a, p: {"deactivated": True}) == {"prvi_start": "2027-01-01"}
 
 
-def test_licenca_udruzenje_i_tablica(tmp_path):
+def test_licenca_udruzenje_i_tablica(tmp_path, monkeypatch):
     """Paket Udruženje (bez ograničenja), 90 dana bez interneta, besplatna verzija pamti jednu tablicu."""
     import licenca
+    monkeypatch.setattr(licenca, "LS_STORE_ID", None)
     from datetime import date
     assert licenca.paket_iz_odgovora({"product_name": "HerdDoc", "variant_name": "Udruženje"}) == "udruzenje"
     assert licenca.paket_iz_odgovora({"product_name": "HerdDoc Association"}) == "udruzenje"
@@ -882,3 +884,17 @@ def test_moje_vrste():
     finally:
         jezik.postavi_moje_vrste([])
         jezik.postavi_jezik("sr")
+
+
+def test_licenca_prodavnica():
+    """Prihvataju se samo ključevi iz HerdDoc prodavnice (516191); naziv varijante sa dvotačkom se prepoznaje."""
+    import licenca
+    import pytest
+    assert licenca.LS_STORE_ID == 516191
+    assert licenca.paket_iz_odgovora({"store_id": 516191, "product_name": "HerdDoc", "variant_name": "Osnovni / Basic:"}) == "osnovni"
+    assert licenca.paket_iz_odgovora({"store_id": 516191, "product_name": "HerdDoc", "variant_name": "Udruženje / Association :"}) == "udruzenje"
+    assert licenca.paket_iz_odgovora({"store_id": 516191, "product_name": "HerdDoc", "variant_name": "Farma / Farm:"}) == "farma"
+    assert licenca.paket_iz_odgovora({"store_id": 516191, "product_name": "HerdDoc", "variant_name": "Pro:"}) == "pro"
+    with pytest.raises(licenca.GreskaLicence) as g:
+        licenca.paket_iz_odgovora({"store_id": 12345, "product_name": "HerdDoc", "variant_name": "Pro"})
+    assert g.value.kod == "prodavnica"
