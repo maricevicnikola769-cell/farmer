@@ -7,6 +7,7 @@ from osnova import EN
 from jezik import AUTO, GRAVIDNOST_PROFILI, PARENJE, STADO_PODMLADAK, T
 from podaci import nazivi, norm, norm_rasa, parsiraj_datum, pct, rasa_potomka, sada, slobodna_oznaka, vrsta_norm
 from izgled import BAD, BRAND, INK, INK2, OK, OK_BG, SURF, SURF2
+from namena_rase import namena_rase
 
 
 class GravidnostDeo:
@@ -601,7 +602,7 @@ class GravidnostDeo:
                     err.config(text=(T(f"Izaberi pol za {nid}.", f"Choose the sex for {nid}.")))
                     return
                 vidjeni.add(nid)
-                novi.append(dict(id=nid, markica=mk, vrsta=vrsta, rasa=rasa, namena=namena_majke, autohtona=autoh_majke, pol=pol, datum_rodjenja=dstr,
+                novi.append(dict(id=nid, markica=mk, vrsta=vrsta, rasa=rasa, namena=namena_rase(self.tab.redovi, vrsta, rasa) or namena_majke, autohtona=autoh_majke, pol=pol, datum_rodjenja=dstr,
                                  otac=otac or "", majka=majka or "", status="aktivno", stado=stado,
                                  poreklo=(T("Sopstveni odgoj", "Home bred")), poreklo_od="", stare_markice="", uneto=sada()))
             if not self.ima_mesta_za_grla(len(novi), win):

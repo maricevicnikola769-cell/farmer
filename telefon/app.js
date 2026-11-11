@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "4.7";
+const VERZIJA_TEL = "5.2";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -38,12 +38,14 @@ const bazaBrisi = k => bazaRadnja("readwrite", st => st.delete(k));
 const kopija = o => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 const stanjeZaCuvanje = () => ({ jezik: S.jezik, jezikIzabran: S.jezikIzabran || null, prag: S.prag, grav: S.grav, grla: S.grla, istorija: S.istorija,
   podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false,
-  sinh: S.sinh || null, poslato: S.poslato || [], slike: S.slike || {}, licenca: S.licenca || null, vrste: S.vrste || [] });
+  sinh: S.sinh || null, poslato: S.poslato || [], slike: S.slike || {}, licenca: S.licenca || null, vrste: S.vrste || [], rase: S.rase || [],
+  mreza: S.mreza || null, mrezaPodaci: S.mrezaPodaci || null, mrezaToken: S.mrezaToken || null });
 function sacuvajStaro(podaci) {
   try { localStorage.setItem(KLJUC, JSON.stringify(podaci)); return true; }
   catch (e) { poruka(t("Podaci nisu sačuvani u telefonu: ", "Data was not saved on the phone: ") + e.message); return false; }
 }
 function sacuvaj() {
+  planUskoro();
   const podaci = kopija(stanjeZaCuvanje());          // snimak trenutnog stanja, upisuje se redom
   if (bezBaze) return sacuvajStaro(podaci);
   redCuvanja = redCuvanja.then(() => bazaUpisi("glavno", podaci)).catch(() => { bezBaze = true; sacuvajStaro(podaci); });
@@ -111,7 +113,7 @@ function prikazi() {
   window.scrollTo(0, 0);
   if (!imaPodatke() && e !== "prenos" && e !== "sinh") return dobrodoslica();
   const ekrani = { grla: ekranGrla, karton: ekranKarton, danas: ekranDanas, dogadjaj: ekranDogadjaj, parenje: ekranParenje, srodstvo: ekranSrodstvo,
-    vise: ekranVise, prenos: ekranPrenos, sinh: ekranSinh, novo: ekranNovoGrlo, rodjenje: ekranRodjenje, mindjuse: ekranMindjuse, podsetnik: ekranPodsetnik, muznja: ekranMuznja, dnk: ekranDnk };
+    vise: ekranVise, prenos: ekranPrenos, sinh: ekranSinh, novo: ekranNovoGrlo, rodjenje: ekranRodjenje, mindjuse: ekranMindjuse, podsetnik: ekranPodsetnik, muznja: ekranMuznja, dnk: ekranDnk, udruzenje: ekranUdruzenje };
   (ekrani[e] || ekranGrla)(arg, upit);
 }
 
@@ -561,16 +563,22 @@ function ekranMuznja(_, upit) {
 let danasLim = 50;                                  // veliko stado: obaveštenja se prikazuju u delovima
 function ekranDanas() {
   postaviVrh(t("Danas", "Today"), false); meni("danas");
-  const ob = obavestenja();
-  ekran.innerHTML = (ob.length ? ob.slice(0, danasLim).map(kartObavestenja).join("") : `<div class="prazno">✓ ${t("Nema obaveštenja. Sve je u redu.", "No notifications. All good.")}</div>`) +
+  const ob = obavestenja(), so = stanjeObavestenja();
+  ekran.innerHTML = (so[0] === "iskljuceno" ? `<button class="dug puno" id="obUk2" style="margin-bottom:10px">🔔 ${t("Uključi obaveštenja – da telefon javi i kad je aplikacija zatvorena", "Turn on notifications – so the phone alerts you even when the app is closed")}</button>` : "") + (ob.length ? ob.slice(0, danasLim).map(kartObavestenja).join("") : `<div class="prazno">✓ ${t("Nema obaveštenja. Sve je u redu.", "No notifications. All good.")}</div>`) +
     (ob.length > danasLim ? `<button class="dug puno" id="josOb">${t("Prikaži još", "Show more")} (${ob.length - danasLim})</button><div style="height:10px"></div>` : "") +
     `<a class="dug puno" href="#podsetnik">＋ ${t("Novi podsetnik", "New reminder")}</a>`;
   vezAkcije(ekran, ob);
+  const uk2 = document.getElementById("obUk2");
+  if (uk2) uk2.onclick = ukljuciObavestenja;
   const jos = document.getElementById("josOb");
   if (jos) jos.onclick = () => { const y = window.scrollY; danasLim += 100; ekranDanas(); window.scrollTo(0, y); };
 }
 
 // ---------------------------------------------------------------- Upis događaja
+const PON_TEL = () => [[t("ne ponavlja se", "does not repeat"), 0], [t("svake nedelje", "every week"), 7], [t("svakog meseca", "every month"), 30],
+  [t("na 3 meseca", "every 3 months"), 90], [t("na 6 meseci", "every 6 months"), 182], [t("svake godine", "every year"), 365]];
+const SLED_TEL = () => [[t("ne", "no"), 0], [t("za 1 mesec", "in 1 month"), 30], [t("za 3 meseca", "in 3 months"), 90],
+  [t("za 6 meseci", "in 6 months"), 182], [t("za 1 godinu", "in 1 year"), 365]];
 function ekranDogadjaj(_, upit) {
   postaviVrh(t("Novi događaj", "New event"), true); meni("dogadjaj");
   const k = K(), sva = M.grla(true);
@@ -590,14 +598,20 @@ function ekranDogadjaj(_, upit) {
     <div class="dve skriveno" id="dKar"><label class="polje"><span style="color:var(--bad)">${t("Karenca meso (dana)", "Meat withdrawal (days)")}</span><input class="unos" id="km" inputmode="numeric"></label>
       <label class="polje"><span style="color:var(--bad)">${t("mleko (dana)", "milk (days)")}</span><input class="unos" id="kml" inputmode="numeric"></label></div>
     <label class="polje"><span>${t("Opis / napomena", "Description / note")}</span><textarea class="unos" id="opis"></textarea></label>
+    <label class="provera" id="dTreba"><input type="checkbox" id="treba"> ⏰ ${t("Treba uraditi – samo podsetnik (još nije urađeno)", "To do – reminder only (not done yet)")}</label>
+    <label class="polje skriveno" id="dPon"><span>${t("Ponavljanje", "Repeat")}</span><select class="unos" id="pon">${PON_TEL().map(([n, v]) => `<option value="${v}">${h(n)}</option>`).join("")}</select></label>
+    <label class="polje skriveno" id="dSled"><span>⏰ ${t("Podseti me za sledeću", "Remind me of the next one")}</span><select class="unos" id="sled">${SLED_TEL().map(([n, v]) => `<option value="${v}">${h(n)}</option>`).join("")}</select></label>
     <label class="provera skriveno" id="dVan"><input type="checkbox" id="van" checked> ${t("Označi grlo kao van zapata", "Mark the animal as out of herd")}</label>
     <div class="greska" id="gr"></div>
     <button class="dug glavno puno" id="sac">${t("Sačuvaj", "Save")}</button></div>
     ${!st.dogadjaj ? `<div class="dugmad"><a class="dug" href="#novo">＋ ${t("Novo grlo", "New animal")}</a></div>` : ""}`;
   const prilagodi = () => {
-    const d = st.dogadjaj, g = M.nadji($("#grlo").value), leci = [k.LECENJE, k.VAKCINA].includes(d);
-    $("#dPar").classList.toggle("skriveno", leci);
-    $("#dKar").classList.toggle("skriveno", !leci);
+    const d = st.dogadjaj, g = M.nadji($("#grlo").value), leci = [k.LECENJE, k.VAKCINA].includes(d), treba = $("#treba").checked, nap = d === k.NAPOMENA;
+    $("#dPar").classList.toggle("skriveno", leci || nap);
+    $("#dVr").classList.toggle("skriveno", nap);               // napomena: samo datum i tekst
+    $("#dKar").classList.toggle("skriveno", !leci || treba);
+    $("#dPon").classList.toggle("skriveno", !treba);
+    $("#dSled").classList.toggle("skriveno", !leci || treba);
     $("#dVan").classList.toggle("skriveno", ![k.PRODAJA, k.UGINUCE].includes(d));
     $("#lVr").textContent = nazivVr[d] || t("Vrednost", "Value");
     const dl = $("#dl-par");
@@ -621,6 +635,7 @@ function ekranDogadjaj(_, upit) {
   };
   $("#tipovi").onclick = e => { const b = e.target.closest("button"); if (!b) return; st.dogadjaj = b.dataset.d; $("#tipovi").querySelectorAll("button").forEach(x => x.classList.toggle("akt", x === b)); prilagodi(); };
   ["grlo", "partner"].forEach(i => $("#" + i).addEventListener("input", prilagodi));
+  $("#treba").onchange = prilagodi;
   prilagodi();
   $("#sac").onclick = () => {
     const g = M.nadji($("#grlo").value), gr = $("#gr");
@@ -629,8 +644,16 @@ function ekranDogadjaj(_, upit) {
     if (!d) return (gr.textContent = t("Datum nije ispravan.", "The date is not valid."));
     if (!st.dogadjaj) return (gr.textContent = t("Izaberi događaj.", "Choose an event."));
     const broj = v => { const x = String(v || "").replace(/\D/g, ""); return x && +x > 0 ? x : ""; };
+    if ($("#treba").checked) {                       // još nije urađeno: samo podsetnik, ništa u istoriju
+      S.podsetnici.push({ grlo: g, datum: fmtD(d), tip: st.dogadjaj, tekst: $("#opis").value.trim(), ponavljanje: String(+$("#pon").value || ""), gotovo: "", uneto: sada() });
+      zabelezi(t(`Podsetnik: ${g} – ${st.dogadjaj} (${fmtD(d)})`, `Reminder: ${g} – ${st.dogadjaj} (${fmtD(d)})`));
+      promena(t(`Podsetnik zakazan: ${g} – ${st.dogadjaj} (${fmtD(d)})`, `Reminder scheduled: ${g} – ${st.dogadjaj} (${fmtD(d)})`));
+      return idi(`karton/${encodeURIComponent(g)}`);
+    }
     upisiDogadjaj({ grlo: g, datum: fmtD(d), dogadjaj: st.dogadjaj, partner: $("#partner").value, vrednost: $("#vrednost").value.trim(),
       opis: $("#opis").value.trim(), karenca_meso: broj($("#km").value), karenca_mleko: broj($("#kml").value), vanZapata: $("#van").checked });
+    const sled = [k.LECENJE, k.VAKCINA].includes(st.dogadjaj) ? +$("#sled").value || 0 : 0;
+    if (sled) S.podsetnici.push({ grlo: g, datum: fmtD(dodajDane(d, sled)), tip: st.dogadjaj, tekst: $("#opis").value.trim(), ponavljanje: String(sled), gotovo: "", uneto: sada() });
     promena(t(`Zapisano: ${g} – ${st.dogadjaj}`, `Recorded: ${g} – ${st.dogadjaj}`));
     idi(`karton/${encodeURIComponent(g)}`);
   };
@@ -721,13 +744,13 @@ function ekranNovoGrlo(_, upit) {
   const stada = [...new Set(sva.map(a => a.stado).filter(Boolean))], rase = [...new Set(sva.map(a => a.rasa).filter(Boolean))];
   let pol = "", status = "";
   ekran.innerHTML = `<div class="kart">
-    <div class="dve"><label class="polje"><span>${t("Oznaka *", "Tag *")}</span><input class="unos" id="id"></label>
+    <div class="dve"><label class="polje"><span>${t("Oznaka (ime)", "Tag (name)")}</span><input class="unos" id="id" placeholder="${t("prazno = markica", "empty = ear tag")}"></label>
       <label class="polje"><span>${t("Markica", "Ear tag")}</span>${saKamerom(`<input class="unos" id="mk" value="${h(upit ? upit.get("mk") || "" : "")}">`, "markica")}</label></div>
     <div class="polje"><span class="mali" style="font-weight:700">${t("Pol *", "Sex *")}</span><div class="izbor" id="pol" style="margin-top:6px"><button data-p="z">${t("Žensko", "Female")}</button><button data-p="m">${t("Muško", "Male")}</button></div></div>
     <div style="height:12px"></div>
     <div class="dve"><label class="polje"><span>${t("Vrsta", "Species")}</span><select class="unos" id="vrsta">${k.VRSTE.map(v => `<option ${v === (posl.vrsta || k.VRSTE[0]) ? "selected" : ""}>${h(v)}</option>`).join("")}</select></label>
       <label class="polje"><span>${t("Rasa", "Breed")}</span><input class="unos" id="rasa" list="dl-r"></label></div>
-    <datalist id="dl-r">${rase.map(r => `<option value="${h(r)}">`).join("")}</datalist>
+    <datalist id="dl-r"></datalist>
     <label class="polje skriveno" id="nam-p"><span>${t("Namena rase *", "Breed purpose *")}</span><select class="unos" id="nam"></select></label>
     <label class="polje"><span>${t("Datum rođenja", "Date of birth")}</span><input class="unos" id="dat" type="date"></label>
     <div class="dve"><label class="polje"><span>${t("Otac", "Sire")}</span><input class="unos" id="otac" list="dl-o" autocomplete="off"></label>
@@ -750,8 +773,15 @@ function ekranNovoGrlo(_, upit) {
     $("#nam-p").classList.toggle("skriveno", !izbori.length);
     $("#nam").innerHTML = `<option value="">${t("– izaberi –", "– choose –")}</option>` + izbori.map(x => `<option ${x === sad ? "selected" : ""}>${h(x)}</option>`).join("");
   };
-  $("#vrsta").onchange = namene; namene();
+  const raseLista = () => { $("#dl-r").innerHTML = raseZaVrstu($("#vrsta").value).map(r => `<option value="${h(r)}">`).join(""); };
+  $("#vrsta").onchange = () => { namene(); raseLista(); }; namene(); raseLista();
   $("#rasa").addEventListener("input", () => { if (autohtonaRasa($("#rasa").value)) $("#autoh").checked = true; });
+  $("#rasa").addEventListener("change", () => {      // namena važi za celu rasu – popuni je kad rasa već ima grla
+    const nm = namenaRase($("#vrsta").value, normRasa($("#rasa").value));
+    if (nm && [...$("#nam").options].some(o => o.value === nm)) $("#nam").value = nm;
+    const moja = mojaRasa($("#vrsta").value, $("#rasa").value);
+    if (moja && moja.autohtona) $("#autoh").checked = true;
+  });
   $("#majka").addEventListener("change", () => {     // otac: mužjak iz stada majke (pušten sa ženkama), ako nije upisan
     const mj = M.nadji($("#majka").value), kand = mj ? M.muzjaciUStadu(mj) : [];
     if (kand.length === 1 && !$("#otac").value.trim()) { $("#otac").value = kand[0]; poruka(t(`Otac: ${kand[0]} – mužjak iz stada majke`, `Sire: ${kand[0]} – male in the dam's herd`)); }
@@ -842,10 +872,12 @@ function ekranVise() {
   ekran.innerHTML = `${dugmeInstalacije()}<div class="lista">
     ${oblakPodesen() ? `<a class="red" href="#sinh"><span style="font-size:24px">☁</span><div class="sred"><b>${S.sinh ? t("Povezano sa računarom", "Connected to computer") : t("Upari sa računarom (QR kod ili kod)", "Pair with computer (QR or code)")}</b><span>${h(S.sinh ? (sinhStanje.tekst || S.sinh.naziv || "") : t("jednom skeniraš i sve se samo usklađuje", "scan once and everything syncs"))}</span></div></a>` : ""}
     <a class="red" href="#prenos"><span style="font-size:24px">⇅</span><div class="sred"><b>${t("Prenos sa računarom", "Transfer with computer")}</b><span>${n ? t(`${n} promena čeka slanje računaru`, `${n} changes waiting to be sent`) : t("sve je poslato", "everything sent")}</span></div>${n ? `<span class="znak warn">${n}</span>` : ""}</a>
+    ${S.mreza ? `<a class="red" href="#udruzenje"><span style="font-size:24px">⌂</span><div class="sred"><b>${t("Udruženje – druge farme", "Association – other farms")}</b><span>${h(S.mreza.naziv || "")} · 🔒 ${t("samo pregled", "view only")}</span></div></a>` : ""}
     <a class="red" href="#srodstvo"><span style="font-size:24px">⚯</span><div class="sred"><b>${t("Srodstvo dva grla", "Relationship of two animals")}</b><span>${t("koliko su srodni, zajednički preci", "how related they are, common ancestors")}</span></div></a>
     <a class="red" href="#novo"><span style="font-size:24px">＋</span><div class="sred"><b>${t("Novo grlo", "New animal")}</b><span>${t("kupljeno ili rođeno", "bought or born")}</span></div></a>
     <a class="red" href="#muznja"><span style="font-size:24px">🥛</span><div class="sred"><b>${t("Mužnja", "Milking")}</b><span>${t("dnevni upis mleka za mlečna grla", "daily milk entry for dairy animals")}</span></div></a>
     <a class="red" href="#podsetnik"><span style="font-size:24px">⏰</span><div class="sred"><b>${t("Novi podsetnik", "New reminder")}</b><span>${t("vakcinacija, lečenje…", "vaccination, treatment…")}</span></div></a>
+    <a class="red" href="#" id="obUk"><span style="font-size:24px">🔔</span><div class="sred"><b>${t("Obaveštenja na telefonu", "Phone notifications")}</b><span>${h(stanjeObavestenja()[1])}</span></div>${stanjeObavestenja()[0] === "da" ? `<span class="znak">✓</span>` : ""}</a>
     <a class="red" href="#" id="problem"><span style="font-size:24px">⚠</span><div class="sred"><b>${t("Prijavi problem", "Report a problem")}</b><span>${t("pošalji izveštaj o greškama (bez podataka o grlima)", "send an error report (no animal data)")}</span></div></a>
     </div>
     <div class="kart"><label class="mali" for="jezikV">🌐 ${t("Jezik", "Language")}</label>
@@ -856,8 +888,60 @@ function ekranVise() {
     ${S.izvoz ? t(`Podaci sa računara od ${h(S.izvoz.datum || "")}`, `Data from computer of ${h(S.izvoz.datum || "")}`) : t("Podaci su upisani samo na telefonu.", "Data entered on the phone only.")}<br>
     ${t("Podrška", "Support")}: <a href="mailto:${PODRSKA}">${PODRSKA}</a></div>`;
   $("#problem").onclick = ev => { ev.preventDefault(); prijaviProblem(); };
+  $("#obUk").onclick = ev => { ev.preventDefault(); if (stanjeObavestenja()[0] !== "da") ukljuciObavestenja(); else poruka(stanjeObavestenja()[1]); };
   $("#jezikV").onchange = e => { izaberiJezik(e.target.value); prikazi(); };
   osveziInstalaciju();
+}
+
+// ---------------------------------------------------------------- udruženje: grla drugih farmi, samo pregled (nema izmene)
+const filtU = { farma: "", vrsta: "", pol: "", q: "", sva: false };
+function ekranUdruzenje() {
+  postaviVrh(t("Udruženje", "Association"), true); meni("vise");
+  if (!S.mreza) { ekran.innerHTML = `<div class="kart mali">${t("Telefon nije u udruženju. Udruženje se podešava na računaru.", "The phone is not in an association. The association is set up on the computer.")}</div>`; return; }
+  const P = S.mrezaPodaci, farme = P ? P.farme : [];
+  const sva = [];
+  farme.forEach(f => f.grla.forEach(g => sva.push([f.naziv, g])));
+  const vrste = [...new Set(sva.map(([, g]) => g.vrsta).filter(Boolean))].sort();
+  ekran.innerHTML = `<div class="kart"><h2>${h(P ? P.naziv : S.mreza.naziv)}</h2>
+      <div class="mali">🔒 ${t("Samo pregled. Grla menja samo farma kojoj pripadaju – ne ulaze u tvoj spisak grla.", "View only. Only the farm that owns the animals changes them – they do not go into your list.")}</div>
+      <div class="mali" id="uSt" style="margin-top:6px">${P ? t(`Učitano ${h(P.ucitano)}`, `Loaded ${h(P.ucitano)}`) : t("Još nije učitano.", "Not loaded yet.")}${P && !P.provereno ? " · " + t("potpisi nisu provereni na ovom telefonu", "signatures not checked on this phone") : ""}</div>
+      <button class="dug puno" id="uOsv" style="margin-top:10px">⟳ ${t("Osveži", "Refresh")}</button></div>
+    ${farme.length ? `<div class="kart"><h2>${t("Farme", "Farms")}</h2>${farme.map(f => `<div class="mali" style="margin:4px 0"><b style="color:var(--ink)">${h(f.naziv)}</b>${f.mesto ? " · " + h(f.mesto) : ""}${f.mapa ? ` · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.mapa)}" target="_blank" rel="noopener">📍 ${t("mapa", "map")}</a>` : ""} · ${f.greska ? `<span class="znak warn">${h(f.greska)}</span>` : t(`${f.grla.filter(g => (g.status || "aktivno") === "aktivno").length} grla`, `${f.grla.filter(g => (g.status || "aktivno") === "aktivno").length} animals`)}</div>`).join("")}</div>` : ""}
+    <input class="pretraga" id="uq" type="search" placeholder="🔍 ${t("Traži oznaku, rasu, roditelje…", "Search ID, breed, parents…")}" value="${h(filtU.q)}">
+    <div class="filteri">${[["", t("Sva", "All")], ["z", t("Ženska", "Females")], ["m", t("Muška", "Males")]].map(([k, n]) =>
+      `<button data-upol="${k}" class="${filtU.pol === k ? "akt" : ""}">${n}</button>`).join("")}
+      <button id="uSva" class="${filtU.sva ? "akt" : ""}">${t("i neaktivna", "incl. inactive")}</button></div>
+    <div class="dve-izbor"><select id="uF" class="stado-izbor ${filtU.farma ? "akt" : ""}"><option value="">${t("Sve farme", "All farms")}</option>${farme.map(f => `<option${f.naziv === filtU.farma ? " selected" : ""}>${h(f.naziv)}</option>`).join("")}</select>
+      <select id="uV" class="stado-izbor ${filtU.vrsta ? "akt" : ""}"><option value="">${t("Sve vrste", "All species")}</option>${vrste.map(v => `<option${v === filtU.vrsta ? " selected" : ""}>${h(v)}</option>`).join("")}</select></div>
+    <div id="usp"></div>`;
+  const crtaj = () => {
+    const q = filtU.q.trim().toLowerCase();
+    const sp = sva.filter(([f, g]) => (!filtU.farma || f === filtU.farma) && (!filtU.vrsta || g.vrsta === filtU.vrsta) && (!filtU.pol || g.pol === filtU.pol) &&
+      (filtU.sva || (g.status || "aktivno") === "aktivno") && (!q || [g.id, g.markica, g.rasa, g.otac, g.majka, f].join(" ").toLowerCase().includes(q)))
+      .sort((a, b) => a[0].localeCompare(b[0]) || sortKey(a[1].id || "", b[1].id || ""));
+    $("#usp").innerHTML = `<div class="mali" style="margin:0 4px 8px">${P ? t(`${sp.length} grla`, `${sp.length} animals`) : ""}</div>` +
+      (sp.length ? `<div class="lista">${sp.slice(0, 300).map(([f, g], i) => {
+        const d = parsirajDatum(g.datum_rodjenja);
+        return `<a class="red" href="#" data-ug="${i}"><span style="font-size:22px">${g.pol === "m" ? "♂" : g.pol === "z" ? "♀" : "•"}</span><div class="sred"><b>${h(g.id || "?")}</b><span>${h(f)} · ${h([g.rasa, d ? fmtD(d) : ""].filter(Boolean).join(" · "))}</span><span class="uDet skriveno" style="white-space:normal">${
+          [[t("Vrsta", "Species"), g.vrsta], [t("Markica", "Ear tag"), g.markica], [t("Namena", "Purpose"), g.namena], [t("Otac", "Sire"), g.otac], [t("Majka", "Dam"), g.majka],
+           [t("Status", "Status"), g.status], [t("Udeo krvi", "Breed share"), g.udeo_krvi], [t("Ocena", "Score"), g.ocena ? g.ocena.split("@")[0].replace(/;/g, ", ") : ""]]
+            .filter(x => x[1]).map(([n, v]) => `${h(n)}: <b style="display:inline">${h(v)}</b>`).join("<br>")}<br>🔒 ${h(t(`menja ga samo: ${f}`, `changed only by: ${f}`))}</span></div></a>`;
+      }).join("")}</div>` : (P ? `<div class="kart mali">${farme.length ? t("Nema grla za ovaj izbor.", "No animals for this selection.") : t("Druge farme još nisu poslale podatke.", "Other farms have not sent data yet.")}</div>` : ""));
+    $("#usp").querySelectorAll("[data-ug]").forEach(a => a.onclick = ev => { ev.preventDefault(); a.querySelector(".uDet").classList.toggle("skriveno"); });
+  };
+  crtaj();
+  $("#uq").oninput = e => { filtU.q = e.target.value; crtaj(); };
+  ekran.querySelectorAll("[data-upol]").forEach(b => b.onclick = () => { filtU.pol = b.dataset.upol; ekranUdruzenje(); });
+  $("#uSva").onclick = () => { filtU.sva = !filtU.sva; ekranUdruzenje(); };
+  $("#uF").onchange = e => { filtU.farma = e.target.value; ekranUdruzenje(); };
+  $("#uV").onchange = e => { filtU.vrsta = e.target.value; ekranUdruzenje(); };
+  const osvezi = () => {
+    $("#uSt").textContent = "⟳ " + t("učitavam…", "loading…");
+    ucitajUdruzenje().then(() => { if (delovi().ekran === "udruzenje") ekranUdruzenje(); })
+      .catch(e => { $("#uSt").textContent = (e instanceof GreskaMreze ? t("Nema interneta – prikazano je poslednje učitano.", "No internet – showing the last loaded data.") : e.message); });
+  };
+  $("#uOsv").onclick = osvezi;
+  if (!P) osvezi();
 }
 
 async function prijaviProblem() {
@@ -966,6 +1050,56 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && Date.now() - obavestenoU > 3 * 3600 * 1000) obavestiPriUlasku();
 });
 
+// ---------------------------------------------------------------- obaveštenja kad je aplikacija zatvorena
+// Telefon (Android, instalirana aplikacija) povremeno sam probudi aplikaciju u pozadini (periodicSync) i pokaže
+// obaveštenje iz unapred napravljenog plana – bez servera; podaci ostaju u telefonu.
+const lokDatum = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function planObavestenja() {
+  const d0 = danas(), plan = [];
+  for (const o of obavestenja().filter(o => o.nivo <= 1)) plan.push({ k: `${o.grlo || ""}|${o.naslov}`, n: (o.grlo ? o.grlo + " – " : "") + o.naslov, od: lokDatum(d0) });
+  for (const p of S.podsetnici.filter(p => !p.gotovo)) {
+    const pd = parsirajDatum(p.datum);
+    if (pd && pd > dodajDane(d0, 3)) plan.push({ k: `p|${p.grlo || ""}|${p.tip}|${p.datum}`, n: `${p.grlo ? p.grlo + " – " : ""}${p.tip || t("Podsetnik", "Reminder")} (${p.datum})`, od: lokDatum(dodajDane(pd, -3)) });
+  }
+  for (const z of cekajuPorodjaj()) {
+    const [od, oc] = granicePorodjaja(z), [majka] = roditeljiParenja(z);
+    if (od && oc && od > d0) plan.push({ k: `r|${majka || ""}|${z.datum}`, n: `${majka || "?"} – ${t("porođaj se očekuje oko", "birth expected around")} ${fmtD(oc)}`, od: lokDatum(od) });
+  }
+  return { plan, naslov: t("HerdDoc – podsetnik", "HerdDoc – reminder"), jos: t("… i još {0}", "… and {0} more"), napravljeno: lokDatum(d0) };
+}
+let _planT = null;
+function planUskoro() {
+  clearTimeout(_planT);
+  _planT = setTimeout(() => { try { if (!bezBaze && imaPodatke()) bazaUpisi("obavestenja", planObavestenja()).catch(() => {}); } catch (e) { /* */ } }, 1500);
+}
+const podrzavaObavestenja = () => "Notification" in window && "serviceWorker" in navigator;
+const podrzavaPozadinu = () => podrzavaObavestenja() && "ServiceWorkerRegistration" in window && "periodicSync" in ServiceWorkerRegistration.prototype;
+function stanjeObavestenja() {
+  if (!podrzavaObavestenja()) return ["ne", t("ovaj telefon javlja samo kad otvoriš aplikaciju", "this phone only notifies when you open the app")];
+  if (Notification.permission === "denied") return ["ne", t("zabranjeno u podešavanjima telefona", "blocked in the phone settings")];
+  if (Notification.permission !== "granted") return ["iskljuceno", t("dodirni da uključiš", "tap to turn on")];
+  return podrzavaPozadinu() ? ["da", t("uključeno – javlja i kad je aplikacija zatvorena", "on – notifies even when the app is closed")]
+    : ["da", t("uključeno – kad otvoriš aplikaciju (ovaj telefon ne budi aplikacije u pozadini)", "on – when you open the app (this phone doesn't wake apps in the background)")];
+}
+async function prijaviPozadinu(reg) {
+  try { if (reg.periodicSync) await reg.periodicSync.register("herddoc-obavestenja", { minInterval: 6 * 3600 * 1000 }); } catch (e) { /* telefon odlučuje */ }
+}
+async function ukljuciObavestenja() {
+  if (!podrzavaObavestenja()) return poruka(stanjeObavestenja()[1]);
+  const dozvola = await Notification.requestPermission();
+  if (dozvola !== "granted") { prikazi(); return poruka(t("Obaveštenja nisu dozvoljena. Uključi ih u podešavanjima telefona za HerdDoc.", "Notifications were not allowed. Turn them on in the phone settings for HerdDoc.")); }
+  planUskoro();
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await prijaviPozadinu(reg);
+    await reg.showNotification("HerdDoc", { body: t("Obaveštenja su uključena. Ovako će izgledati podsetnici.", "Notifications are on. This is how reminders will look."),
+      icon: "ikone/ikona-192.png", badge: "ikone/ikona-192.png", tag: "herddoc-proba" });
+  } catch (e) { /* */ }
+  prikazi();
+}
+if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => { if (e.data && e.data.idi) idi(e.data.idi); });
+if (podrzavaObavestenja() && Notification.permission === "granted") navigator.serviceWorker.ready.then(prijaviPozadinu).catch(() => {});
+
 // ---------------------------------------------------------------- start
 ekran.innerHTML = `<div class="prazno">${t("Učitavam…", "Loading…")}</div>`;
 ucitajIzTelefona().then(() => {
@@ -973,6 +1107,7 @@ ucitajIzTelefona().then(() => {
   prikazi();
   pokreniUsaglasavanje();
   setTimeout(obavestiPriUlasku, 600);
+  planUskoro();
 });
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});

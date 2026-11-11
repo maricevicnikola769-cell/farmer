@@ -695,7 +695,7 @@ function upisUListu(z, mladi, stado, ostaliCekaju) {
     if (mk) { const p = markicaZauzeta(mk, null); if (p || novi.some(x => norm(x.markica) === norm(mk))) return p || (t(`Markica ${mk} je upisana dva puta.`, `Ear tag ${mk} is entered twice.`)); }
     if (pol !== "m" && pol !== "z") return t(`Izaberi pol za ${nid}.`, `Choose the sex for ${nid}.`);
     vidjeni.add(nid);
-    novi.push({ id: nid, markica: mk, vrsta, rasa, namena: (majka && M.A[majka] && M.A[majka].namena) || "",
+    novi.push({ id: nid, markica: mk, vrsta, rasa, namena: namenaRase(vrsta, rasa) || (majka && M.A[majka] && M.A[majka].namena) || "",
       autohtona: (majka && M.A[majka] && M.A[majka].autohtona) || "", pol, datum_rodjenja: dstr, otac: otac || "", majka: majka || "", status: "aktivno", stado,
       poreklo: K().SOPSTVENI, poreklo_od: "", stare_markice: "", uneto: sada() });
   }
@@ -720,6 +720,34 @@ function upisUListu(z, mladi, stado, ostaliCekaju) {
 }
 
 // novo grlo (forma u karton.py)
+// namena se zadaje za celu rasu (na računaru); melezi, hibridi i neodređena rasa – po grlu
+function cistaRasaTel(rasa) {
+  const r = String(rasa || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+  return !!r && !/^(hibrid|hybrid|melez|crossbred|mešanac|mesanac|neodređ|neodred|undetermined)/.test(r) && !r.includes("×") && !` ${r} `.includes(" x ");
+}
+// moje rase (upisane na računaru): [{vrsta, ime, namena, autohtona}]
+const mojeRase = () => (Array.isArray(S.rase) ? S.rase : []);
+const _imeRase = r => String(r || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+function mojaRasa(vrsta, rasa) { return mojeRase().find(r => vrstaKanon(r.vrsta) === vrstaKanon(vrsta) && _imeRase(r.ime) === _imeRase(rasa)); }
+function raseZaVrstu(vrsta) {
+  const im = {};
+  mojeRase().forEach(r => { if (vrstaKanon(r.vrsta) === vrstaKanon(vrsta)) im[_imeRase(r.ime)] = r.ime; });
+  S.grla.forEach(a => { if (a.status !== "obrisano" && vrstaKanon(a.vrsta) === vrstaKanon(vrsta) && cistaRasaTel(a.rasa) && !im[_imeRase(a.rasa)]) im[_imeRase(a.rasa)] = a.rasa; });
+  return Object.values(im).sort((a, b) => a.localeCompare(b));
+}
+function namenaRase(vrsta, rasa) {
+  if (!cistaRasaTel(rasa)) return "";
+  const izbori = nameneZa(vrsta), r0 = String(rasa).split(/\s+/).filter(Boolean).join(" ").toLowerCase(), c = {};
+  const moja = mojaRasa(vrsta, rasa);
+  if (moja && izbori.includes(moja.namena)) return moja.namena;
+  for (const r of S.grla) {
+    if (r.status === "obrisano" || vrstaKanon(r.vrsta) !== vrstaKanon(vrsta) || String(r.rasa || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase() !== r0) continue;
+    if (izbori.includes(r.namena)) c[r.namena] = (c[r.namena] || 0) + 1;
+  }
+  const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
+  return top ? top[0] : "";
+}
+
 // namena rase: goveda, ovce i koze (mlečna/tovna/kombinovana), svinje (mesnata/masna/kombinovana); konji nemaju
 function nameneZa(vrsta) {
   const v = vrstaKanon(vrsta);
@@ -757,8 +785,8 @@ function porukaLimita(novih) {
 
 // vraća poruku o grešci (tekst) ili {id} sačuvanog grla
 function novoGrlo(v) {
-  const en = EN(), uneto = (v.id || "").trim();
-  if (!uneto) return t("Upiši oznaku grla.", "Enter the animal's tag.");
+  const en = EN(), uneto = (v.id || "").trim() || String(v.markica || "").trim().split(/\s+/).join(" ");   // bez oznake: oznaka = markica
+  if (!uneto) return t("Upiši oznaku grla ili ušnu markicu.", "Enter the animal's tag or ear tag.");
   const nid = slobodnaOznaka(uneto, S.grla.map(r => r.id));
   const mk = (v.markica || "").trim(), z = markicaZauzeta(mk, null);
   if (z) return z;
@@ -767,6 +795,7 @@ function novoGrlo(v) {
   if (rz) return t(`Elektronski broj ${rfid} je već upisan za grlo ${rz.id}.`, `Electronic ID ${rfid} is already entered for animal ${rz.id}.`);
   if (v.pol !== "m" && v.pol !== "z") return t("Izaberi pol.", "Choose the sex.");
   const izbori = nameneZa(vrstaNorm(v.vrsta) || v.vrsta);
+  if (izbori.length && !v.namena) v = { ...v, namena: namenaRase(vrstaNorm(v.vrsta) || v.vrsta, normRasa(v.rasa)) };
   if (izbori.length && !izbori.includes(v.namena)) return (t("Izaberi namenu rase (", "Choose the breed purpose (")) + izbori.join(" / ") + ").";
   if (v.status !== "aktivno" && v.status !== "neaktivno") return t("Izaberi da li je grlo aktivno (na farmi) ili neaktivno.", "Choose whether the animal is active (on the farm) or inactive.");
   const dat = (v.datum_rodjenja || "").trim();
@@ -897,6 +926,7 @@ function ucitajSaRacunara(obj) {
   S.izvoz = { id: obj.id, datum: obj.izvezeno, stada: obj.stada || [] };
   S.licenca = obj.licenca || null;      // paket licence sa računara (telefon ne kupuje posebno)
   S.vrste = Array.isArray(obj.vrste) ? obj.vrste : [];
+  S.rase = Array.isArray(obj.rase) ? obj.rase : [];
   S.promene = [];
   osveziModel();
 }
@@ -951,7 +981,7 @@ function smanjiSliku(fajl, maks = 1600, kvalitet = 0.78) {
   });
 }
 
-if (typeof module !== "undefined") module.exports = { S, K, Model, M: () => M, osveziModel, parsirajDatum, fmtD, pct, procena, nazivi, rasaPotomka, normRasa,
+if (typeof module !== "undefined") module.exports = { S, K, Model, M: () => M, osveziModel, parsirajDatum, fmtD, pct, procena, nazivi, rasaPotomka, normRasa, namenaRase, raseZaVrstu, mojaRasa,
   vrstaNorm, upisiDogadjaj, rodjenje, upisUListu, novoGrlo, teraSe, neTeraSe, oznaciNeuspelo, podsetnikUradjen, podsetnikOdlozi, noviPodsetnik,
   obavestenja, cekajuPorodjaj, cekajuMindjusu, granicePorodjaja, opisIshoda, partneri, karenca, opisKarence, ucitajSaRacunara, paketZaRacunar,
   leglo, danas, dodajDane, istorijaZa, markicaZauzeta, roditeljiParenja, podaciLegla, sortKey };

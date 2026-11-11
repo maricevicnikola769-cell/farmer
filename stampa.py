@@ -42,13 +42,13 @@ th{background:#E9EDE6;font-weight:600} tr:nth-child(even) td{background:#FAFBF9}
 """
 
 
-def _otvori_html(naziv, naslov, podnaslov, telo):
+def _otvori_html(naziv, naslov, podnaslov, telo, dodatni_stil=""):
     import tempfile
     logo = LOGO.get(64, "")
     if isinstance(logo, (tuple, list)):
         logo = "".join(logo)
     html = (f"<!doctype html><html lang='{JEZIK}'><head><meta charset='utf-8'><title>{_html_esc(naslov)}</title>"
-            f"<style>{_HTML_STIL}</style></head><body>"
+            f"<style>{_HTML_STIL}{dodatni_stil}</style></head><body>"
             f"<button class='dugme' onclick='window.print()'>{T('🖨 Štampaj / Sačuvaj kao PDF', '🖨 Print / Save as PDF')}</button>"
             f"<div class='list'><div class='zag'><img src='data:image/png;base64,{logo}' alt=''>"
             f"<div><h1>{_html_esc(naslov)}</h1><div class='pod'>{_html_esc(podnaslov)}</div></div>"
@@ -81,7 +81,57 @@ def _deca(m, x):
     return [y for y, (o, mm) in m.P.items() if x in (o, mm) and y in m.A and not m.A[y]["osnivac"]]
 
 
+PAPIRI = (("A4", "A4"), ("A3", "A3"), ("velika", None))     # velika = ceo rodoslov na jednoj strani (PDF)
+MAKS_NA_PAPIRU = {"A4": 5, "A3": 6}                          # najviše kolena u tabeli koja čitko staju na list
+
+
 def _app_stampaj_rodoslov(self, x):
+    """Prozor: koliko kolena i koji papir, pa rodoslovni list."""
+    m = self.model
+    if x not in m.A:
+        return
+    dubina = max((max(gs) for gs in m.putanje(x).values()), default=0)
+    if dubina <= 4:                                   # malo kolena – nema šta da se bira, A4
+        return _napravi_rodoslov(self, x, max(2, dubina), "A4")
+    win = tk.Toplevel(self.root, bg=SURF)
+    win.title(T("Rodoslovni list", "Pedigree certificate"))
+    win.transient(self.root)
+    win.resizable(False, False)
+    win.grab_set()
+    b = tk.Frame(win, bg=SURF)
+    b.pack(fill="both", expand=True, padx=26, pady=22)
+    self.lbl(b, T("Rodoslovni list", "Pedigree certificate"), 15, "bold").pack(anchor="w")
+    self.lbl(b, T(f"Za grlo {x} je poznato {dubina} kolena predaka.", f"{dubina} generations of ancestors are known for {x}."),
+             10, fg=INK2).pack(anchor="w", pady=(2, 12))
+    self.lbl(b, T("Kolena u rodoslovu", "Generations in the pedigree"), 9, "bold", fg=INK2).pack(anchor="w")
+    izbori = [T(f"sva poznata ({dubina})", f"all known ({dubina})")] + [str(g) for g in range(dubina - 1, 1, -1)]
+    v_k = tk.StringVar(value=izbori[0])
+    ttk.Combobox(b, textvariable=v_k, values=izbori, state="readonly", width=24, font=self.f(10)).pack(anchor="w", pady=(4, 10))
+    self.lbl(b, T("Papir", "Paper"), 9, "bold", fg=INK2).pack(anchor="w")
+    nazivi = {"A4": T("A4 – do 5 kolena u tabeli, ostala ispod nje", "A4 – up to 5 generations in the table, the rest below it"),
+              "A3": T("A3 – do 6 kolena u tabeli, ostala ispod nje", "A3 – up to 6 generations in the table, the rest below it"),
+              "velika": T("Ceo rodoslov na jednoj strani (PDF)", "Whole pedigree on one page (PDF)")}
+    v_p = tk.StringVar(value="velika" if dubina > 6 else "A3" if dubina > 5 else "A4")
+    for k, _ in PAPIRI:
+        ttk.Radiobutton(b, text=nazivi[k], value=k, variable=v_p).pack(anchor="w", pady=1)
+    self.lbl(b, T("Od 5 kolena list se okreće položeno. Preci iz kolena koja nisu u tabeli navode se ispod nje.",
+                  "From 5 generations the page is landscape. Ancestors from generations not in the table are listed below it."),
+             9, fg=INK2, wraplength=420, justify="left").pack(anchor="w", pady=(10, 0))
+
+    def napravi():
+        k = dubina if v_k.get() == izbori[0] else int(v_k.get())
+        win.grab_release()
+        win.destroy()
+        _napravi_rodoslov(self, x, k, v_p.get())
+    fb = tk.Frame(b, bg=SURF)
+    fb.pack(fill="x", pady=(16, 0))
+    self.btn(fb, T("Napravi rodoslovni list", "Create pedigree certificate"), napravi, "Primary").pack(side="right")
+    self.btn(fb, T("Otkaži", "Cancel"), win.destroy).pack(side="right", padx=8)
+    win.bind("<Escape>", lambda e: win.destroy())
+    self.postavi_prozor(win, self.root)
+
+
+def _napravi_rodoslov(self, x, kolena=4, papir="A4"):
     m = self.model
     if x not in m.A:
         return
@@ -97,19 +147,22 @@ def _app_stampaj_rodoslov(self, x):
               + red(T("Otac", "Sire"), o) + red(T("Majka", "Dam"), mj)
               + red(T("Stado", "Herd"), a.get("stado")) + red(T("Poreklo", "Origin"), a.get("poreklo"))
               + f"<tr><td>{T('Inbriding (F)', 'Inbreeding (F)')}</td><td>{_znak(f, self.prag)}</td></tr></table>")
-    # rodoslov u 4 generacije
+    # rodoslov: koliko god kolena (bez ograničenja); prazna kolena na kraju se ne prikazuju
+    kolena = max(2, int(kolena or 4))
+    if papir in MAKS_NA_PAPIRU:                       # u tabelu ide koliko staje čitko; dalja kolena se navode ispod tabele
+        kolena = min(kolena, MAKS_NA_PAPIRU[papir])
     niz = [[x]]
-    for g in range(4):
+    for g in range(kolena):
         sl = []
         for y in niz[-1]:
             sl.extend(m.P.get(y, (None, None)) if y else (None, None))
         niz.append(sl)
-    gens = max([2] + [g for g in range(1, 5) if any(niz[g])])   # prazna kolena se ne prikazuju
+    gens = max([2] + [g for g in range(1, kolena + 1) if any(niz[g])])
     redovi = 2 ** gens
-    tab = "<table class='rod'><tr>" + "".join(f"<th>{T(n_sr, n_en)}</th>" for n_sr, n_en in
-                                             (("Roditelji", "Parents"), ("Babe i dede", "Grandparents"),
-                                              ("Prababe i pradede", "Great-grandparents"),
-                                              ("4. koleno", "4th generation"))[:gens]) + "</tr>"
+    imena_kol = (("Roditelji", "Parents"), ("Babe i dede", "Grandparents"), ("Prababe i pradede", "Great-grandparents"))
+    tab = "<table class='rod'><tr>" + "".join(
+        f"<th>{T(*imena_kol[g - 1]) if g <= 3 else T(f'{g}. koleno', f'Generation {g}')}</th>" for g in range(1, gens + 1)) + "</tr>"
+    sitno = gens >= 6                                  # mnogo kolena: u ćeliji samo oznaka i markica
     for r in range(redovi):
         tab += "<tr>"
         for g in range(1, gens + 1):
@@ -120,8 +173,8 @@ def _app_stampaj_rodoslov(self, x):
             if y and y in m.A:
                 b = m.A[y]
                 kl = "m" if b.get("pol") == "m" else "z"
-                det = " · ".join(t for t in (b.get("markica"), b.get("rasa"),
-                                              str(b["datum"].year) if b.get("datum") else "") if t)
+                det = " · ".join(t for t in ((b.get("markica"),) if sitno and g >= 4 else
+                                             (b.get("markica"), b.get("rasa"), str(b["datum"].year) if b.get("datum") else "")) if t)
                 fy = m.inbr(y)
                 tab += (f"<td rowspan='{span}' class='{kl}'><b>{_html_esc(y)}</b>"
                         + (f"<br><small>{_html_esc(det)}</small>" if det else "")
@@ -130,6 +183,18 @@ def _app_stampaj_rodoslov(self, x):
                 tab += f"<td rowspan='{span}' class='n'>{T('nepoznat', 'unknown')}</td>"
         tab += "</tr>"
     tab += "</table>"
+    # preci iz daljih kolena (koja nisu u tabeli) – spisak, bez ograničenja
+    put = m.putanje(x)
+    dalji = {}
+    for p, gs in put.items():
+        for g in gs:
+            if g > gens:
+                dalji.setdefault(g, set()).add(p)
+    if dalji:
+        tab += (f"<h2>{T('Preci u daljim kolenima', 'Ancestors in further generations')}</h2><table><tr><th>{T('Koleno', 'Generation')}</th>"
+                f"<th>{T('Preci', 'Ancestors')}</th></tr>"
+                + "".join(f"<tr><td>{g}.</td><td>{_html_esc(', '.join(sorted(dalji[g], key=sort_key)))}</td></tr>" for g in sorted(dalji))
+                + "</table>")
     komp = m.kompletnost(x, gens)
     komp_t = " · ".join(f"{g}. {T('koleno', 'gen.')}: {n}/{u}" for g, n, u in komp)
     preci = [(d, p) for d, p in m.udeli_predaka(x) if d > 0][:8]
@@ -160,8 +225,26 @@ def _app_stampaj_rodoslov(self, x):
             + f"<div style='font-size:11.5px;color:#56645A;margin-top:6px'>{T('Poznati preci', 'Known ancestors')}: {komp_t}</div>"
             + preci_t + deca_t + ist_t
             + f"<div class='potpis'><div>{T('Odgajivač', 'Breeder')}</div><div>{T('Datum i potpis', 'Date and signature')}</div></div>")
-    _otvori_html(f"rodoslov-{x}", T("Rodoslovni list", "Pedigree certificate"), f"{x} · {m.pol_naziv(x)}"
-                 + (f" · {a['rasa']}" if a.get("rasa") else ""), telo)
+    # papir: od 5 kolena položeno; "velika" = jedna strana tačno koliko treba (PDF)
+    polozeno = gens >= 5
+    visina_reda = 34 if gens <= 4 else 22 if gens == 5 else 14 if gens <= 7 else 10
+    if papir != "velika" and gens >= 5:
+        # tabela ide na svoju stranu i mora da stane na nju (ćelija koja zauzima mnogo redova ne može da se prelomi)
+        dost_mm = {"A4": 210, "A3": 297}.get(papir, 210) - 24 - 12
+        visina_reda = max(7, min(visina_reda, int(dost_mm * 3.78 / redovi)))
+    slova = 11.5 if gens <= 4 else max(5.5, min(10, visina_reda * 0.62))
+    stil = (f".rod td{{height:{visina_reda}px;font-size:{slova}px;padding:{5 if gens <= 4 else 1}px 4px;line-height:1.1}}"
+            f".rod b{{font-size:{slova + 1}px}} .rod small{{font-size:{slova - 0.5}px}}")
+    if papir == "velika":
+        sir = max(210, 30 + 55 * gens)
+        vis = max(297, int(redovi * visina_reda * 0.2646) + 230)
+        stil += f"@media print{{@page{{size:{sir}mm {vis}mm;margin:10mm}}}} .list{{max-width:{int(sir * 3.78)}px}}"
+    else:
+        stil += f"@media print{{@page{{size:{papir} {'landscape' if polozeno else 'portrait'};margin:12mm}}}}"
+        if polozeno:
+            stil += ".list{max-width:1200px} @media print{.rod{break-before:page}}"
+    return _otvori_html(f"rodoslov-{x}", T("Rodoslovni list", "Pedigree certificate"), f"{x} · {m.pol_naziv(x)}"
+                 + (f" · {a['rasa']}" if a.get("rasa") else ""), telo, stil)
 
 
 def _app_stampaj_plan(self):

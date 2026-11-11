@@ -4,7 +4,7 @@
 const DEO = 900000;
 const AAD = new TextEncoder().encode("farmer1");
 const KOLONE_GRLA = ["id", "markica", "rfid", "vrsta", "rasa", "namena", "autohtona", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
-  "poreklo", "poreklo_od", "stare_markice", "uneto", "napomena", "udeo_krvi"];
+  "poreklo", "poreklo_od", "stare_markice", "uneto", "napomena", "udeo_krvi", "ocena"];
 
 function oblakKonfig() {
   let test = {};
@@ -134,6 +134,56 @@ class Oblak {
   }
 }
 
+// ---------------------------------------------------------------- udruženje: grla drugih farmi (SAMO pregled)
+// Telefon dobija od svog računara samo ključ za čitanje – nema ključ za potpis, pa ne može ništa da pošalje u ime farme.
+// Pregled svake farme je potpisan ključem te farme; ako potpis ne valja, pregled se odbacuje.
+async function potpisValja(javni, tekst, potpis) {
+  try {
+    const k = await crypto.subtle.importKey("raw", izB64u(javni), { name: "Ed25519" }, false, ["verify"]);
+    return await crypto.subtle.verify({ name: "Ed25519" }, k, izB64u(potpis), new TextEncoder().encode(tekst));
+  } catch (e) { return null; }                         // stariji telefon ne ume da proveri potpis
+}
+async function ucitajUdruzenje() {
+  const m = S.mreza;
+  if (!m || !m.udr || !oblakPodesen()) return null;
+  const o = new Oblak(m.udr, m.kljuc, S.mrezaToken);
+  const d = await o.citaj("spisak", "glavni");
+  let spisak = { naziv: m.naziv, clanovi: [] }, provereno = true;
+  if (d && d.podaci) {
+    const ok = await potpisValja(m.admin_javni, d.podaci, d.potpis || "");
+    if (ok === false) throw new Error(t("Spisak farmi nije potpisan od udruženja – odbačen.", "The farm list is not signed by the association – rejected."));
+    if (ok === null) provereno = false;
+    spisak = await otkljucaj(d.podaci, m.kljuc);
+  }
+  const farme = [];
+  for (const c of spisak.clanovi || []) {
+    if (c.id === m.clan) continue;                     // svoja grla su već u telefonu
+    const f = { naziv: c.naziv, mesto: c.mesto || "", grla: [], vreme: "", greska: "" };
+    try {
+      const st = await o.citaj("stanje", c.id);
+      if (!st) f.greska = t("još nije poslala podatke", "has not sent data yet");
+      else {
+        const tekst = await o.procitajVeliko("pregledi", c.id, +st.ukupno || 1);
+        const ok = await potpisValja(c.javni, tekst, st.potpis || "");
+        if (ok === false) f.greska = t("podaci nisu potpisani od ove farme", "data not signed by this farm");
+        else {
+          if (ok === null) provereno = false;
+          const p = await otkljucaj(tekst, m.kljuc);
+          f.grla = Array.isArray(p.grla) ? p.grla : []; f.vreme = p.vreme || "";
+          const l = p.lokacija || {};                  // tačno mesto (brojevi) ili samo naziv mesta
+          if (typeof l.lat === "number" && typeof l.lon === "number") f.mapa = `${l.lat},${l.lon}`;
+          else if (l.adresa) f.mapa = String(l.adresa);
+        }
+      }
+    } catch (e) { if (e instanceof GreskaMreze) throw e; f.greska = e.message; }
+    farme.push(f);
+  }
+  S.mrezaToken = o.token;
+  S.mrezaPodaci = { naziv: spisak.naziv || m.naziv, farme, ucitano: sada(), provereno };
+  sacuvaj();
+  return S.mrezaPodaci;
+}
+
 // ---------------------------------------------------------------- spajanje (isto kao na računaru)
 const PREVODNA = ["dogadjaj", "ishod", "ter", "tip", "poreklo", "namena"];
 // vrednost sačuvana na bilo kom jeziku (događaj, poreklo…) -> na jeziku telefona
@@ -192,6 +242,11 @@ function primeniSnimak(snap) {
   S.izvoz = { id: snap.id, datum: snap.izvezeno, stada: snap.stada || [] };
   if (snap.licenca) S.licenca = snap.licenca;
   if (Array.isArray(snap.vrste)) S.vrste = snap.vrste;
+  if (Array.isArray(snap.rase)) S.rase = snap.rase;
+  if ("mreza" in snap) {                               // udruženje: pristup samo za pregled grla drugih farmi
+    if (!snap.mreza || !S.mreza || S.mreza.udr !== snap.mreza.udr) S.mrezaPodaci = null;
+    S.mreza = snap.mreza || null;
+  }
   if (S.sinh) S.sinh.spisak = snap.telefoni || null;   // računar zna za ove telefone
   osveziModel();
 }

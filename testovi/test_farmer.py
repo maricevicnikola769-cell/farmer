@@ -985,3 +985,149 @@ def test_dogadjaj_zatvara_podsetnik(tmp_path):
     akt = a.pods.aktivni()
     assert len(akt) == 4                                                             # 3 ostala + novi za 180 d.
     assert any(p["grlo"] == "Mina" and p["tip"] == "Vakcinacija" and podaci.parsiraj_datum(p["datum"]) > d0 + timedelta(days=170) for p in akt)
+
+
+def test_rodoslovni_list_neograniceno(tmp_path, monkeypatch):
+    """Rodoslovni list: na 'velikoj' strani sva kolena u tabeli; na A4 najviše 5, ostala se navode ispod tabele."""
+    import stampa
+    from rodoslov import Model
+    redovi = []
+
+    def napravi(i, d):
+        r = dict(id=f"G{i}", vrsta="ovce", pol="m" if i % 2 == 0 else "z", status="aktivno")
+        if d < 8:
+            r["otac"], r["majka"] = f"G{2 * i}", f"G{2 * i + 1}"
+            napravi(2 * i, d + 1)
+            napravi(2 * i + 1, d + 1)
+        redovi.append(r)
+    napravi(1, 0)
+    html = {}
+    monkeypatch.setattr(stampa, "_otvori_html", lambda naziv, naslov, pod, telo, stil="": html.update(telo=telo, stil=stil) or naziv)
+
+    class A:
+        model = Model(redovi)
+        prag = 0.0625
+        tab = type("t", (), {"putanja": str(tmp_path / "stado.csv")})()
+        ist = type("i", (), {"za": lambda self, x, auto=False: []})()
+    stampa._napravi_rodoslov(A(), "G1", 8, "velika")
+    assert "8. koleno" in html["telo"] and "Preci u daljim kolenima" not in html["telo"] and "mm;margin" in html["stil"]
+    stampa._napravi_rodoslov(A(), "G1", 8, "A4")
+    assert "5. koleno" in html["telo"] and "6. koleno" not in html["telo"]
+    assert "Preci u daljim kolenima" in html["telo"] and "G256" in html["telo"] and "A4 landscape" in html["stil"]
+
+
+
+def test_ocene_grla():
+    """Ručne ocene se čuvaju/čitaju; zdravlje i rangiranje prirasta među grlima iste vrste."""
+    import ocene
+    import podaci
+    assert "ocena" in podaci.KOLONE
+    o, d = ocene.procitaj_ocenu("karakter=4;gradja=9;noge=x;vime=2@2026-11-11")
+    assert o == {"karakter": 4, "vime": 2} and d == "2026-11-11"
+    t = ocene.zapisi_ocenu({"karakter": 5}, "2026-01-02")
+    assert t == "karakter=5@2026-01-02" and ocene.procitaj_ocenu(t)[0] == {"karakter": 5}
+    assert ocene.zapisi_ocenu({}) == ""
+    assert [ocene.zdravlje_ocena(n) for n in (0, 1, 3, 7)] == [5, 4, 2, 1]
+    sve = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+    assert ocene._rang_ocena(1000, sve) == 5 and ocene._rang_ocena(100, sve) == 1 and ocene._rang_ocena(500, [500, 1]) is None
+    assert ocene.zvezdice(3.6) == "★★★★☆" and ocene.zvezdice(None) == "–"
+
+
+def test_namena_za_celu_rasu():
+    """Namena se zadaje za rasu: čita se iz grla te rase, menja kod svih; melezi biraju po grlu; vime samo kod nemlečnih ženki."""
+    import namena_rase as nr
+    red = [dict(id="A", vrsta="goveda", rasa="simentalska", namena="kombinovana", pol="z"),
+           dict(id="B", vrsta="goveda", rasa="Simentalska", namena="kombinovana", pol="z"),
+           dict(id="C", vrsta="goveda", rasa="simentalska", namena="mlečna", pol="m"),
+           dict(id="D", vrsta="ovce", rasa="simentalska", namena="tovna", pol="z"),
+           dict(id="E", vrsta="goveda", rasa="hibrid S×H", namena="mlečna", pol="z"),
+           dict(id="F", vrsta="goveda", rasa="holštajn", namena="mlečna", pol="z")]
+    assert nr.namena_rase(red, "goveda", "simentalska") == "kombinovana"
+    assert nr.namena_rase(red, "goveda", "hibrid S×H") == "" and not nr.rasa_sa_namenom("hibrid S×H")
+    prom = nr.postavi_namenu_rase(red, "goveda", "simentalska", "tovna")
+    assert [r["id"] for r, _ in prom] == ["A", "B", "C"] and red[3]["namena"] == "tovna" and red[4]["namena"] == "mlečna"
+    assert nr.vime_se_ocenjuje(red[0]) and not nr.vime_se_ocenjuje(red[5]) and not nr.vime_se_ocenjuje(red[2])
+
+
+def test_moje_rase():
+    """Rasa se upiše jednom: spisak se napravi od postojećih grla, nova rasa se pamti, melez ne ide na spisak."""
+    import rase
+    assert rase.ocisti_rasu(dict(vrsta="goveda", ime="hibrid S×H", namena="mlečna")) is None
+    c = rase.ocisti_rasu(dict(vrsta="goveda", ime="  Holštajn ", namena="mlečna", autohtona=True))
+    assert c == dict(vrsta="goveda", ime="holštajn", namena="mlečna", autohtona="1")
+    assert rase.ocisti_rasu(dict(vrsta="goveda", ime="angus", namena="masna"))["namena"] == ""
+
+    class Lazni(rase.RaseDeo):
+        def __init__(self, redovi):
+            self.pod = {}
+            self.tab = type("T", (), {"redovi": redovi})()
+    a = Lazni([dict(id="A", vrsta="goveda", rasa="angus", namena="tovna"), dict(id="B", vrsta="goveda", rasa="hibrid A×H"),
+               dict(id="C", vrsta="ovce", rasa="pramenka", namena="kombinovana")])
+    assert sorted((r["vrsta"], r["ime"], r["namena"]) for r in a.moje_rase()) == [("goveda", "angus", "tovna"), ("ovce", "pramenka", "kombinovana")]
+    assert a.zapamti_rasu("goveda", "Holštajn", "mlečna") and a.nadji_rasu("goveda", "holštajn")["namena"] == "mlečna"
+    assert not a.zapamti_rasu("goveda", "holštajn", "mlečna")
+    assert a.rase_za_vrstu("goveda") == ["angus", "holštajn"] and a.rase_za_vrstu("ovce") == ["pramenka"]
+
+
+def test_udruzenje_samo_pregled():
+    """Udruženje: farme se upišu kodom; svaka šalje svoj potpisan pregled; tuđi (podmetnut) pregled se odbacuje."""
+    import lazni_firebase
+    import mreza as M
+    from oblak import zakljucaj
+    srv, st, konfig = lazni_firebase.napravi_server()
+    try:
+        m = M.nova_mreza("Udruženje odgajivača")
+        a, a_t = M.novi_clan("Farma A", "Čačak")
+        m["clanovi"].append(a)
+        m.update(clan=a["id"], clan_tajni=a_t, naziv_farme="Farma A")
+        o = M.oblak_mreze(konfig, m)
+        M.objavi_spisak(o, m)
+        # upis farme B i njen kod
+        b = M.novi_clan("Farma B")[0]
+        b_t, b["javni"] = M.novi_potpisni_kljuc()
+        m["clanovi"].append(b)
+        M.objavi_spisak(o, m)
+        M.objavi_poziv(konfig, "K7M2-9XQP", dict(udr=m["udr"], kljuc=m["kljuc"], naziv=m["naziv"], admin_javni=m["admin_javni"],
+                                                 clan=b["id"], clan_tajni=b_t, naziv_farme="Farma B"))
+        p = M.preuzmi_poziv(konfig, "k7m2 9xqp")
+        assert p["clan"] == b["id"] and M.preuzmi_poziv(konfig, "K7M2-9XQP") is None      # kod važi samo jednom
+        mb = dict(udr=p["udr"], kljuc=p["kljuc"], naziv=p["naziv"], admin_javni=p["admin_javni"], uloga="clan",
+                  clan=p["clan"], clan_tajni=p["clan_tajni"], naziv_farme="Farma B")
+        ob = M.oblak_mreze(konfig, mb)
+        redovi = [dict(id="Mina", pol="z", vrsta="ovce", rasa="pramenka", napomena="tajna beleška", stado="Gornje", status="aktivno"),
+                  dict(id="X", pol="m", status="obrisano")]
+        M.objavi_pregled(ob, mb, M.pregled_farme(redovi, "Farma B"))
+        M.objavi_pregled(o, m, M.pregled_farme([dict(id="Bik", pol="m")], "Farma A", M.procitaj_lokaciju("43,8912 20,3456")))
+        spisak = M.procitaj_spisak(ob, mb)
+        assert [c["naziv"] for c in spisak["clanovi"]] == ["Farma A", "Farma B"]
+        pr = M.procitaj_preglede(ob, mb, spisak)
+        assert [g["id"] for g in pr[b["id"]]["grla"]] == ["Mina"] and "napomena" not in pr[b["id"]]["grla"][0]
+        assert "stado" not in pr[b["id"]]["grla"][0] and [g["id"] for g in pr[a["id"]]["grla"]] == ["Bik"]
+        assert pr[a["id"]]["lokacija"] == {"lat": 43.8912, "lon": 20.3456} and "lokacija" not in pr[b["id"]]
+        assert M.procitaj_lokaciju("https://www.google.com/maps/place/X/@43.8,20.3,15z/data=!3m1!8m2!3d43.8912!4d20.3456") == {"lat": 43.8912, "lon": 20.3456}
+        assert M.procitaj_lokaciju("100.5, 20.1") is None and M.procitaj_lokaciju("Čačak") is None
+        assert M.lokacija_iz_teksta("  Prijevor,   Čačak ") == {"adresa": "Prijevor, Čačak"} and M.lokacija_iz_teksta("12") is None
+        assert "query=Prijevor%2C%20%C4%8Ca%C4%8Dak" in M.mapa_url({"adresa": "Prijevor, Čačak"})
+        assert "Prijevor" not in M.mapa_html([("A", "", 1, {"adresa": "Prijevor"})], "U")    # bez brojeva nije na zajedničkoj mapi
+        assert "43.8912" in M.mapa_html([("A", "Čačak", 1, {"lat": 43.8912, "lon": 20.3456}), ("B", "", 0, None)], "U")
+        # telefon dobija samo ključ za čitanje – bez tajnih ključeva za potpis
+        class Lazni(M.MrezaDeo):
+            pod = {"mreza": dict(m)}
+            def mreza_dozvoljena(self): return True
+        za_tel = Lazni().mreza_za_telefon()
+        assert za_tel["udr"] == m["udr"] and "clan_tajni" not in za_tel and "admin_tajni" not in za_tel
+        # farma B pokuša da pošalje podatke u ime farme A -> odbačeno (nema A-in ključ za potpis)
+        lazno = dict(mb, clan=a["id"])
+        M.objavi_pregled(ob, lazno, M.pregled_farme([dict(id="Lažno")], "Farma A"))
+        pr = M.procitaj_preglede(o, m, M.procitaj_spisak(o, m))
+        assert pr[a["id"]]["grla"] == [] and pr[a["id"]].get("greska")
+        # i spisak farmi može da menja samo računar koji je napravio udruženje
+        tekst = zakljucaj(dict(naziv="x", clanovi=[]), mb["kljuc"])
+        ob.upisi("spisak", "glavni", dict(podaci=tekst, potpis=M.potpisi(mb["clan_tajni"], tekst)))
+        try:
+            M.procitaj_spisak(ob, mb)
+            assert False, "podmetnut spisak je prihvaćen"
+        except M.OblakGreska:
+            pass
+    finally:
+        srv.shutdown()

@@ -8,7 +8,7 @@ from jezik import NAZIVI, T, vrsta_kanon, vrsta_na_jeziku
 
 
 KOLONE = ["id", "markica", "rfid", "vrsta", "rasa", "namena", "autohtona", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
-          "poreklo", "poreklo_od", "stare_markice", "uneto", "napomena", "udeo_krvi"]
+          "poreklo", "poreklo_od", "stare_markice", "uneto", "napomena", "udeo_krvi", "ocena"]
 # napomena: vidi se svuda gde je grlo; udeo_krvi: ručno upisan sastav rase osnivača ("romanovska=50;pramenka=50")
 
 
@@ -146,7 +146,7 @@ class Tablica:
 EN_KOL = {"id": "id", "markica": "ear_tag", "rfid": "rfid", "vrsta": "species", "rasa": "breed", "namena": "purpose", "autohtona": "native_breed", "pol": "sex",
           "datum_rodjenja": "birth_date", "otac": "sire", "majka": "dam", "status": "status", "stado": "herd",
           "poreklo": "origin", "poreklo_od": "origin_from", "stare_markice": "old_ear_tags", "uneto": "added", "napomena": "note",
-          "udeo_krvi": "breed_share"}
+          "udeo_krvi": "breed_share", "ocena": "score"}
 
 
 EN_IST = {"grlo": "animal", "datum": "date", "dogadjaj": "event", "opis": "description", "partner": "partner",

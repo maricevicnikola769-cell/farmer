@@ -28,7 +28,9 @@ class GrlaEkran:
                        if sva else (T("Evidencija svih grla sa roditeljima.", "Records of all animals with their parents.")),
                        [((T("Pretraga partnera", "Partner search")), self.idi_na_pretragu, "Secondary"),
                         ((T("Uvezi", "Import")), self.uvezi, "Secondary"), ((T("Izvezi", "Export")), self.izvezi, "Secondary"), ((T("📶 Čitač", "📶 Reader")), self.citac, "Secondary"), ((T("Otvori u Excelu", "Open in Excel")), self.otvori_excel, "Secondary"),
+                        (T("⭐ Rang", "⭐ Ranking"), self.rang_prozor, "Secondary"),
                         ((T("Moje vrste", "My species")), self.prozor_vrsta, "Secondary"),
+                        ((T("Moje rase", "My breeds")), self.prozor_rasa, "Secondary"),
                         ((T("+  Novo grlo", "+  New animal")), lambda: self.forma(), "Primary")])
         if not sva:
             self.prazno(body)

@@ -9,6 +9,7 @@ from podaci import (je_neodredjena, neodredjena_rasa, fmt_datum, fmt_starost, na
     autohtona_rasa, slobodna_oznaka, sort_key, starost_meseci, vrsta_norm)
 from izgled import BAD, BAD_BG, BG, BRAND, INK, INK2, LINE, OK, SURF, SURF2, ScrollFrame, TAG, WARN
 from rodoslov import procena
+from namena_rase import grla_rase, namena_rase, postavi_namenu_rase, rasa_sa_namenom
 
 
 class KartonEkran:
@@ -263,6 +264,7 @@ class KartonEkran:
 
         if not a["osnivac"]:
             self.prirast_na_kartonu(b, x)
+            self.ocene_na_kartonu(b, x)
             self.mlecnost_na_kartonu(b, x)
             self.dnk_na_kartonu(b, x)
         act1 = tk.Frame(b, bg=SURF)
@@ -715,11 +717,27 @@ class KartonEkran:
             vars_[key] = var
             return w
 
-        e_id = polje(1, 0, (T("Oznaka grla *", "Animal tag *")), "id", hint=(T("npr. K12 ili ime", "e.g. K12 or a name")))
+        e_id = polje(1, 0, (T("Oznaka grla (ime)", "Animal tag (name)")), "id",
+                     hint=(T("npr. Mina ili K12 – prazno = markica", "e.g. Mina or K12 – empty = ear tag")))
         polje(1, 1, (T("Ušna markica", "Ear tag")), "markica", hint=(T("npr. RS 1234-5678", "e.g. UK 123456 700123")))
         vr = polje(2, 0, (T("Vrsta", "Species")), "vrsta", "combo", VRSTE)
-        polje(2, 1, (T("Rasa", "Breed")), "rasa", "combo",
-              [neodredjena_rasa()] + sorted({a["rasa"] for a in sva if a["rasa"] and not je_neodredjena(a["rasa"])}))
+        w_rasa = polje(2, 1, (T("Rasa", "Breed")), "rasa", "combo", [])
+        lk_rasa = self.lbl(w_rasa.master, T("+ Moje rase", "+ My breeds"), 8, "bold", fg=BRAND, cursor="hand2")
+        lk_rasa.pack(anchor="w")
+
+        def rase_u_izbor(*_):
+            """Na spisku su rase izabrane vrste (moje rase + rase koje grla već imaju)."""
+            w_rasa.config(values=[neodredjena_rasa()] + self.rase_za_vrstu(vrsta_norm(vars_["vrsta"].get()) or vars_["vrsta"].get()))
+        rase_u_izbor()
+        vars_["vrsta"].trace_add("write", rase_u_izbor)
+
+        def otvori_rase(e=None):
+            win.wait_window(self.prozor_rasa(win))
+            if win.winfo_exists():
+                win.grab_set()
+                rase_u_izbor()
+                vars_["rasa"].set(vars_["rasa"].get())       # osveži namenu
+        lk_rasa.bind("<Button-1>", lambda e: win.after(1, otvori_rase))
 
         pf = tk.Frame(b, bg=SURF)
         pf.grid(row=3, column=0, sticky="w", pady=6)
@@ -749,7 +767,9 @@ class KartonEkran:
         namena = tk.StringVar(value=v.get("namena", ""))
         cb_nam = ttk.Combobox(nf, textvariable=namena, width=26, font=self.f(10), state="readonly")
         cb_nam.pack(fill="x", pady=(4, 0))
-        self.lbl(nf, (T("za goveda, ovce, koze i svinje", "cattle, sheep, goats and pigs")), 8, fg="#8A968D").pack(anchor="w")
+        hint_nam = self.lbl(nf, (T("za goveda, ovce, koze i svinje", "cattle, sheep, goats and pigs")), 8, fg="#8A968D",
+                            wraplength=260, justify="left")
+        hint_nam.pack(anchor="w")
 
         def crtaj_namenu(*_):
             izbori = namene_za(vrsta_norm(vars_["vrsta"].get()) or vars_["vrsta"].get())
@@ -794,6 +814,25 @@ class KartonEkran:
             if nm and not namena.get() and nm in (cb_nam.cget("values") or ()):
                 namena.set(nm)
         vars_["majka"].trace_add("write", namena_od_majke)
+
+        def namena_po_rasi(*_, prvi=False):
+            """Namena se zadaje za rasu: kad rasa već ima namenu, popuni je; za meleze se bira po grlu."""
+            vr_, ra_ = vrsta_norm(vars_["vrsta"].get()) or vars_["vrsta"].get(), norm_rasa(vars_["rasa"].get())
+            if not namene_za(vr_):
+                return
+            if rasa_sa_namenom(ra_):
+                moja = self.nadji_rasu(vr_, ra_)
+                nm = (moja or {}).get("namena") or namena_rase(self.tab.redovi, vr_, ra_, osim=red)
+                if nm and nm in (cb_nam.cget("values") or ()) and not (prvi and namena.get()):
+                    namena.set(nm)
+                n_ = len([r for r in grla_rase(self.tab.redovi, vr_, ra_) if r is not red])
+                hint_nam.config(text=T(f"važi za celu rasu {ra_} (još {n_} grla)", f"applies to the whole {ra_} breed ({n_} more animals)")
+                                if n_ else T(f"važi za celu rasu {ra_}", f"applies to the whole {ra_} breed"))
+            else:
+                hint_nam.config(text=T("melez / neodređena rasa: bira se za ovo grlo", "crossbred / undetermined: chosen for this animal"))
+        vars_["rasa"].trace_add("write", namena_po_rasi)
+        vars_["vrsta"].trace_add("write", namena_po_rasi)
+        namena_po_rasi(prvi=True)
         hint_otac = self.lbl(w_otac.master, "", 8, "bold", fg=BRAND, wraplength=260, justify="left")
         hint_otac.pack(anchor="w")
 
@@ -837,7 +876,8 @@ class KartonEkran:
                         style="Card.TCheckbutton").pack(anchor="w", pady=(0, 10))
 
         def predlozi_autohtonu(*_):
-            if autohtona_rasa(vars_["rasa"].get()):
+            moja = self.nadji_rasu(vrsta_norm(vars_["vrsta"].get()) or vars_["vrsta"].get(), vars_["rasa"].get())
+            if autohtona_rasa(vars_["rasa"].get()) or (moja and moja.get("autohtona")):
                 autoh.set(True)
         vars_["rasa"].trace_add("write", predlozi_autohtonu)
         self.lbl(stf, (T("Status grla *", "Status *")), 9, "bold", fg=INK2).pack(anchor="w")
@@ -850,9 +890,9 @@ class KartonEkran:
         err.grid(row=8, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         def sacuvaj(dalje=False):
-            nid = vars_["id"].get().strip()
-            if not nid:
-                err.config(text=(T("Upiši oznaku grla.", "Enter the animal's tag.")))
+            nid = vars_["id"].get().strip() or (" ".join(vars_["markica"].get().split()) if "markica" in vars_ else "")
+            if not nid:                      # bez oznake: oznaka = ušna markica
+                err.config(text=(T("Upiši oznaku grla ili ušnu markicu.", "Enter the animal's tag or ear tag.")))
                 e_id.focus_set()
                 return
             prvobitno = nid
@@ -901,6 +941,17 @@ class KartonEkran:
                                                   else status.get()),
                         stado=vars_["stado"].get().strip(), poreklo=vars_["poreklo"].get().strip(),
                         poreklo_od=vars_["poreklo_od"].get().strip(), napomena=" ".join(nap_var.get().split()))
+            # namena važi za celu rasu: ako se razlikuje kod drugih grla iste rase, promeni se kod svih
+            ostali_rase = []
+            if novi["namena"] and rasa_sa_namenom(novi["rasa"]):
+                ostali_rase = [r for r in grla_rase(self.tab.redovi, novi["vrsta"], novi["rasa"])
+                               if r is not red and (r.get("namena") or "") != novi["namena"]]
+                if ostali_rase and not messagebox.askyesno("HerdDoc", T(
+                        f"Namena važi za celu rasu {novi['rasa']}.\n\nPromeniti namenu u „{novi['namena']}“ i kod još "
+                        f"{len(ostali_rase)} grla te rase?",
+                        f"The purpose applies to the whole {novi['rasa']} breed.\n\nChange the purpose to “{novi['namena']}” "
+                        f"for {len(ostali_rase)} more animals of this breed?"), parent=win):
+                    return
             if red and novi["status"] == "aktivno" and (red.get("status") or "aktivno") != "aktivno" \
                     and not self.ima_mesta_za_grla(1, win):            # neaktivno -> aktivno: računa se kao novo grlo u paketu
                 return
@@ -944,6 +995,11 @@ class KartonEkran:
                                            (T(f"Rođen potomak {nid} ({'muško' if pol.get() == 'm' else 'žensko'})", f"Offspring born {nid} ({'male' if pol.get() == 'm' else 'female'})")),
                                            datum=parsiraj_datum(dat).strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")),
                                            partner=self.model.nadji(drugi) or drugi or "", automatski=True)
+            if ostali_rase:
+                for r_, staro_ in postavi_namenu_rase([r for r in ostali_rase], novi["vrsta"], novi["rasa"], novi["namena"]):
+                    self.ist.dodaj(r_["id"], AUTO, T(f"Namena rase: {staro_ or '–'} → {novi['namena']}",
+                                                     f"Breed purpose: {staro_ or '–'} → {novi['namena']}"), automatski=True)
+            self.zapamti_rasu(novi["vrsta"], novi["rasa"], novi["namena"] or None, novi["autohtona"] or None)   # rasa ostaje na spisku
             self.pod["poslednje"] = dict(vrsta=novi["vrsta"], rasa=novi["rasa"], stado=novi["stado"])
             self.sacuvaj_podesavanja()
             win.grab_release()

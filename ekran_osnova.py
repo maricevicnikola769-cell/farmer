@@ -137,7 +137,8 @@ class OsnovaProzora:
         root.after(10 * 60 * 1000, self.iskacuce_provera)   # zatim na svakih 30 min: nova hitna obaveštenja kao poruka u uglu ekrana
         root.after(1500, self.dnevna_kopija)
         root.after(2500, self.licenca_na_startu)
-        root.after(4500, lambda: precica.ponudi(self))   # samo verzija iz prodavnice, samo jednom
+        root.after(4500, lambda: precica.ponudi(self))
+        root.after(2 * 60 * 1000, self.mreza_petlja)    # udruženje: svoja grla šalje drugim farmama (samo kad ima promena)   # samo verzija iz prodavnice, samo jednom
         root.after(60000, self.dnevna_kopija_u_oblak)     # kopija u oblaku jednom dnevno (ako je telefon uparen)
         self.pokreni_sinhronizaciju()
         root.bind("<FocusIn>", self.proveri_promenu)
@@ -247,7 +248,7 @@ class OsnovaProzora:
         self.nav = {}
         for key, txt, ic in (("grla", (T("Grla", "Animals")), "☰"), ("parenje", (T("Parenje", "Mating")), "⚭"),
                              ("srodstvo", (T("Srodstvo", "Relationship")), "⑂"),
-                             ("rasa", T("Nova rasa", "New breed"), "✦"), ("istorija", (T("Istorija", "History")), "◷"),
+                             ("rasa", T("Nova rasa", "New breed"), "✦"), ("mreza", T("Udruženje", "Association"), "⌂"), ("istorija", (T("Istorija", "History")), "◷"),
                              ("mlecnost", (T("Mlečnost", "Milk")), "◔"), ("finansije", (T("Finansije", "Finances")), "¤"),
                              ("obavestenja", (T("Obaveštenja", "Notifications")), "◉"), ("pregled", (T("Pregled", "Overview")), "▥"),
                              ("statistika", T("Statistika", "Statistics"), "▤"), ("stampa", T("Štampa i PDF", "Print and PDF"), "⎙"),

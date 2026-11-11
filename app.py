@@ -27,8 +27,11 @@ from prirast import PrirastDeo
 from dnk import DnkDeo
 from licenca import LicencaDeo
 from vrste import VrsteDeo
+from rase import RaseDeo
+from mreza import MrezaDeo
 from nova_rasa import NovaRasaDeo
 from iskacuce import IskacuceDeo
+from ocene import OceneDeo
 from telefon_prenos import TelefonDeo
 from sinhronizacija import SinhronizacijaDeo
 import dnevnik
@@ -36,7 +39,7 @@ from dnevnik import DnevnikDeo
 
 
 class App(OsnovaProzora, GrlaEkran, ParenjeEkran, KartonEkran, GravidnostDeo, IstorijaDeo, KopijeDeo, ObavestenjaDeo, StampaDeo, TelefonDeo,
-          SinhronizacijaDeo, DnevnikDeo, IzvozDeo, MlecnostDeo, CitacDeo, FinansijeDeo, OblakKopijaDeo, PrirastDeo, DnkDeo, LicencaDeo, VrsteDeo, NovaRasaDeo, IskacuceDeo):
+          SinhronizacijaDeo, DnevnikDeo, IzvozDeo, MlecnostDeo, CitacDeo, FinansijeDeo, OblakKopijaDeo, PrirastDeo, DnkDeo, LicencaDeo, VrsteDeo, RaseDeo, MrezaDeo, NovaRasaDeo, IskacuceDeo, OceneDeo):
     """Glavni prozor programa, sklopljen iz delova (svaki deo je u svom fajlu)."""
 
 

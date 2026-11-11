@@ -707,6 +707,23 @@ class IstorijaDeo:
         chk = ttk.Checkbutton(b, text=(T("Označi grlo kao van zapata", "Mark the animal as out of herd")), variable=vz, style="Card.TCheckbutton")
         err = self.lbl(b, "", 10, "bold", fg=BAD)
         err.grid(row=8, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        # podsetnik uz događaj: "treba uraditi" (samo podsetnik) ili "podseti me za sledeću" (posle urađene vakcinacije / lečenja)
+        PON = [(T("ne ponavlja se", "does not repeat"), 0), (T("svake nedelje", "every week"), 7), (T("svakog meseca", "every month"), 30),
+               (T("na 3 meseca", "every 3 months"), 90), (T("na 6 meseci", "every 6 months"), 182), (T("svake godine", "every year"), 365)]
+        SLED = [(T("ne", "no"), 0), (T("za 1 mesec", "in 1 month"), 30), (T("za 3 meseca", "in 3 months"), 90),
+                (T("za 6 meseci", "in 6 months"), 182), (T("za 1 godinu", "in 1 year"), 365)]
+        fp = tk.Frame(b, bg=SURF)
+        v_treba = tk.BooleanVar(value=False)
+        v_pon = tk.StringVar(value=PON[0][0])
+        v_sled = tk.StringVar(value=SLED[0][0])
+        ttk.Checkbutton(fp, text=T("⏰ Treba uraditi – samo podsetnik (još nije urađeno)", "⏰ To do – reminder only (not done yet)"),
+                        variable=v_treba, style="Card.TCheckbutton", command=lambda: prilagodi()).grid(row=0, column=0, columnspan=4, sticky="w")
+        l_pon = self.lbl(fp, T("Ponavljanje", "Repeat"), 9, "bold", fg=INK2)
+        cb_pon = ttk.Combobox(fp, textvariable=v_pon, values=[k for k, _ in PON], state="readonly", width=16, font=self.f(10))
+        l_sled = self.lbl(fp, T("⏰ Podseti me za sledeću", "⏰ Remind me of the next one"), 9, "bold", fg=INK2)
+        cb_sled = ttk.Combobox(fp, textvariable=v_sled, values=[k for k, _ in SLED], state="readonly", width=14, font=self.f(10))
+        if not zapis:
+            fp.grid(row=9, column=0, columnspan=2, sticky="w", pady=(10, 0))
         nazivi_vr = {(T("Merenje težine", "Weighing")): (T("Težina (kg)", "Weight (kg)")), (T("Vakcinacija", "Vaccination")): (T("Vakcina / preparat", "Vaccine / product")),
                      (T("Lečenje", "Treatment")): (T("Lek / dijagnoza", "Drug / diagnosis")), (T("Prodaja", "Sale")): (T("Kupac / cena", "Buyer / price")), (T("Premeštanje", "Move")): (T("Novo stado / lokacija", "New herd / location")),
                      (T("Porođaj", "Birth")): (T("Broj mladunaca", "Number of young")), (T("Parenje / osemenjavanje", "Mating / insemination")): (T("Način (prirodno / VO)", "Method (natural / AI)"))}
@@ -716,14 +733,31 @@ class IstorijaDeo:
         def prilagodi(*_):
             d = vars_["dogadjaj"].get()
             g = m.nadji(vars_["grlo"].get())
+            leci_ = d in ((T("Lečenje", "Treatment")), (T("Vakcinacija", "Vaccination")))
+            for w_ in (l_pon, cb_pon, l_sled, cb_sled):
+                w_.grid_remove()
+            if v_treba.get():
+                l_pon.grid(row=1, column=0, sticky="w", pady=(6, 0))
+                cb_pon.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
+            elif leci_:
+                l_sled.grid(row=1, column=0, sticky="w", pady=(6, 0))
+                cb_sled.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
+            napomena_ = d == (T("Napomena", "Note"))
             if not zapis:
                 self.partner_iz_stada(g, d, vars_["partner"], auto_par2)
-            if d in ((T("Lečenje", "Treatment")), (T("Vakcinacija", "Vaccination"))):
+            if d in ((T("Lečenje", "Treatment")), (T("Vakcinacija", "Vaccination"))) and not v_treba.get():
                 f_par.grid_remove()
                 f_kar.grid(row=3, column=1, sticky="nw", padx=(14, 0), pady=6)
+            elif napomena_ or d in ((T("Lečenje", "Treatment")), (T("Vakcinacija", "Vaccination"))):
+                f_kar.grid_remove()
+                f_par.grid_remove()
             else:
                 f_kar.grid_remove()
                 f_par.grid()
+            if napomena_:
+                f_vr.grid_remove()                   # napomena: samo datum i tekst
+            else:
+                f_vr.grid()
             for w_ in f_vr.winfo_children():
                 if isinstance(w_, tk.Label):
                     w_.config(text=nazivi_vr.get(d, (T("Vrednost", "Value"))))
@@ -763,6 +797,18 @@ class IstorijaDeo:
                 return
             par = vars_["partner"].get().strip()
             par = m.nadji(par) or par
+            ds = d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y"))
+            if not zapis and v_treba.get():           # još nije urađeno: samo podsetnik, ništa u istoriju
+                self.pods.dodaj(g, ds, dog, opis.get("1.0", "end").strip(), dict(PON).get(v_pon.get(), 0))
+                win.grab_release()
+                win.destroy()
+                self.promena(T(f"Podsetnik zakazan: {g} – {dog} ({ds})", f"Reminder scheduled: {g} – {dog} ({ds})"))
+                if posle:
+                    try:
+                        posle()
+                    except tk.TclError:
+                        pass
+                return
             leci = dog in ((T("Lečenje", "Treatment")), (T("Vakcinacija", "Vaccination")))
             podaci = dict(grlo=g, datum=d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), dogadjaj=dog, opis=opis.get("1.0", "end").strip(),
                           partner="" if leci else par, vrednost=vars_["vrednost"].get().strip(),
@@ -772,6 +818,9 @@ class IstorijaDeo:
                 zapis.update(podaci)
             else:
                 self.posle_novog_zapisa(self.ist.dodaj(**podaci))
+                sled = dict(SLED).get(v_sled.get(), 0) if leci else 0
+                if sled:                              # urađeno + zakaži sledeću (ponavlja se na isto)
+                    self.pods.dodaj(g, (d + timedelta(days=sled)).strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), dog, podaci["opis"], sled)
                 if dog in ((T("Prodaja", "Sale")), (T("Uginuće", "Death"))) and vz.get():
                     r = self.red_za(g)
                     if r and r.get("status") == "aktivno":
@@ -792,7 +841,7 @@ class IstorijaDeo:
                     pass
 
         fb = tk.Frame(b, bg=SURF)
-        fb.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(16, 0))
+        fb.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(16, 0))
         self.btn(fb, (T("Sačuvaj", "Save")), sacuvaj, "Primary").pack(side="right")
         self.btn(fb, (T("Otkaži", "Cancel")), win.destroy).pack(side="right", padx=8)
         win.bind("<Escape>", lambda e: win.destroy())
