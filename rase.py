@@ -104,7 +104,7 @@ class RaseDeo:
         tv.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
-        sve_vrste = list(jezik.VRSTE) + [v["ime"] for v in self.pod.get("vrste_moje", [])]
+        sve_vrste = list(dict.fromkeys(list(jezik.VRSTE) + [v["ime"] for v in self.pod.get("vrste_moje", [])]))   # bez duplih
         v_vrsta = tk.StringVar(value=sve_vrste[0] if sve_vrste else "")
         v_ime, v_nam, v_aut = tk.StringVar(), tk.StringVar(), tk.BooleanVar()
         menjam = {"r": None}
