@@ -1,12 +1,14 @@
 """Iskačuća poruka u uglu ekrana: hitni i skori podsetnici (porođaj, ter, karenca, podsetnici…) se pojave
 iznad svih prozora – i kad je HerdDoc umanjen ili iza drugog programa. Svako obaveštenje iskoči najviše jednom dnevno."""
 import tkinter as tk
-from datetime import date
+from datetime import date, datetime
 
 from jezik import T
 from izgled import BAD, BRAND, INK, INK2, LINE, SURF, WARN
 
 PROVERA_MIN = 30            # koliko često program proverava (minuta)
+SAT_PODRAZUMEVANO = 7       # poruke ne iskaču pre 7 sati (može da se promeni)
+UNAPRED_PODRAZUMEVANO = 3   # podsetnik se javlja 3 dana pre roka (može da se promeni)
 OSTAJE_SEK = 180            # poruka se sama skloni posle 3 minuta
 
 
@@ -16,6 +18,23 @@ def kljuc_obavestenja(o):
 
 class IskacuceDeo:
     """Poruke na ekranu za obaveštenja koja traže pažnju."""
+
+    def obav_sat(self):
+        """Od koliko sati smeju da iskaču poruke (0–23)."""
+        try:
+            return max(0, min(23, int(self.pod.get("obav_sat", SAT_PODRAZUMEVANO))))
+        except (TypeError, ValueError):
+            return SAT_PODRAZUMEVANO
+
+    def dana_unapred(self):
+        """Koliko dana pre roka podsetnik postaje „uskoro“ i javlja se (0–30)."""
+        try:
+            return max(0, min(30, int(self.pod.get("obav_unapred", UNAPRED_PODRAZUMEVANO))))
+        except (TypeError, ValueError):
+            return UNAPRED_PODRAZUMEVANO
+
+    def obav_za_telefon(self):
+        return dict(sat=self.obav_sat(), unapred=self.dana_unapred())
 
     def iskacuce_ukljuceno(self):
         return self.pod.get("iskacuce", True)
@@ -38,8 +57,9 @@ class IskacuceDeo:
         return [o for o in self.obavestenja() if o["nivo"] <= 1 and kljuc_obavestenja(o) not in vec]
 
     def iskacuce_provera(self):
+        sada = datetime.now()
         try:
-            if self.iskacuce_ukljuceno():
+            if self.iskacuce_ukljuceno() and sada.hour >= self.obav_sat():
                 nova = self.nova_za_poruku()
                 if nova:
                     self.zapamti_prikazana(nova)
@@ -47,7 +67,10 @@ class IskacuceDeo:
                     self.iskacuca_poruka(nova)
         except Exception:
             pass
-        self.root.after(PROVERA_MIN * 60 * 1000, self.iskacuce_provera)
+        # sledeća provera za 30 min – ili tačno u izabrani sat, ako je on pre toga
+        do_sata = (sada.replace(hour=self.obav_sat(), minute=0, second=5, microsecond=0) - sada).total_seconds()
+        cekaj = min(PROVERA_MIN * 60, do_sata) if do_sata > 0 else PROVERA_MIN * 60
+        self.root.after(int(cekaj * 1000), self.iskacuce_provera)
 
     def iskacuca_poruka(self, stavke):
         stari = getattr(self, "_iskacuca", None)

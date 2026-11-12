@@ -1,5 +1,5 @@
 // HerdDoc za telefon – radi i bez interneta: svi fajlovi aplikacije se čuvaju u telefonu.
-const VERZIJA = "farmer-tel-5.2";
+const VERZIJA = "farmer-tel-5.3";
 const FAJLOVI = ["./", "index.html", "app.js", "skener.js", "oblak.js", "oblak-konfig.js", "zxing.min.js", "logika.js", "konstante.js", "prevodi.js", "manifest.webmanifest",
   "ikone/ikona-192.png", "ikone/ikona-512.png", "ikone/ikona-maskable-512.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(VERZIJA).then(c => c.addAll(FAJLOVI.map(f => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting())));
@@ -22,6 +22,7 @@ async function javiPodsetnike() {
   const db = await bazaSW();
   const p = await swRadnja(db, "readonly", st => st.get("obavestenja"));
   if (!p || !Array.isArray(p.plan)) return;
+  if (new Date().getHours() < (+p.sat || 0)) return;          // pre izabranog sata ne javlja (podešava se na računaru)
   const d = danasISO(), pok = (await swRadnja(db, "readonly", st => st.get("pokazano"))) || {};
   const vec = pok.datum === d ? pok.k || [] : [];
   const nova = p.plan.filter(x => x.od <= d && !vec.includes(x.k));

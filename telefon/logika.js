@@ -545,6 +545,9 @@ function opisKarence(x) {
 
 // ---------------------------------------------------------------- obaveštenja
 // nivo: 0 hitno, 1 uskoro, 2 info, 3 zakazano. akcije: [{tekst, radnja, glavno}]
+// podešava se na računaru (Obaveštenja): od koliko sati i koliko dana pre roka
+const danaUnapred = () => (S.obav && +S.obav.unapred >= 0 ? Math.min(30, +S.obav.unapred) : 3);
+const obavSat = () => (S.obav && +S.obav.sat >= 0 ? Math.min(23, +S.obav.sat) : 7);
 function obavestenja(x = null) {
   const en = EN(), d0 = danas(), rez = [];
   for (const z of cekajuPorodjaj()) {
@@ -573,7 +576,7 @@ function obavestenja(x = null) {
   for (const p of S.podsetnici.filter(p => !p.gotovo && (x === null || p.grlo === x))) {
     const d = parsirajDatum(p.datum) || d0, dana = razlikaDana(d, d0), pon = parseInt(p.ponavljanje || "0", 10) || 0;
     const kad = dana < 0 ? (t(`zakasnelo ${-dana} d.`, `${-dana} d. overdue`)) : dana === 0 ? (t("danas", "today")) : dana === 1 ? (t("sutra", "tomorrow")) : (t(`za ${dana} d.`, `in ${dana} d.`));
-    rez.push({ nivo: dana < 0 ? 0 : dana <= 3 ? 1 : 3, grlo: p.grlo || null, naslov: `${p.tip || (t("Podsetnik", "Reminder"))} – ${kad}`,
+    rez.push({ nivo: dana < 0 ? 0 : dana <= danaUnapred() ? 1 : 3, grlo: p.grlo || null, naslov: `${p.tip || (t("Podsetnik", "Reminder"))} – ${kad}`,
       opis: p.datum + (p.tekst ? ` · ${p.tekst}` : "") + (pon ? (t(` · ponavlja se na ${pon} d.`, ` · repeats every ${pon} d.`)) : ""), datum: d,
       akcije: [{ tekst: t("Urađeno", "Done"), radnja: ["podsetnikUradjen", p], glavno: true }, { tekst: t("Odloži 7 d.", "Postpone 7 d."), radnja: ["podsetnikOdlozi", p] }] });
   }
@@ -981,7 +984,7 @@ function smanjiSliku(fajl, maks = 1600, kvalitet = 0.78) {
   });
 }
 
-if (typeof module !== "undefined") module.exports = { S, K, Model, M: () => M, osveziModel, parsirajDatum, fmtD, pct, procena, nazivi, rasaPotomka, normRasa, namenaRase, raseZaVrstu, mojaRasa,
+if (typeof module !== "undefined") module.exports = { S, K, Model, M: () => M, osveziModel, parsirajDatum, fmtD, pct, procena, nazivi, rasaPotomka, normRasa, namenaRase, danaUnapred, obavSat, raseZaVrstu, mojaRasa,
   vrstaNorm, upisiDogadjaj, rodjenje, upisUListu, novoGrlo, teraSe, neTeraSe, oznaciNeuspelo, podsetnikUradjen, podsetnikOdlozi, noviPodsetnik,
   obavestenja, cekajuPorodjaj, cekajuMindjusu, granicePorodjaja, opisIshoda, partneri, karenca, opisKarence, ucitajSaRacunara, paketZaRacunar,
   leglo, danas, dodajDane, istorijaZa, markicaZauzeta, roditeljiParenja, podaciLegla, sortKey };

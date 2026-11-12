@@ -1131,3 +1131,41 @@ def test_udruzenje_samo_pregled():
             pass
     finally:
         srv.shutdown()
+
+
+def test_obavestenja_sat_i_unapred(monkeypatch):
+    """Poruka ne iskače pre izabranog sata (a sledeća provera je tačno u taj sat); broj dana unapred se čuva u granicama."""
+    from datetime import datetime as DT
+    import iskacuce
+
+    class A(iskacuce.IskacuceDeo):
+        def __init__(self):
+            self.pod, self.iskocilo, self.zakazano = {"obav_sat": 8}, [], []
+            self.root = type("R", (), {"after": lambda _s, ms, fn: self.zakazano.append(ms)})()
+        def obavestenja(self):
+            return [dict(nivo=0, grlo="K1", naslov="Termin porođaja je prošao")]
+        def sacuvaj_podesavanja(self):
+            pass
+        def iskacuca_poruka(self, stavke):
+            self.iskocilo.append(stavke)
+
+    class Sat(DT):
+        trenutno = DT(2026, 11, 12, 6, 30)
+        @classmethod
+        def now(cls, tz=None):
+            return cls.trenutno
+    monkeypatch.setattr(iskacuce, "datetime", Sat)
+    a = A()
+    a.iskacuce_provera()
+    assert a.iskocilo == [] and abs(a.zakazano[-1] - 30 * 60 * 1000) < 2000          # 6:30 – ćuti, proverava u 7:00
+    Sat.trenutno = DT(2026, 11, 12, 7, 45)
+    a.iskacuce_provera()
+    assert a.iskocilo == [] and abs(a.zakazano[-1] - (15 * 60 + 5) * 1000) < 2000    # 7:45 – sledeća provera tačno u 8:00
+    Sat.trenutno = DT(2026, 11, 12, 8, 0, 5)
+    a.iskacuce_provera()
+    assert len(a.iskocilo) == 1                                                      # 8:00 – iskoči
+    assert a.dana_unapred() == 3 and a.obav_za_telefon() == {"sat": 8, "unapred": 3}
+    a.pod["obav_unapred"] = 99
+    assert a.dana_unapred() == 30
+    a.pod["obav_unapred"] = "x"
+    assert a.dana_unapred() == 3

@@ -352,7 +352,7 @@ class ObavestenjaDeo:
         for p in self.pods.aktivni(x):
             d = parsiraj_datum(p["datum"]) or danas
             dana = (d - danas).days
-            nivo = 0 if dana < 0 else 1 if dana <= 3 else 3
+            nivo = 0 if dana < 0 else 1 if dana <= self.dana_unapred() else 3
             kad = ((T(f"zakasnelo {-dana} d.", f"{-dana} d. overdue")) if dana < 0 else (T("danas", "today")) if dana == 0 else
                    (T("sutra", "tomorrow")) if dana == 1 else (T(f"za {dana} d.", f"in {dana} d.")))
             pon = int(p.get("ponavljanje") or 0)
@@ -444,7 +444,8 @@ class ObavestenjaDeo:
             self.sacuvaj_podesavanja()
         ttk.Checkbutton(body, text=T("Prikaži hitna obaveštenja kao poruku u uglu ekrana (i kad je HerdDoc umanjen)",
                                      "Show urgent notifications as a message in the corner of the screen (even when HerdDoc is minimised)"),
-                        variable=v_isk, command=promena_isk).pack(anchor="w", pady=(0, 14))
+                        variable=v_isk, command=promena_isk).pack(anchor="w", pady=(0, 6))
+        self._podesavanje_vremena(body)
         if not aktivna and not zakazano:
             self.napomena(body, (T("Sve je u redu – nema obaveštenja. Dodaj podsetnik za grlo (vakcinacija, "
                                 "lečenje, prodaja…) dugmetom „Novi podsetnik“.", "All is well – no notifications. Add a reminder for an animal (vaccination, "
@@ -464,6 +465,34 @@ class ObavestenjaDeo:
             self.lbl(c_, (T(f"Zakazani podsetnici ({len(zakazano)})", f"Scheduled reminders ({len(zakazano)})")), 12, "bold").pack(anchor="w", pady=(0, 4))
             self._redovi_sa_vise(c_, zakazano, 3)
 
+
+    def _podesavanje_vremena(self, body):
+        """U koliko sati smeju da iskaču poruke i koliko dana unapred se javlja podsetnik (važi i za telefon)."""
+        red = tk.Frame(body, bg=body.cget("bg"))
+        red.pack(anchor="w", pady=(0, 14))
+        v_sat = tk.StringVar(value=f"{self.obav_sat():02d}:00")
+        v_dan = tk.StringVar(value=str(self.dana_unapred()))
+        self.lbl(red, T("⏰ Obaveštavaj me od", "⏰ Notify me from"), 10, bg=body.cget("bg")).pack(side="left")
+        ttk.Combobox(red, textvariable=v_sat, values=[f"{h:02d}:00" for h in range(24)], width=6, state="readonly",
+                     font=self.f(10)).pack(side="left", padx=6)
+        self.lbl(red, T("časova, i to", "o'clock, and"), 10, bg=body.cget("bg")).pack(side="left")
+        ttk.Combobox(red, textvariable=v_dan, values=[str(d) for d in (0, 1, 2, 3, 5, 7, 10, 14, 21, 30)], width=4,
+                     state="readonly", font=self.f(10)).pack(side="left", padx=6)
+        self.lbl(red, T("dana pre roka podsetnika", "days before a reminder is due"), 10, bg=body.cget("bg")).pack(side="left")
+
+        def promena(*_):
+            self.pod["obav_sat"] = int(v_sat.get()[:2])
+            self.pod["obav_unapred"] = int(v_dan.get())
+            self.sacuvaj_podesavanja()
+            try:
+                self.sinh_uskoro()                    # telefon dobija ista podešavanja
+            except Exception:
+                pass
+            if hasattr(self, "osvezi_nav_brojac"):
+                self.osvezi_nav_brojac()
+            self.root.after(50, lambda: self.prikazi("obavestenja"))
+        v_sat.trace_add("write", promena)
+        v_dan.trace_add("write", promena)
 
     def _redovi_sa_vise(self, c_, grupa, kljuc, korak=60):
         """Veliko stado ima i hiljadu obaveštenja – prikazuje se deo, ostalo na dugme (strana ostaje brza)."""
@@ -555,7 +584,8 @@ class ObavestenjaDeo:
         b = tk.Frame(win, bg=SURF)
         b.pack(fill="both", expand=True, padx=26, pady=22)
         self.lbl(b, (T("Izmena podsetnika", "Edit reminder")) if zapis else (T("Novi podsetnik", "New reminder")), 16, "bold").pack(anchor="w")
-        self.lbl(b, (T("Program će te obavestiti kad dođe dan (i 3 dana pre toga).", "The program will notify you when the day comes (and 3 days before).")), 9, fg=INK2).pack(anchor="w", pady=(2, 10))
+        self.lbl(b, T(f"Program će te obavestiti kad dođe dan (i {self.dana_unapred()} dana pre toga).",
+                      f"The program will notify you when the day comes (and {self.dana_unapred()} days before)."), 9, fg=INK2).pack(anchor="w", pady=(2, 10))
         g = tk.Frame(b, bg=SURF)
         g.pack(fill="x")
         gv = tk.StringVar(value=z.get("grlo") or grlo or "")

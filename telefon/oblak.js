@@ -243,6 +243,7 @@ function primeniSnimak(snap) {
   if (snap.licenca) S.licenca = snap.licenca;
   if (Array.isArray(snap.vrste)) S.vrste = snap.vrste;
   if (Array.isArray(snap.rase)) S.rase = snap.rase;
+  if (snap.obav && typeof snap.obav === "object") S.obav = { sat: +snap.obav.sat || 0, unapred: +snap.obav.unapred >= 0 ? +snap.obav.unapred : 3 };
   if ("mreza" in snap) {                               // udruženje: pristup samo za pregled grla drugih farmi
     if (!snap.mreza || !S.mreza || S.mreza.udr !== snap.mreza.udr) S.mrezaPodaci = null;
     S.mreza = snap.mreza || null;

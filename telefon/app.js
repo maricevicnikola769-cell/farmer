@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "5.2";
+const VERZIJA_TEL = "5.3";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -39,7 +39,7 @@ const kopija = o => (typeof structuredClone === "function" ? structuredClone(o) 
 const stanjeZaCuvanje = () => ({ jezik: S.jezik, jezikIzabran: S.jezikIzabran || null, prag: S.prag, grav: S.grav, grla: S.grla, istorija: S.istorija,
   podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false,
   sinh: S.sinh || null, poslato: S.poslato || [], slike: S.slike || {}, licenca: S.licenca || null, vrste: S.vrste || [], rase: S.rase || [],
-  mreza: S.mreza || null, mrezaPodaci: S.mrezaPodaci || null, mrezaToken: S.mrezaToken || null });
+  obav: S.obav || null, mreza: S.mreza || null, mrezaPodaci: S.mrezaPodaci || null, mrezaToken: S.mrezaToken || null });
 function sacuvajStaro(podaci) {
   try { localStorage.setItem(KLJUC, JSON.stringify(podaci)); return true; }
   catch (e) { poruka(t("Podaci nisu sačuvani u telefonu: ", "Data was not saved on the phone: ") + e.message); return false; }
@@ -877,7 +877,7 @@ function ekranVise() {
     <a class="red" href="#novo"><span style="font-size:24px">＋</span><div class="sred"><b>${t("Novo grlo", "New animal")}</b><span>${t("kupljeno ili rođeno", "bought or born")}</span></div></a>
     <a class="red" href="#muznja"><span style="font-size:24px">🥛</span><div class="sred"><b>${t("Mužnja", "Milking")}</b><span>${t("dnevni upis mleka za mlečna grla", "daily milk entry for dairy animals")}</span></div></a>
     <a class="red" href="#podsetnik"><span style="font-size:24px">⏰</span><div class="sred"><b>${t("Novi podsetnik", "New reminder")}</b><span>${t("vakcinacija, lečenje…", "vaccination, treatment…")}</span></div></a>
-    <a class="red" href="#" id="obUk"><span style="font-size:24px">🔔</span><div class="sred"><b>${t("Obaveštenja na telefonu", "Phone notifications")}</b><span>${h(stanjeObavestenja()[1])}</span></div>${stanjeObavestenja()[0] === "da" ? `<span class="znak">✓</span>` : ""}</a>
+    <a class="red" href="#" id="obUk"><span style="font-size:24px">🔔</span><div class="sred"><b>${t("Obaveštenja na telefonu", "Phone notifications")}</b><span>${h(stanjeObavestenja()[1])}</span><span>${h(t(`od ${obavSat()}:00 h · ${danaUnapred()} dana pre roka (menja se na računaru)`, `from ${obavSat()}:00 · ${danaUnapred()} days before due (set on the computer)`))}</span></div>${stanjeObavestenja()[0] === "da" ? `<span class="znak">✓</span>` : ""}</a>
     <a class="red" href="#" id="problem"><span style="font-size:24px">⚠</span><div class="sred"><b>${t("Prijavi problem", "Report a problem")}</b><span>${t("pošalji izveštaj o greškama (bez podataka o grlima)", "send an error report (no animal data)")}</span></div></a>
     </div>
     <div class="kart"><label class="mali" for="jezikV">🌐 ${t("Jezik", "Language")}</label>
@@ -1059,13 +1059,13 @@ function planObavestenja() {
   for (const o of obavestenja().filter(o => o.nivo <= 1)) plan.push({ k: `${o.grlo || ""}|${o.naslov}`, n: (o.grlo ? o.grlo + " – " : "") + o.naslov, od: lokDatum(d0) });
   for (const p of S.podsetnici.filter(p => !p.gotovo)) {
     const pd = parsirajDatum(p.datum);
-    if (pd && pd > dodajDane(d0, 3)) plan.push({ k: `p|${p.grlo || ""}|${p.tip}|${p.datum}`, n: `${p.grlo ? p.grlo + " – " : ""}${p.tip || t("Podsetnik", "Reminder")} (${p.datum})`, od: lokDatum(dodajDane(pd, -3)) });
+    if (pd && pd > dodajDane(d0, danaUnapred())) plan.push({ k: `p|${p.grlo || ""}|${p.tip}|${p.datum}`, n: `${p.grlo ? p.grlo + " – " : ""}${p.tip || t("Podsetnik", "Reminder")} (${p.datum})`, od: lokDatum(dodajDane(pd, -danaUnapred())) });
   }
   for (const z of cekajuPorodjaj()) {
     const [od, oc] = granicePorodjaja(z), [majka] = roditeljiParenja(z);
     if (od && oc && od > d0) plan.push({ k: `r|${majka || ""}|${z.datum}`, n: `${majka || "?"} – ${t("porođaj se očekuje oko", "birth expected around")} ${fmtD(oc)}`, od: lokDatum(od) });
   }
-  return { plan, naslov: t("HerdDoc – podsetnik", "HerdDoc – reminder"), jos: t("… i još {0}", "… and {0} more"), napravljeno: lokDatum(d0) };
+  return { plan, sat: obavSat(), naslov: t("HerdDoc – podsetnik", "HerdDoc – reminder"), jos: t("… i još {0}", "… and {0} more"), napravljeno: lokDatum(d0) };
 }
 let _planT = null;
 function planUskoro() {

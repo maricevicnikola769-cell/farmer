@@ -380,11 +380,16 @@ SABLONI = [
 "🏷 {0} born {1} – waiting for ear tag",
 "🔑 Free: {0}/{1} animals – buy",
 "🔑 Trial: {0} days left",
-"🔒 View only – only the farm {0} changes it"
+"🔒 View only – only the farm {0} changes it",
+"The program will notify you when the day comes (and {0} days before).",
 ]
 SABLONI = set(SABLONI)
 PREVODI = {
 "fr": {
+"⏰ Notify me from": "⏰ Me prévenir à partir de",
+"o'clock, and": "heures, et",
+"days before a reminder is due": "jours avant l'échéance d'un rappel",
+"The program will notify you when the day comes (and {0} days before).": "Le programme vous préviendra le jour venu (et {0} jours avant).",
 "\n\nRestore this data? The current data on this computer will first be saved as a manual backup.": "\n\nRestaurer ces données ? Les données actuelles de cet ordinateur seront d'abord enregistrées comme sauvegarde manuelle.",
 "\n\nWarning: {0}{1} has/have this animal as a parent. Their ancestors through this animal will be lost and the relationships will be wrong.": "\n\nAttention : {0}{1} a/ont cet animal comme parent. Leurs ancêtres par cet animal seront perdus et les parentés seront fausses.",
 "\n\n{0} records were changed on both the computer and the phone – the phone version was used.": "\n\n{0} entrées ont été modifiées à la fois sur l'ordinateur et sur le téléphone – la version du téléphone a été retenue.",
@@ -2244,6 +2249,10 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Acheter un forfait sur le site…"
 },
 "de": {
+"⏰ Notify me from": "⏰ Benachrichtigen ab",
+"o'clock, and": "Uhr, und zwar",
+"days before a reminder is due": "Tage vor Fälligkeit einer Erinnerung",
+"The program will notify you when the day comes (and {0} days before).": "Das Programm benachrichtigt Sie, wenn der Tag kommt (und {0} Tage vorher).",
 "\n\nRestore this data? The current data on this computer will first be saved as a manual backup.": "\n\nDiese Daten wiederherstellen? Die aktuellen Daten auf diesem Computer werden zuerst als manuelle Sicherung gespeichert.",
 "\n\nWarning: {0}{1} has/have this animal as a parent. Their ancestors through this animal will be lost and the relationships will be wrong.": "\n\nAchtung: {0}{1} hat/haben dieses Tier als Elternteil. Ihre Vorfahren über dieses Tier gehen verloren und die Verwandtschaften werden falsch.",
 "\n\n{0} records were changed on both the computer and the phone – the phone version was used.": "\n\n{0} Einträge wurden sowohl am Computer als auch am Telefon geändert – die Telefonversion wurde übernommen.",
@@ -4103,6 +4112,10 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Paket auf der Website kaufen…"
 },
 "es": {
+"⏰ Notify me from": "⏰ Avisarme desde las",
+"o'clock, and": "horas, y",
+"days before a reminder is due": "días antes del vencimiento de un recordatorio",
+"The program will notify you when the day comes (and {0} days before).": "El programa le avisará cuando llegue el día (y {0} días antes).",
 "\n\nRestore this data? The current data on this computer will first be saved as a manual backup.": "\n\n¿Restaurar estos datos? Los datos actuales de este ordenador se guardarán primero como copia manual.",
 "\n\nWarning: {0}{1} has/have this animal as a parent. Their ancestors through this animal will be lost and the relationships will be wrong.": "\n\nAtención: {0}{1} tiene(n) este animal como progenitor. Sus antepasados a través de este animal se perderán y los parentescos serán incorrectos.",
 "\n\n{0} records were changed on both the computer and the phone – the phone version was used.": "\n\n{0} registros se cambiaron tanto en el ordenador como en el teléfono: se usó la versión del teléfono.",
@@ -5962,6 +5975,10 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Comprar un paquete en el sitio web…"
 },
 "pt": {
+"⏰ Notify me from": "⏰ Avisar-me a partir das",
+"o'clock, and": "horas, e",
+"days before a reminder is due": "dias antes do prazo de um lembrete",
+"The program will notify you when the day comes (and {0} days before).": "O programa avisará quando chegar o dia (e {0} dias antes).",
 "\n\nRestore this data? The current data on this computer will first be saved as a manual backup.": "\n\nRestaurar estes dados? Os dados atuais deste computador serão salvos antes como cópia manual.",
 "\n\nWarning: {0}{1} has/have this animal as a parent. Their ancestors through this animal will be lost and the relationships will be wrong.": "\n\nAtenção: {0}{1} tem(têm) este animal como progenitor. Os ancestrais por meio deste animal serão perdidos e os parentescos ficarão errados.",
 "\n\n{0} records were changed on both the computer and the phone – the phone version was used.": "\n\n{0} registros foram alterados tanto no computador quanto no celular – foi usada a versão do celular.",
