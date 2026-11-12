@@ -156,7 +156,7 @@ EN_IST = {"grlo": "animal", "datum": "date", "dogadjaj": "event", "opis": "descr
 
 
 EN_POD = {"grlo": "animal", "datum": "date", "tip": "type", "tekst": "text", "ponavljanje": "repeat_days",
-          "gotovo": "done", "uneto": "added"}
+          "gotovo": "done", "uneto": "added", "vreme": "time"}
 
 
 STATUS_EN = {"aktivno": "active", "neaktivno": "inactive", "obrisano": "deleted"}
@@ -491,9 +491,19 @@ class Istorija:
                 z["partner"] = novo
 
 
+def norm_vreme(tekst):
+    """'7', '7:5', '07.30', '19h' -> '07:00', '07:05', '07:30', '19:00'; neispravno ili prazno -> ''."""
+    import re as _re
+    x = _re.fullmatch(r"\s*(\d{1,2})(?:\s*[:.,h]\s*(\d{1,2}))?\s*h?\s*", str(tekst or ""))
+    if not x:
+        return ""
+    h, m = int(x.group(1)), int(x.group(2) or 0)
+    return f"{h:02d}:{m:02d}" if h < 24 and m < 60 else ""
+
+
 class Podsetnici:
     """Podsetnici za grla (vakcinacija, lečenje…), čuvaju se u <tablica>_podsetnici.csv."""
-    KOLONE = ["grlo", "datum", "tip", "tekst", "ponavljanje", "gotovo", "uneto"]
+    KOLONE = ["grlo", "datum", "tip", "tekst", "ponavljanje", "gotovo", "uneto", "vreme"]
 
     def __init__(self, putanja_tablice):
         self.putanja = _uz_tablicu(putanja_tablice, "_podsetnici.csv", "_reminders.csv")
@@ -534,9 +544,9 @@ class Podsetnici:
                     w.writerow([z.get(k, "") for k in self.KOLONE])
         os.replace(tmp, self.putanja)
 
-    def dodaj(self, grlo, datum, tip, tekst="", ponavljanje=0):
+    def dodaj(self, grlo, datum, tip, tekst="", ponavljanje=0, vreme=""):
         z = dict(grlo=grlo or "", datum=datum, tip=tip, tekst=tekst, ponavljanje=str(ponavljanje or ""),
-                 gotovo="", uneto=sada())
+                 gotovo="", uneto=sada(), vreme=norm_vreme(vreme))
         self.zapisi.append(z)
         return z
 

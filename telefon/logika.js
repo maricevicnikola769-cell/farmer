@@ -4,7 +4,14 @@
 
 const IST_KOLONE = ["grlo", "datum", "dogadjaj", "opis", "partner", "vrednost", "automatski", "uneto", "ishod",
   "ter", "karenca_meso", "karenca_mleko", "upisao", "mast", "proteini", "lab", "uzorak", "fajl", "izvestaj"];
-const POD_KOLONE = ["grlo", "datum", "tip", "tekst", "ponavljanje", "gotovo", "uneto"];
+const POD_KOLONE = ["grlo", "datum", "tip", "tekst", "ponavljanje", "gotovo", "uneto", "vreme"];
+// '7', '7:5', '07.30' -> '07:00', '07:05', '07:30'; neispravno -> ''
+function normVreme(v) {
+  const x = String(v || "").trim().match(/^(\d{1,2})(?:\s*[:.,h]\s*(\d{1,2}))?\s*h?$/);
+  if (!x) return "";
+  const hh = +x[1], mm = +(x[2] || 0);
+  return hh < 24 && mm < 60 ? `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}` : "";
+}
 
 // ---------------------------------------------------------------- stanje
 const S = {
@@ -503,7 +510,7 @@ function zatvoriPodsetnike(nz) {
     if (pon) {
       let sl = dodajDane(pd, pon);
       while (sl <= d) sl = dodajDane(sl, pon);
-      S.podsetnici.push({ grlo: p.grlo, datum: fmtD(sl), tip: p.tip, tekst: p.tekst, ponavljanje: String(pon), gotovo: "", uneto: sada() });
+      S.podsetnici.push({ grlo: p.grlo, datum: fmtD(sl), tip: p.tip, tekst: p.tekst, ponavljanje: String(pon), gotovo: "", uneto: sada(), vreme: p.vreme || "" });
     }
     n++;
   }
@@ -575,8 +582,12 @@ function obavestenja(x = null) {
   }
   for (const p of S.podsetnici.filter(p => !p.gotovo && (x === null || p.grlo === x))) {
     const d = parsirajDatum(p.datum) || d0, dana = razlikaDana(d, d0), pon = parseInt(p.ponavljanje || "0", 10) || 0;
-    const kad = dana < 0 ? (t(`zakasnelo ${-dana} d.`, `${-dana} d. overdue`)) : dana === 0 ? (t("danas", "today")) : dana === 1 ? (t("sutra", "tomorrow")) : (t(`za ${dana} d.`, `in ${dana} d.`));
-    rez.push({ nivo: dana < 0 ? 0 : dana <= danaUnapred() ? 1 : 3, grlo: p.grlo || null, naslov: `${p.tip || (t("Podsetnik", "Reminder"))} – ${kad}`,
+    let kad = dana < 0 ? (t(`zakasnelo ${-dana} d.`, `${-dana} d. overdue`)) : dana === 0 ? (t("danas", "today")) : dana === 1 ? (t("sutra", "tomorrow")) : (t(`za ${dana} d.`, `in ${dana} d.`));
+    let nivoP = dana < 0 ? 0 : dana <= danaUnapred() ? 1 : 3;
+    const vr = normVreme(p.vreme), sad = new Date(), sadaHM = `${String(sad.getHours()).padStart(2, "0")}:${String(sad.getMinutes()).padStart(2, "0")}`;
+    if (vr && dana === 0 && sadaHM >= vr) { kad = t(`sada (${vr})`, `now (${vr})`); nivoP = 0; }   // došao je zakazani sat
+    else if (vr && dana >= 0) kad += t(` u ${vr}`, ` at ${vr}`);
+    rez.push({ nivo: nivoP, grlo: p.grlo || null, naslov: `${p.tip || (t("Podsetnik", "Reminder"))} – ${kad}`,
       opis: p.datum + (p.tekst ? ` · ${p.tekst}` : "") + (pon ? (t(` · ponavlja se na ${pon} d.`, ` · repeats every ${pon} d.`)) : ""), datum: d,
       akcije: [{ tekst: t("Urađeno", "Done"), radnja: ["podsetnikUradjen", p], glavno: true }, { tekst: t("Odloži 7 d.", "Postpone 7 d."), radnja: ["podsetnikOdlozi", p] }] });
   }
@@ -895,7 +906,7 @@ function podsetnikUradjen(p) {
   if (pon) {
     let sl = dodajDane(parsirajDatum(p.datum) || danas(), pon);
     while (sl <= danas()) sl = dodajDane(sl, pon);
-    S.podsetnici.push({ grlo: p.grlo || "", datum: fmtD(sl), tip: p.tip, tekst: p.tekst, ponavljanje: String(pon), gotovo: "", uneto: sada() });
+    S.podsetnici.push({ grlo: p.grlo || "", datum: fmtD(sl), tip: p.tip, tekst: p.tekst, ponavljanje: String(pon), gotovo: "", uneto: sada(), vreme: p.vreme || "" });
   }
   zabelezi((t("Urađeno: ", "Done: ")) + (p.tip || "") + (p.grlo ? ` – ${p.grlo}` : ""));
 }
@@ -904,8 +915,8 @@ function podsetnikOdlozi(p, dana) {
   p.datum = fmtD(d);
   zabelezi((t("Podsetnik odložen za ", "Reminder postponed to ")) + p.datum + (p.grlo ? ` – ${p.grlo}` : ""));
 }
-function noviPodsetnik(grlo, datum, tip, tekst, ponavljanje) {
-  S.podsetnici.push({ grlo: grlo || "", datum, tip, tekst: tekst || "", ponavljanje: ponavljanje ? String(ponavljanje) : "", gotovo: "", uneto: sada() });
+function noviPodsetnik(grlo, datum, tip, tekst, ponavljanje, vreme) {
+  S.podsetnici.push({ grlo: grlo || "", datum, tip, tekst: tekst || "", ponavljanje: ponavljanje ? String(ponavljanje) : "", gotovo: "", uneto: sada(), vreme: normVreme(vreme) });
   zabelezi((t("Novi podsetnik: ", "New reminder: ")) + tip + (grlo ? ` – ${grlo}` : ""));
 }
 
@@ -984,7 +995,7 @@ function smanjiSliku(fajl, maks = 1600, kvalitet = 0.78) {
   });
 }
 
-if (typeof module !== "undefined") module.exports = { S, K, Model, M: () => M, osveziModel, parsirajDatum, fmtD, pct, procena, nazivi, rasaPotomka, normRasa, namenaRase, danaUnapred, obavSat, raseZaVrstu, mojaRasa,
+if (typeof module !== "undefined") module.exports = { S, K, Model, M: () => M, osveziModel, parsirajDatum, fmtD, pct, procena, nazivi, rasaPotomka, normRasa, namenaRase, danaUnapred, obavSat, normVreme, raseZaVrstu, mojaRasa,
   vrstaNorm, upisiDogadjaj, rodjenje, upisUListu, novoGrlo, teraSe, neTeraSe, oznaciNeuspelo, podsetnikUradjen, podsetnikOdlozi, noviPodsetnik,
   obavestenja, cekajuPorodjaj, cekajuMindjusu, granicePorodjaja, opisIshoda, partneri, karenca, opisKarence, ucitajSaRacunara, paketZaRacunar,
   leglo, danas, dodajDane, istorijaZa, markicaZauzeta, roditeljiParenja, podaciLegla, sortKey };

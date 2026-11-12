@@ -33,6 +33,20 @@ class IskacuceDeo:
         except (TypeError, ValueError):
             return UNAPRED_PODRAZUMEVANO
 
+    def sekundi_do_vremena(self, sada):
+        """Koliko sekundi do sledećeg današnjeg podsetnika sa tačnim vremenom (ili None)."""
+        from podaci import norm_vreme, parsiraj_datum
+        najblize = None
+        for p in getattr(getattr(self, "pods", None), "zapisi", []) or []:
+            vr = norm_vreme(p.get("vreme"))
+            if p.get("gotovo") or not vr or parsiraj_datum(p.get("datum")) != sada.date():
+                continue
+            h, m = map(int, vr.split(":"))
+            s = (sada.replace(hour=h, minute=m, second=5, microsecond=0) - sada).total_seconds()
+            if s > 0 and (najblize is None or s < najblize):
+                najblize = s
+        return najblize
+
     def obav_za_telefon(self):
         return dict(sat=self.obav_sat(), unapred=self.dana_unapred())
 
@@ -59,8 +73,10 @@ class IskacuceDeo:
     def iskacuce_provera(self):
         sada = datetime.now()
         try:
-            if self.iskacuce_ukljuceno() and sada.hour >= self.obav_sat():
+            if self.iskacuce_ukljuceno():
                 nova = self.nova_za_poruku()
+                if sada.hour < self.obav_sat():           # pre izabranog sata – samo podsetnici sa tačnim vremenom
+                    nova = [o for o in nova if o.get("u_vreme")]
                 if nova:
                     self.zapamti_prikazana(nova)
                     self.sacuvaj_podesavanja()
@@ -70,6 +86,9 @@ class IskacuceDeo:
         # sledeća provera za 30 min – ili tačno u izabrani sat, ako je on pre toga
         do_sata = (sada.replace(hour=self.obav_sat(), minute=0, second=5, microsecond=0) - sada).total_seconds()
         cekaj = min(PROVERA_MIN * 60, do_sata) if do_sata > 0 else PROVERA_MIN * 60
+        za_vreme = self.sekundi_do_vremena(sada)
+        if za_vreme is not None:
+            cekaj = min(cekaj, za_vreme)
         self.root.after(int(cekaj * 1000), self.iskacuce_provera)
 
     def iskacuca_poruka(self, stavke):

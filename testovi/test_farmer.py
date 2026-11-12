@@ -1169,3 +1169,51 @@ def test_obavestenja_sat_i_unapred(monkeypatch):
     assert a.dana_unapred() == 30
     a.pod["obav_unapred"] = "x"
     assert a.dana_unapred() == 3
+
+
+def test_podsetnik_sa_vremenom(tmp_path, monkeypatch):
+    """Podsetnik može da ima tačno vreme: čuva se u CSV-u, ponavljanje ga zadržava, u to vreme postaje hitan, a poruka se zakaže tačno tada."""
+    from datetime import date, datetime as DT, timedelta
+    import iskacuce
+    import obavestenja
+    import podaci
+    assert [podaci.norm_vreme(x) for x in ("7", "7:5", "07.30", "19h", "25:00", "x", "")] == ["07:00", "07:05", "07:30", "19:00", "", "", ""]
+    put = str(tmp_path / "stado.csv")
+    p = podaci.Podsetnici(put)
+    f = lambda d: d.strftime("%d.%m.%Y")
+    d0 = date.today()
+    p.dodaj("Mina", f(d0), "Vakcinacija", "", 0, "10:00")
+    p.dodaj("Lola", f(d0), "Lečenje", "", 0)
+    p.sacuvaj()
+    p2 = podaci.Podsetnici(put)
+    assert [z["vreme"] for z in p2.zapisi] == ["10:00", ""]
+
+    class Sat(DT):
+        trenutno = DT.combine(d0, DT.min.time()).replace(hour=9, minute=30)
+        @classmethod
+        def now(cls, tz=None):
+            return cls.trenutno
+    monkeypatch.setattr(obavestenja, "datetime", Sat)
+    monkeypatch.setattr(iskacuce, "datetime", Sat)
+
+    class A(obavestenja.ObavestenjaDeo, iskacuce.IskacuceDeo):
+        pod = {}
+        pods = p2
+        model = type("M", (), {"warn": []})()
+        def cekaju_porodjaj(self): return []
+        def cekaju_mindjusu(self, x=None): return []
+        def obavestenja_ter(self, x=None): return []
+        def obavestenja_karenca(self, x=None): return []
+    a = A()
+    mina = lambda: next(o for o in a.obavestenja() if o["grlo"] == "Mina")
+    assert mina()["nivo"] == 1 and "10:00" in mina()["naslov"] and not mina()["u_vreme"]
+    assert abs(a.sekundi_do_vremena(Sat.trenutno) - (30 * 60 + 5)) < 2                  # poruka zakazana tačno za 10:00
+    Sat.trenutno = Sat.trenutno.replace(hour=10, minute=1)
+    assert mina()["nivo"] == 0 and mina()["u_vreme"] and a.sekundi_do_vremena(Sat.trenutno) is None
+    # urađeno + ponavljanje: sledeći termin zadržava vreme
+    a.pods.zapisi[0]["ponavljanje"] = "30"
+    a.posle_obavestenja = lambda: None
+    a.promena = lambda *_: None
+    a.ist = type("I", (), {"dodaj": lambda *_a, **_k: None})()
+    a.podsetnik_uradjen(a.pods.zapisi[0])
+    assert a.pods.aktivni("Mina")[0]["vreme"] == "10:00"

@@ -1,11 +1,11 @@
 """Obaveštenja: ter, karenca, plodnost, podsetnici i obaveštenja na startu."""
 import tkinter as tk
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from tkinter import messagebox, ttk
 
 from osnova import EN
 from jezik import AUTO, DOGADJAJI, PARENJE, T, TER, TER_CIKLUS
-from podaci import nazivi, parsiraj_datum, vrsta_norm
+from podaci import nazivi, norm_vreme, parsiraj_datum, vrsta_norm
 from izgled import BAD, BAD_BG, BRAND, INK, INK2, SURF, SURF2, WARN, WARN_BG
 
 
@@ -69,7 +69,7 @@ class ObavestenjaDeo:
                 sl = pd + timedelta(days=pon)
                 while sl <= d:
                     sl += timedelta(days=pon)
-                self.pods.dodaj(p["grlo"], sl.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), p["tip"], p["tekst"], pon)
+                self.pods.dodaj(p["grlo"], sl.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), p["tip"], p["tekst"], pon, p.get("vreme", ""))
             n += 1
         return n
 
@@ -355,11 +355,18 @@ class ObavestenjaDeo:
             nivo = 0 if dana < 0 else 1 if dana <= self.dana_unapred() else 3
             kad = ((T(f"zakasnelo {-dana} d.", f"{-dana} d. overdue")) if dana < 0 else (T("danas", "today")) if dana == 0 else
                    (T("sutra", "tomorrow")) if dana == 1 else (T(f"za {dana} d.", f"in {dana} d.")))
+            vr = norm_vreme(p.get("vreme"))
+            u_vreme = False
+            if vr:
+                if dana == 0 and datetime.now().strftime("%H:%M") >= vr:   # došao je zakazani sat – javlja se ponovo, kao hitno
+                    kad, nivo, u_vreme = T(f"sada ({vr})", f"now ({vr})"), 0, True
+                elif dana >= 0:
+                    kad += T(f" u {vr}", f" at {vr}")
             pon = int(p.get("ponavljanje") or 0)
             rez.append(dict(nivo=nivo, grlo=p["grlo"] or None, naslov=(T(f"{p['tip'] or 'Podsetnik'} – {kad}", f"{p['tip'] or 'Reminder'} – {kad}")),
                             opis=f"{p['datum']}" + (f" · {p['tekst']}" if p["tekst"] else "") +
                                  ((T(f" · ponavlja se na {pon} d.", f" · repeats every {pon} d.")) if pon else ""),
-                            datum=d, podsetnik=p,
+                            datum=d, podsetnik=p, u_vreme=u_vreme,
                             akcije=[((T("Urađeno", "Done")), lambda p=p: self.podsetnik_uradjen(p), "Primary"),
                                     ((T("Odloži 7 d.", "Postpone 7 d.")), lambda p=p: self.podsetnik_odlozi(p, 7), "Secondary"),
                                     ((T("Izmeni", "Edit")), lambda p=p: self.podsetnik_forma(zapis=p), "Secondary")]))
@@ -552,7 +559,7 @@ class ObavestenjaDeo:
             sl = (parsiraj_datum(p["datum"]) or date.today()) + timedelta(days=pon)
             while sl <= date.today():
                 sl += timedelta(days=pon)
-            self.pods.dodaj(p["grlo"], sl.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), p["tip"], p["tekst"], pon)
+            self.pods.dodaj(p["grlo"], sl.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), p["tip"], p["tekst"], pon, p.get("vreme", ""))
         self.promena((T(f"Urađeno: {p['tip'] or 'podsetnik'}", f"Done: {p['tip'] or 'reminder'}")) + (f" – {p['grlo']}" if p["grlo"] else "") +
                      ((T(" · sledeći je zakazan", " · the next one is scheduled")) if pon else ""))
         self.posle_obavestenja()
@@ -604,6 +611,15 @@ class ObavestenjaDeo:
             lk = self.lbl(de, t, 9, "bold", fg=BRAND, cursor="hand2")
             lk.pack(side="left", padx=(8, 0))
             lk.bind("<Button-1>", lambda e, dn=dn: dv.set((date.today() + timedelta(days=dn)).strftime(("%d/%m/%Y" if EN else "%d.%m.%Y"))))
+        f = tk.Frame(g, bg=SURF)
+        f.grid(row=0, column=2, sticky="w", padx=(16, 0))
+        self.lbl(f, T("Vreme (nije obavezno)", "Time (optional)"), 9, "bold", fg=INK2).pack(anchor="w")
+        vv = tk.StringVar(value=norm_vreme(z.get("vreme")))
+        ttk.Combobox(f, textvariable=vv, values=[""] + [f"{h:02d}:{mm:02d}" for h in range(5, 23) for mm in (0, 30)], width=7,
+                     font=self.f(10)).pack(anchor="w", pady=(3, 0))
+        self.lbl(b, T("Ako upišeš vreme, program te tog dana obavesti tačno u to vreme (npr. 10:00 – veterinar).",
+                      "If you enter a time, the program notifies you exactly at that time on that day (e.g. 10:00 – vet)."),
+                 8, fg="#8A968D").pack(anchor="w", pady=(4, 0))
         self.lbl(b, (T("Šta treba uraditi", "What needs to be done")), 9, "bold", fg=INK2).pack(anchor="w", pady=(12, 4))
         tv = tk.StringVar(value=z.get("tip", (T("Vakcinacija", "Vaccination"))))
         self.izbor_dogadjaja(b, tv, po_redu=5).pack(anchor="w")
@@ -638,6 +654,10 @@ class ObavestenjaDeo:
             if not tip:
                 err.config(text=(T("Izaberi šta treba uraditi.", "Choose what needs to be done.")))
                 return
+            vr = norm_vreme(vv.get())
+            if vv.get().strip() and not vr:
+                err.config(text=T("Vreme nije ispravno. Upiši ga kao 10:00.", "The time is not valid. Enter it as 10:00."))
+                return
             pt = pv.get().strip()
             if pt in opc:
                 pon = opc[pt]
@@ -645,12 +665,13 @@ class ObavestenjaDeo:
                 cif = "".join(ch for ch in pt if ch.isdigit())
                 pon = int(cif) if cif else 0
             if zapis:
-                zapis.update(grlo=gr, datum=d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), tip=tip, tekst=xv.get().strip(), ponavljanje=str(pon))
+                zapis.update(grlo=gr, datum=d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), tip=tip, tekst=xv.get().strip(), ponavljanje=str(pon), vreme=vr)
             else:
-                self.pods.dodaj(gr, d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), tip, xv.get().strip(), pon)
+                self.pods.dodaj(gr, d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), tip, xv.get().strip(), pon, vr)
             win.grab_release()
             win.destroy()
-            self.promena((T(f"Podsetnik sačuvan za {d.strftime('%d.%m.%Y')}", f"Reminder saved for {d.strftime('%d/%m/%Y')}")))
+            self.promena((T(f"Podsetnik sačuvan za {d.strftime('%d.%m.%Y')}", f"Reminder saved for {d.strftime('%d/%m/%Y')}")) +
+                         (T(f" u {vr}", f" at {vr}") if vr else ""))
             self.posle_obavestenja()
 
         fb = tk.Frame(b, bg=SURF)

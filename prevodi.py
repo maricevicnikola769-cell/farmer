@@ -382,10 +382,18 @@ SABLONI = [
 "🔑 Trial: {0} days left",
 "🔒 View only – only the farm {0} changes it",
 "The program will notify you when the day comes (and {0} days before).",
+"now ({0})",
+" at {0}",
 ]
 SABLONI = set(SABLONI)
 PREVODI = {
 "fr": {
+"Time (optional)": "Heure (facultatif)",
+"If you enter a time, the program notifies you exactly at that time on that day (e.g. 10:00 – vet).": "Si vous indiquez une heure, le programme vous prévient exactement à cette heure ce jour-là (p. ex. 10:00 – vétérinaire).",
+"The time is not valid. Enter it as 10:00.": "L'heure n'est pas valide. Saisissez-la comme 10:00.",
+"at": "à",
+"now ({0})": "maintenant ({0})",
+" at {0}": " à {0}",
 "⏰ Notify me from": "⏰ Me prévenir à partir de",
 "o'clock, and": "heures, et",
 "days before a reminder is due": "jours avant l'échéance d'un rappel",
@@ -2249,6 +2257,12 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Acheter un forfait sur le site…"
 },
 "de": {
+"Time (optional)": "Uhrzeit (optional)",
+"If you enter a time, the program notifies you exactly at that time on that day (e.g. 10:00 – vet).": "Wenn Sie eine Uhrzeit angeben, benachrichtigt Sie das Programm an diesem Tag genau zu dieser Zeit (z. B. 10:00 – Tierarzt).",
+"The time is not valid. Enter it as 10:00.": "Die Uhrzeit ist ungültig. Geben Sie sie als 10:00 ein.",
+"at": "um",
+"now ({0})": "jetzt ({0})",
+" at {0}": " um {0}",
 "⏰ Notify me from": "⏰ Benachrichtigen ab",
 "o'clock, and": "Uhr, und zwar",
 "days before a reminder is due": "Tage vor Fälligkeit einer Erinnerung",
@@ -4112,6 +4126,12 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Paket auf der Website kaufen…"
 },
 "es": {
+"Time (optional)": "Hora (opcional)",
+"If you enter a time, the program notifies you exactly at that time on that day (e.g. 10:00 – vet).": "Si indica una hora, el programa le avisa exactamente a esa hora ese día (p. ej. 10:00 – veterinario).",
+"The time is not valid. Enter it as 10:00.": "La hora no es válida. Escríbala como 10:00.",
+"at": "a las",
+"now ({0})": "ahora ({0})",
+" at {0}": " a las {0}",
 "⏰ Notify me from": "⏰ Avisarme desde las",
 "o'clock, and": "horas, y",
 "days before a reminder is due": "días antes del vencimiento de un recordatorio",
@@ -5975,6 +5995,12 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Comprar un paquete en el sitio web…"
 },
 "pt": {
+"Time (optional)": "Hora (opcional)",
+"If you enter a time, the program notifies you exactly at that time on that day (e.g. 10:00 – vet).": "Se indicar uma hora, o programa avisa exatamente a essa hora nesse dia (p. ex. 10:00 – veterinário).",
+"The time is not valid. Enter it as 10:00.": "A hora não é válida. Escreva-a como 10:00.",
+"at": "às",
+"now ({0})": "agora ({0})",
+" at {0}": " às {0}",
 "⏰ Notify me from": "⏰ Avisar-me a partir das",
 "o'clock, and": "horas, e",
 "days before a reminder is due": "dias antes do prazo de um lembrete",

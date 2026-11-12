@@ -5,7 +5,7 @@ from tkinter import messagebox, ttk
 
 from osnova import EN, _srpski_kljuc, prevedi_vrednost
 from jezik import AUTO, DOGADJAJI, GRUPE, MUZNJA, PARENJE, POREKLA, T, TER
-from podaci import (fmt_starost, fmt_upis, nazivi, norm, norm_rasa, parsiraj_datum, pct, rasa_potomka,
+from podaci import (norm_vreme, fmt_starost, fmt_upis, nazivi, norm, norm_rasa, parsiraj_datum, pct, rasa_potomka,
     sort_key, starost_meseci)
 from izgled import BAD, BG, BRAND, INK, INK2, LINE, SURF, SURF2, ScrollFrame, WARN
 from rodoslov import procena
@@ -722,6 +722,10 @@ class IstorijaDeo:
         cb_pon = ttk.Combobox(fp, textvariable=v_pon, values=[k for k, _ in PON], state="readonly", width=16, font=self.f(10))
         l_sled = self.lbl(fp, T("⏰ Podseti me za sledeću", "⏰ Remind me of the next one"), 9, "bold", fg=INK2)
         cb_sled = ttk.Combobox(fp, textvariable=v_sled, values=[k for k, _ in SLED], state="readonly", width=14, font=self.f(10))
+        v_vr = tk.StringVar()
+        l_vr = self.lbl(fp, T("u", "at"), 9, "bold", fg=INK2)
+        cb_vr = ttk.Combobox(fp, textvariable=v_vr, values=[""] + [f"{h:02d}:{mm:02d}" for h in range(5, 23) for mm in (0, 30)],
+                             width=7, font=self.f(10))
         if not zapis:
             fp.grid(row=9, column=0, columnspan=2, sticky="w", pady=(10, 0))
         nazivi_vr = {(T("Merenje težine", "Weighing")): (T("Težina (kg)", "Weight (kg)")), (T("Vakcinacija", "Vaccination")): (T("Vakcina / preparat", "Vaccine / product")),
@@ -734,11 +738,13 @@ class IstorijaDeo:
             d = vars_["dogadjaj"].get()
             g = m.nadji(vars_["grlo"].get())
             leci_ = d in ((T("Lečenje", "Treatment")), (T("Vakcinacija", "Vaccination")))
-            for w_ in (l_pon, cb_pon, l_sled, cb_sled):
+            for w_ in (l_pon, cb_pon, l_sled, cb_sled, l_vr, cb_vr):
                 w_.grid_remove()
             if v_treba.get():
                 l_pon.grid(row=1, column=0, sticky="w", pady=(6, 0))
                 cb_pon.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
+                l_vr.grid(row=1, column=2, sticky="w", padx=(12, 0), pady=(6, 0))       # vreme (nije obavezno)
+                cb_vr.grid(row=1, column=3, sticky="w", padx=(6, 0), pady=(6, 0))
             elif leci_:
                 l_sled.grid(row=1, column=0, sticky="w", pady=(6, 0))
                 cb_sled.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
@@ -799,7 +805,7 @@ class IstorijaDeo:
             par = m.nadji(par) or par
             ds = d.strftime(("%d/%m/%Y" if EN else "%d.%m.%Y"))
             if not zapis and v_treba.get():           # još nije urađeno: samo podsetnik, ništa u istoriju
-                self.pods.dodaj(g, ds, dog, opis.get("1.0", "end").strip(), dict(PON).get(v_pon.get(), 0))
+                self.pods.dodaj(g, ds, dog, opis.get("1.0", "end").strip(), dict(PON).get(v_pon.get(), 0), norm_vreme(v_vr.get()))
                 win.grab_release()
                 win.destroy()
                 self.promena(T(f"Podsetnik zakazan: {g} – {dog} ({ds})", f"Reminder scheduled: {g} – {dog} ({ds})"))

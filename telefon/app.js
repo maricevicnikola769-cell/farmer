@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "5.3";
+const VERZIJA_TEL = "5.4";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -600,6 +600,7 @@ function ekranDogadjaj(_, upit) {
     <label class="polje"><span>${t("Opis / napomena", "Description / note")}</span><textarea class="unos" id="opis"></textarea></label>
     <label class="provera" id="dTreba"><input type="checkbox" id="treba"> ⏰ ${t("Treba uraditi – samo podsetnik (još nije urađeno)", "To do – reminder only (not done yet)")}</label>
     <label class="polje skriveno" id="dPon"><span>${t("Ponavljanje", "Repeat")}</span><select class="unos" id="pon">${PON_TEL().map(([n, v]) => `<option value="${v}">${h(n)}</option>`).join("")}</select></label>
+    <label class="polje skriveno" id="dVrT"><span>${t("Vreme (nije obavezno)", "Time (optional)")}</span><input class="unos" id="vrT" type="time"></label>
     <label class="polje skriveno" id="dSled"><span>⏰ ${t("Podseti me za sledeću", "Remind me of the next one")}</span><select class="unos" id="sled">${SLED_TEL().map(([n, v]) => `<option value="${v}">${h(n)}</option>`).join("")}</select></label>
     <label class="provera skriveno" id="dVan"><input type="checkbox" id="van" checked> ${t("Označi grlo kao van zapata", "Mark the animal as out of herd")}</label>
     <div class="greska" id="gr"></div>
@@ -611,6 +612,7 @@ function ekranDogadjaj(_, upit) {
     $("#dVr").classList.toggle("skriveno", nap);               // napomena: samo datum i tekst
     $("#dKar").classList.toggle("skriveno", !leci || treba);
     $("#dPon").classList.toggle("skriveno", !treba);
+    $("#dVrT").classList.toggle("skriveno", !treba);
     $("#dSled").classList.toggle("skriveno", !leci || treba);
     $("#dVan").classList.toggle("skriveno", ![k.PRODAJA, k.UGINUCE].includes(d));
     $("#lVr").textContent = nazivVr[d] || t("Vrednost", "Value");
@@ -645,7 +647,7 @@ function ekranDogadjaj(_, upit) {
     if (!st.dogadjaj) return (gr.textContent = t("Izaberi događaj.", "Choose an event."));
     const broj = v => { const x = String(v || "").replace(/\D/g, ""); return x && +x > 0 ? x : ""; };
     if ($("#treba").checked) {                       // još nije urađeno: samo podsetnik, ništa u istoriju
-      S.podsetnici.push({ grlo: g, datum: fmtD(d), tip: st.dogadjaj, tekst: $("#opis").value.trim(), ponavljanje: String(+$("#pon").value || ""), gotovo: "", uneto: sada() });
+      S.podsetnici.push({ grlo: g, datum: fmtD(d), tip: st.dogadjaj, tekst: $("#opis").value.trim(), ponavljanje: String(+$("#pon").value || ""), gotovo: "", uneto: sada(), vreme: $("#vrT") ? normVreme($("#vrT").value) : "" });
       zabelezi(t(`Podsetnik: ${g} – ${st.dogadjaj} (${fmtD(d)})`, `Reminder: ${g} – ${st.dogadjaj} (${fmtD(d)})`));
       promena(t(`Podsetnik zakazan: ${g} – ${st.dogadjaj} (${fmtD(d)})`, `Reminder scheduled: ${g} – ${st.dogadjaj} (${fmtD(d)})`));
       return idi(`karton/${encodeURIComponent(g)}`);
@@ -851,6 +853,7 @@ function ekranPodsetnik() {
   const k = K();
   ekran.innerHTML = `<div class="kart"><label class="polje"><span>${t("Grlo (može i prazno)", "Animal (can be empty)")}</span><input class="unos" id="g" list="dl" autocomplete="off"></label>${datalistGrla("dl", M.grla(true))}
     <label class="polje"><span>${t("Datum *", "Date *")}</span><input class="unos" id="d" type="date" value="${uIso(dodajDane(danas(), 7))}"></label>
+    <label class="polje"><span>${t("Vreme (nije obavezno – javi tačno u to vreme)", "Time (optional – notify exactly then)")}</span><input class="unos" id="vr" type="time"></label>
     <label class="polje"><span>${t("Vrsta *", "Type *")}</span><input class="unos" id="tip" list="dl-t" value="${h(k.VAKCINA)}"></label>
     <datalist id="dl-t">${k.DOGADJAJI.map(d => `<option value="${h(d)}">`).join("")}</datalist>
     <label class="polje"><span>${t("Tekst", "Text")}</span><input class="unos" id="tx"></label>
@@ -860,7 +863,7 @@ function ekranPodsetnik() {
     const g = $("#g").value.trim() ? M.nadji($("#g").value) : "", d = parsirajDatum($("#d").value), tip = $("#tip").value.trim();
     if ($("#g").value.trim() && !g) return ($("#gr").textContent = t("Grlo nije pronađeno.", "Animal not found."));
     if (!d || !tip) return ($("#gr").textContent = t("Upiši datum i vrstu.", "Enter date and type."));
-    noviPodsetnik(g, fmtD(d), tip, $("#tx").value.trim(), parseInt($("#pon").value, 10) || 0);
+    noviPodsetnik(g, fmtD(d), tip, $("#tx").value.trim(), parseInt($("#pon").value, 10) || 0, $("#vr").value);
     promena(t("Podsetnik je sačuvan.", "Reminder saved.")); idi("danas");
   };
 }
@@ -1025,8 +1028,8 @@ function ekranPrenos() {
 // ---------------------------------------------------------------- obaveštenje pri ulasku u aplikaciju
 // Kad se aplikacija otvori (ili vrati iz pozadine posle 3 sata), hitne stvari iskoče odmah na ekranu.
 let obavestenoU = 0;
-function obavestiPriUlasku() {
-  if (!imaPodatke() || document.querySelector(".obavesti") || delovi().ekran === "danas") return;
+function obavestiPriUlasku(sila) {
+  if (!imaPodatke() || (!sila && (document.querySelector(".obavesti") || delovi().ekran === "danas"))) return;
   const ob = obavestenja().filter(o => o.nivo <= 1);
   obavestenoU = Date.now();
   if (!ob.length) return;
@@ -1046,8 +1049,25 @@ function obavestiPriUlasku() {
   d.querySelector("#obP").onclick = () => { zatvori(); idi("danas"); };
   try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* */ }
 }
+// podsetnik sa tačnim vremenom: dok je aplikacija otvorena, javi se tačno u to vreme (i kad se vratiš posle tog vremena)
+let _vrT = null, _vrJavljeno = new Set();
+function zakaziVremenske() {
+  clearTimeout(_vrT);
+  const sad = new Date(), d0 = danas();
+  let najblize = null;
+  for (const p of S.podsetnici.filter(p => !p.gotovo && normVreme(p.vreme))) {
+    const pd = parsirajDatum(p.datum);
+    if (!pd || +pd !== +d0) continue;
+    const [hh, mm] = normVreme(p.vreme).split(":").map(Number), kad = new Date(sad); kad.setHours(hh, mm, 2, 0);
+    const k = `${p.grlo}|${p.tip}|${p.datum}|${p.vreme}`, ms = kad - sad;
+    if (ms <= 0 && !_vrJavljeno.has(k)) { _vrJavljeno.add(k); document.querySelector(".obavesti")?.remove(); obavestiPriUlasku(true); }
+    else if (ms > 0 && (najblize === null || ms < najblize)) najblize = ms;
+  }
+  if (najblize !== null) _vrT = setTimeout(zakaziVremenske, Math.min(najblize, 6 * 3600 * 1000));
+}
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && Date.now() - obavestenoU > 3 * 3600 * 1000) obavestiPriUlasku();
+  if (document.visibilityState === "visible") zakaziVremenske();
 });
 
 // ---------------------------------------------------------------- obaveštenja kad je aplikacija zatvorena
@@ -1057,6 +1077,10 @@ const lokDatum = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 function planObavestenja() {
   const d0 = danas(), plan = [];
   for (const o of obavestenja().filter(o => o.nivo <= 1)) plan.push({ k: `${o.grlo || ""}|${o.naslov}`, n: (o.grlo ? o.grlo + " – " : "") + o.naslov, od: lokDatum(d0) });
+  for (const p of S.podsetnici.filter(p => !p.gotovo && normVreme(p.vreme))) {   // tačno vreme: posebno obaveštenje tog dana
+    const pd = parsirajDatum(p.datum);
+    if (pd && pd >= d0) plan.push({ k: `v|${p.grlo || ""}|${p.tip}|${p.datum}|${p.vreme}`, n: `${p.grlo ? p.grlo + " – " : ""}${p.tip || t("Podsetnik", "Reminder")} (${normVreme(p.vreme)})`, od: lokDatum(pd), u: normVreme(p.vreme) });
+  }
   for (const p of S.podsetnici.filter(p => !p.gotovo)) {
     const pd = parsirajDatum(p.datum);
     if (pd && pd > dodajDane(d0, danaUnapred())) plan.push({ k: `p|${p.grlo || ""}|${p.tip}|${p.datum}`, n: `${p.grlo ? p.grlo + " – " : ""}${p.tip || t("Podsetnik", "Reminder")} (${p.datum})`, od: lokDatum(dodajDane(pd, -danaUnapred())) });
@@ -1070,6 +1094,7 @@ function planObavestenja() {
 let _planT = null;
 function planUskoro() {
   clearTimeout(_planT);
+  setTimeout(zakaziVremenske, 100);
   _planT = setTimeout(() => { try { if (!bezBaze && imaPodatke()) bazaUpisi("obavestenja", planObavestenja()).catch(() => {}); } catch (e) { /* */ } }, 1500);
 }
 const podrzavaObavestenja = () => "Notification" in window && "serviceWorker" in navigator;
@@ -1107,6 +1132,7 @@ ucitajIzTelefona().then(() => {
   prikazi();
   pokreniUsaglasavanje();
   setTimeout(obavestiPriUlasku, 600);
+  setTimeout(() => { const sd = new Date(), hm = `${String(sd.getHours()).padStart(2, "0")}:${String(sd.getMinutes()).padStart(2, "0")}`; for (const p of S.podsetnici) if (normVreme(p.vreme) && normVreme(p.vreme) <= hm && +(parsirajDatum(p.datum) || 0) === +danas()) _vrJavljeno.add(`${p.grlo}|${p.tip}|${p.datum}|${p.vreme}`); zakaziVremenske(); }, 700);   // već prošla vremena pokriva prozor pri ulasku
   planUskoro();
 });
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
