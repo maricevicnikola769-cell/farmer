@@ -400,6 +400,8 @@ SABLONI = [
 SABLONI = set(SABLONI)
 PREVODI = {
 "fr": {
+"🔒 Sign out": "🔒 Se déconnecter",
+"🔒 Sign out (another worker signs in)": "🔒 Se déconnecter (un autre employé se connecte)",
 "Sign in…": "Se connecter…",
 "Signed in: {0}": "Connecté : {0}",
 "Sign in": "Se connecter",
@@ -2349,6 +2351,8 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Acheter un forfait sur le site…"
 },
 "de": {
+"🔒 Sign out": "🔒 Abmelden",
+"🔒 Sign out (another worker signs in)": "🔒 Abmelden (ein anderer Mitarbeiter meldet sich an)",
 "Sign in…": "Anmelden…",
 "Signed in: {0}": "Angemeldet: {0}",
 "Sign in": "Anmelden",
@@ -4298,6 +4302,8 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Paket auf der Website kaufen…"
 },
 "es": {
+"🔒 Sign out": "🔒 Cerrar sesión",
+"🔒 Sign out (another worker signs in)": "🔒 Cerrar sesión (entra otro trabajador)",
 "Sign in…": "Iniciar sesión…",
 "Signed in: {0}": "Sesión iniciada: {0}",
 "Sign in": "Iniciar sesión",
@@ -6247,6 +6253,8 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Comprar un paquete en el sitio web…"
 },
 "pt": {
+"🔒 Sign out": "🔒 Terminar sessão",
+"🔒 Sign out (another worker signs in)": "🔒 Terminar sessão (entra outro trabalhador)",
 "Sign in…": "Entrar…",
 "Signed in: {0}": "Sessão iniciada: {0}",
 "Sign in": "Entrar",

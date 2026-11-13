@@ -75,6 +75,9 @@ class KorisnikDeo:
         self.lbl_korisnik = tk.Label(foot, text="", bg=SURF, fg=BRAND, font=self.f(9, "bold"), cursor="hand2", anchor="w")
         self.lbl_korisnik.pack(anchor="w", pady=(6, 0))
         self.lbl_korisnik.bind("<Button-1>", lambda e: self.meni_korisnika())
+        odj = tk.Label(foot, text=T("🔒 Odjavi se", "🔒 Sign out"), bg=SURF, fg=INK2, font=self.f(9), cursor="hand2", anchor="w")
+        odj.pack(anchor="w", pady=(2, 0))
+        odj.bind("<Button-1>", lambda e: self.zakljucaj())
         self.postavi_korisnika(podaci.KORISNIK)
 
     # ------------------------------------------------------------ start: bez prijave nema programa
@@ -321,7 +324,7 @@ class KorisnikDeo:
     # ------------------------------------------------------------ meni 👤
     def meni_korisnika(self):
         mn = tk.Menu(self.root, tearoff=0)
-        mn.add_command(label=T("Promeni korisnika / zaključaj…", "Switch user / lock…"), command=self.zakljucaj)
+        mn.add_command(label=T("🔒 Odjavi se (drugi radnik se prijavljuje)", "🔒 Sign out (another worker signs in)"), command=self.zakljucaj)
         mn.add_command(label=T("Promeni svoju šifru…", "Change my password…"), command=self.promena_sifre)
         if self.ja_sam_vlasnik():
             mn.add_separator()
