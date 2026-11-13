@@ -15,12 +15,27 @@ from jezik import T
 from podaci import IST_KOLONE, KOLONE, Podsetnici
 from izgled import BRAND, BAD, INK2, OK, SURF, WARN
 from rodoslov import Model
-from oblak import Oblak, OblakGreska, link_za_uparivanje, novi_kod, novo_gazdinstvo, objavi_kod, obrisi_kod, omotaj_za
+from oblak import NAJVISE_IZMENA, napravi_izmene, zakljucaj, Oblak, OblakGreska, link_za_uparivanje, novi_kod, novo_gazdinstvo, objavi_kod, obrisi_kod, omotaj_za
 from oblak_konfig import FIREBASE
 import dnevnik
 from telefon_prenos import _kljuc_fin, _kljuc_ist, _kljuc_pod, spoji_razlike
 
 INTERVAL_MS = 60_000          # dok se nešto dešava; kad je mirno, ređe (štedi besplatnu kvotu servera)
+
+
+NAJVISE_NA_SAT = 120          # zaštita: ako nešto (greška, petlja) usklađuje prečesto, program sam uspori
+NAJMANJI_RAZMAK_S = 10
+
+
+def cekaj_sinh(vremena, sada):
+    """Koliko sekundi treba sačekati pre sledećeg automatskog usklađivanja (0 = može odmah).
+    vremena: lista ranijih početaka (sekunde); stari se izbacuju."""
+    vremena[:] = [x for x in vremena if 0 <= sada - x < 3600]
+    if vremena and sada - vremena[-1] < NAJMANJI_RAZMAK_S:
+        return NAJMANJI_RAZMAK_S - (sada - vremena[-1])
+    if len(vremena) >= NAJVISE_NA_SAT:
+        return 3600 - (sada - vremena[0])
+    return 0
 
 
 def razmak_ms(mirno):
@@ -102,6 +117,19 @@ class SinhronizacijaDeo:
             self._sinh_mirno = 0
         if self._sinh_radi:
             return
+        vremena = self.__dict__.setdefault("_sinh_vremena", [])
+        ceka = 0 if rucno else cekaj_sinh(vremena, time.time())
+        if ceka > 0:                                 # prečesto – pomeri za kasnije (jednom), ništa se ne gubi
+            if not getattr(self, "_sinh_kasnije", None):
+                def kasnije():
+                    self._sinh_kasnije = None
+                    self.usaglasi()
+                try:
+                    self._sinh_kasnije = self.root.after(int(ceka * 1000) + 100, kasnije)
+                except tk.TclError:
+                    pass
+            return
+        vremena.append(time.time())
         self._sinh_radi = True
         self.sinh_status(T("☁ Usklađujem…", "☁ Syncing…"))
         s = dict(self.pod["sinh"])
@@ -240,14 +268,29 @@ class SinhronizacijaDeo:
 
     def _sinh_posalji(self, o, s, snimak, hes, primljeno, broj):   # u pozadini
         try:
-            verzija = s.get("verzija")
+            verzija, osn = s.get("verzija"), None
             if snimak is not None:
-                verzija = o.posalji_snimak(snimak, s.get("verzija"))
+                osn = self._sinh_novi_snimak(o, s, snimak)
+                verzija = osn["vrh"]
             for dok in primljeno:                    # paketi se brišu tek kad je snimak sa njima poslat
                 o.obrisi_paket(dok)
-            self._sinh_red.put((self._sinh_kraj, (o, verzija, hes, broj, snimak is not None)))
+            self._sinh_red.put((self._sinh_kraj, (o, verzija, hes, broj, snimak is not None, osn)))
         except Exception as e:
             self._sinh_red.put((self._sinh_kraj_greska, (e,)))
+
+    def _sinh_novi_snimak(self, o, s, snimak):      # u pozadini
+        """Telefonima se šalju samo izmene od prošlog slanja; pun snimak samo prvi put posle pokretanja programa,
+        posle mnogo izmena ili kad bi izmene bile skoro velike kao cela baza."""
+        snimak = json.loads(json.dumps(snimak, ensure_ascii=False))     # tačno ono što će telefon dobiti
+        osn = getattr(self, "_sinh_osnova", None)
+        if osn and osn["vrh"] == s.get("verzija") and osn["farma"] == s.get("farma") and len(osn["lanac"]) < NAJVISE_IZMENA:
+            tekst = zakljucaj(napravi_izmene(osn["snimak"], snimak, osn["vrh"]), s["kljuc"])
+            if len(tekst) < osn["velicina"] * 0.3:
+                vid, lanac = o.posalji_izmene(tekst, osn["puna"], osn["puna_uk"], osn["lanac"])
+                return dict(osn, vrh=vid, lanac=lanac, snimak=snimak)
+        verzija = o.posalji_snimak(snimak, s.get("verzija"))
+        uk, vel = o.poslednji_snimak
+        return dict(farma=s.get("farma"), puna=verzija, puna_uk=uk, velicina=vel, lanac=[], vrh=verzija, snimak=snimak)
 
     def _sinh_rotiraj(self, o, s, snimak, primljeno, broj, tid, ostali):   # u pozadini
         """Novo gazdinstvo (nova oznaka i ključ); preostalim telefonima se javlja nova adresa, zaključana
@@ -273,6 +316,7 @@ class SinhronizacijaDeo:
             self._sinh_red.put((self._sinh_kraj_greska, (e,)))
 
     def _sinh_kraj_rotacija(self, o2, farma2, kljuc2, verzija, broj, tid):
+        self._sinh_osnova = None                     # nov ključ: sledeći put pun snimak
         sinh = self.pod.setdefault("sinh", {})
         ime = self.telefoni().pop(tid, {}).get("ime", "")
         bez_kljuca = [v.get("ime", "") for v in self.telefoni().values() if not v.get("javni")]
@@ -304,8 +348,10 @@ class SinhronizacijaDeo:
         self._sinh_iskljuci = tid
         self.usaglasi()
 
-    def _sinh_kraj(self, o, verzija, hes, broj, poslato=True):
+    def _sinh_kraj(self, o, verzija, hes, broj, poslato=True, osn=None):
         self._sinh_radi = False
+        if osn is not None:
+            self._sinh_osnova = osn
         self._sinh_mirno = 0 if (broj or poslato) else getattr(self, "_sinh_mirno", 0) + 1
         sinh = self.pod.setdefault("sinh", {})
         sinh.update(verzija=verzija, hes=hes, token=o.token, poslednje=time.strftime("%Y-%m-%d %H:%M:%S"))

@@ -263,6 +263,52 @@ function primeniSnimak(snap) {
   if (S.sinh) S.sinh.spisak = snap.telefoni || null;   // računar zna za ove telefone
   osveziModel();
 }
+// ---- izmene: računar posle punog snimka šalje samo ono što se promenilo (lanac izmena); telefon pamti poslednji snimak
+function primeniIzmene(snap, izm, od) {
+  const greska = () => new Error(t("Izmene ne odgovaraju snimku.", "The changes do not match the snapshot."));
+  if (!izm || izm.format !== "farmer-izmene" || izm.od !== od) throw greska();
+  const rez = Object.assign({}, snap);
+  for (const k of izm.bez || []) delete rez[k];
+  Object.assign(rez, izm.polja || {});
+  for (const [k, koraci] of Object.entries(izm.liste || {})) {
+    const stara = snap[k] || [], nova = [];
+    let i = 0;
+    for (const op of koraci) {
+      if (op[0] === "=") { for (let j = 0; j < op[1]; j++) nova.push(stara[i + j]); i += op[1]; }
+      else if (op[0] === "-") i += op[1];
+      else if (op[0] === "+") for (const x of op[1]) nova.push(x);
+    }
+    if (i !== stara.length || nova.length !== (izm.n || {})[k]) throw greska();
+    rez[k] = nova;
+  }
+  return rez;
+}
+async function snimakCitaj() {
+  if (bezBaze) return null;
+  try { return (await bazaCitaj("snimak")) || null; } catch (e) { return null; }
+}
+function snimakUpisi(id, snap) {
+  if (bezBaze) return;                               // bez baze u telefonu: svaki put cela baza (radi, samo više interneta)
+  redCuvanja = redCuvanja.then(() => (id ? bazaUpisi("snimak", { id, snap }) : bazaBrisi("snimak"))).catch(() => { /* sledeći put cela baza */ });
+}
+async function preuzmiSnimak(o, pz, lanac) {
+  const ucitaj = async (kol, id, uk) => otkljucaj(await o.procitajVeliko(kol, id, +uk || 1), S.sinh.kljuc);
+  const i = lanac.findIndex(x => x[0] === S.sinh.verzija);
+  if (S.sinh.verzija && (i >= 0 || S.sinh.verzija === pz.verzija)) {   // telefon već ima deo – samo nove izmene
+    const sac = await snimakCitaj();
+    if (sac && sac.id === S.sinh.verzija && sac.snap) {
+      try {
+        let snap = sac.snap, od = sac.id;
+        for (const [id, uk] of lanac.slice(i + 1)) { snap = primeniIzmene(snap, await ucitaj("izmene", id, uk), od); od = id; }
+        return snap;
+      } catch (e) { if (e instanceof GreskaMreze) throw e; }      // nešto se ne slaže -> cela baza ispod
+    }
+  }
+  let snap = await ucitaj("snimci", pz.verzija, pz.ukupno), od = pz.verzija;
+  for (const [id, uk] of lanac) { snap = primeniIzmene(snap, await ucitaj("izmene", id, uk), od); od = id; }
+  return snap;
+}
+
 // šta je telefon promenio u odnosu na poslednje sa računara: [{n, b, t}]
 function razlike() {
   const baza = S.osnova || { grla: [], istorija: [], podsetnici: [] }, rez = {};
@@ -292,10 +338,25 @@ function sinhStatus(tekst, vrsta) {
   const el2 = document.getElementById("sinhTekst");
   if (el2) { el2.textContent = tekst; el2.className = "sinh-tekst " + vrsta; }
 }
+// zaštita: ako nešto (greška, petlja) usklađuje prečesto, telefon sam uspori – ništa se ne gubi, samo kasni
+const SINH_NA_SAT = 120, SINH_RAZMAK_S = 10;
+let sinhVremena = [], sinhKasnije = null;
+function cekajSinh(vremena, sad) {                  // sekunde do sledećeg dozvoljenog (0 = odmah)
+  vremena.splice(0, vremena.length, ...vremena.filter(x => sad - x >= 0 && sad - x < 3600));
+  if (vremena.length && sad - vremena[vremena.length - 1] < SINH_RAZMAK_S) return SINH_RAZMAK_S - (sad - vremena[vremena.length - 1]);
+  if (vremena.length >= SINH_NA_SAT) return 3600 - (sad - vremena[0]);
+  return 0;
+}
 async function usaglasi(rucno, dubina = 0) {
   if (!S.sinh || !oblakPodesen()) return;
   if (S.sinh.iskljucen) return sinhStatus(t("Računar je isključio ovaj telefon", "The computer disconnected this phone"), "greska");
   if (sinhRadi) return;
+  const ceka = rucno || dubina ? 0 : cekajSinh(sinhVremena, Date.now() / 1000);
+  if (ceka > 0) {
+    if (!sinhKasnije) sinhKasnije = setTimeout(() => { sinhKasnije = null; usaglasi(); }, ceka * 1000 + 100);
+    return;
+  }
+  sinhVremena.push(Date.now() / 1000);
   if (!navigator.onLine && !rucno) return sinhStatus(S.promene.length ? t(`${S.promene.length} promena čeka internet`, `${S.promene.length} changes waiting for internet`) : t("Nema interneta", "No internet"), "ceka");
   sinhRadi = true;
   sinhStatus(t("Usklađujem…", "Syncing…"), "radi");
@@ -335,11 +396,17 @@ async function usaglasi(rucno, dubina = 0) {
       Object.assign(S.sinh, { farma: nova.farma, kljuc: nova.kljuc, naziv: nova.naziv || S.sinh.naziv, verzija: null, predstavi: true });
       await sacuvaj();                              // ono što je bilo poslato na staru adresu, šalje se ponovo (spajanje to podnosi)
       ponovo = true;
-    } else if (pz && pz.verzija && pz.verzija !== S.sinh.verzija) {
-      const snap = await otkljucaj(await o.procitajVeliko("snimci", pz.verzija, +pz.ukupno || 1), S.sinh.kljuc);
-      primeniSnimak(snap);
-      S.sinh.verzija = pz.verzija;
-      novo = true;
+    } else if (pz && pz.verzija) {
+      let lanac = [];
+      try { lanac = pz.lanac ? JSON.parse(pz.lanac) : []; } catch (e) { lanac = []; }
+      const vrh = lanac.length ? lanac[lanac.length - 1][0] : pz.verzija;
+      if (vrh !== S.sinh.verzija) {
+        const snap = await preuzmiSnimak(o, pz, lanac);
+        primeniSnimak(kopija(snap));
+        S.sinh.verzija = vrh;
+        snimakUpisi(vrh, snap);
+        novo = true;
+      }
     }
     S.sinh.token = o.token;
     S.sinh.poslednje = sada();
@@ -424,10 +491,10 @@ async function upari(p) {
   if (S.sinh && S.sinh.farma !== p.farma) {
     if (!confirm(t(`Telefon je uparen sa gazdinstvom „${S.sinh.naziv || "?"}“. Preći na „${p.naziv || "novo gazdinstvo"}“?\n\nPodaci starog gazdinstva biće uklonjeni sa ovog telefona` + (S.promene.length ? ` (i ${S.promene.length} neposlatih promena!)` : "") + ".",
       `This phone is paired with „${S.sinh.naziv || "?"}“. Switch to „${p.naziv || "new farm"}“?\n\nThe old farm's data will be removed from this phone` + (S.promene.length ? ` (and ${S.promene.length} unsent changes!)` : "") + "."))) return false;
-    Object.assign(S, { grla: [], istorija: [], podsetnici: [], osnova: null, izvoz: null, promene: [] });
+    Object.assign(S, { grla: [], istorija: [], podsetnici: [], osnova: null, izvoz: null, promene: [] }); snimakUpisi(null);
   } else if (ima && !confirm(t("Na telefonu već ima podataka. Da li su sa ISTOG računara sa kojim se sada uparuješ?\n\nU redu = da, zadrži ih i spoji\nOtkaži = ne, obriši ih sa telefona",
     "There is already data on the phone. Is it from the SAME computer you are pairing with?\n\nOK = yes, keep and merge\nCancel = no, delete it from the phone"))) {
-    Object.assign(S, { grla: [], istorija: [], podsetnici: [], osnova: null, izvoz: null, promene: [] });
+    Object.assign(S, { grla: [], istorija: [], podsetnici: [], osnova: null, izvoz: null, promene: [] }); snimakUpisi(null);
   }
   const ime = (prompt(t("Ime ovog telefona – da se na računaru vidi ko je šta upisao (npr. Marko):",
     "Name of this phone – so the computer shows who entered what (e.g. Mark):"), S.imeTelefona || "") || "").trim().slice(0, 40);

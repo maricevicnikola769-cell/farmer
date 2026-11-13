@@ -313,6 +313,8 @@ class OceneDeo:
                 return
             self.pod["korisnik"] = ime
             self.sacuvaj_podesavanja()
+            if hasattr(self, "postavi_korisnika"):
+                self.postavi_korisnika(ime)
             nove = {k: v.get() for k, v in vr.items() if v.get()}
             mapa = procitaj_ocene(red.get("ocena", ""))
             staro = mapa.get(ime, ({}, ""))[0]

@@ -76,7 +76,7 @@ class GrlaEkran:
         self.tv_grla = tv
         tv.bind("<Double-1>", lambda ev: self.otvori_iz(tv))
         tv.bind("<Return>", lambda ev: self.otvori_iz(tv))
-        tv.bind("<Delete>", lambda ev: self.obrisi_grla([i for i in tv.selection() if i in self.model.A]))
+        tv.bind("<Delete>", lambda ev: self.deaktiviraj_grla([i for i in tv.selection() if i in self.model.A]))
         tv.bind("<Button-3>", lambda ev: self.meni_grla(tv, ev))
         tv.bind("<Button-2>", lambda ev: self.meni_grla(tv, ev))
         dno = tk.Frame(body, bg=BG)
@@ -647,6 +647,56 @@ class GrlaEkran:
                      f"+{self.root.winfo_rooty() + max(20, (self.root.winfo_height() - win.winfo_height()) // 3)}")
 
 
+    def deaktiviraj_grla(self, ids, parent=None):
+        """Umesto brisanja: grlo ostaje u evidenciji i rodoslovu, samo piše da nije aktivno (i zašto)."""
+        ids = [i for i in ids if self.red_za(i) and (self.red_za(i).get("status") or "aktivno") == "aktivno"]
+        if not ids:
+            return False
+        naziv = ids[0] if len(ids) == 1 else (T(f"{len(ids)} grla ({', '.join(ids[:5])}{'…' if len(ids) > 5 else ''})",
+                                                f"{len(ids)} animals ({', '.join(ids[:5])}{'…' if len(ids) > 5 else ''})"))
+        par = parent or self.root
+        win = tk.Toplevel(par, bg=SURF)
+        win.title(T("Grlo nije aktivno", "Animal not active"))
+        win.transient(par)
+        win.resizable(False, False)
+        win.grab_set()
+        b = tk.Frame(win, bg=SURF)
+        b.pack(fill="both", expand=True, padx=26, pady=22)
+        self.lbl(b, T(f"{naziv} – više nije aktivno", f"{naziv} – no longer active"), 14, "bold").pack(anchor="w")
+        self.lbl(b, T("Grlo ostaje u evidenciji, istoriji i rodoslovu, ali se ne računa u aktivna grla. "
+                      "Ponovo ga možeš aktivirati u „Izmeni podatke“.",
+                      "The animal stays in the records, history and pedigree, but is not counted as active. "
+                      "You can make it active again in “Edit details”."), 9, fg=INK2, wraplength=400, justify="left").pack(anchor="w", pady=(4, 12))
+        self.lbl(b, T("Razlog (nije obavezno)", "Reason (optional)"), 10).pack(anchor="w")
+        razlozi = [T("prodato", "sold"), T("uginulo", "died"), T("zaklano", "slaughtered"), T("pozajmljeno", "on loan"), T("izgubljeno", "lost")]
+        v = tk.StringVar()
+        ttk.Combobox(b, textvariable=v, values=razlozi, width=32, font=self.f(10)).pack(anchor="w", pady=(2, 0))
+        rez = {"ok": False}
+
+        def potvrdi(*_):
+            razlog = " ".join(v.get().split())
+            for i in ids:
+                self.red_za(i)["status"] = "neaktivno"
+                self.ist.dodaj(i, AUTO, T("Grlo više nije aktivno", "Animal no longer active") + (f" – {razlog}" if razlog else ""), automatski=True)
+            if self.ui.get("partner") in ids:
+                self.ui.update(partner="", partner_upit="")
+            rez["ok"] = True
+            win.grab_release()
+            win.destroy()
+            self.promena(T(f"Nije aktivno: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}",
+                           f"Not active: {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}"))
+
+        dno = tk.Frame(b, bg=SURF)
+        dno.pack(fill="x", pady=(16, 0))
+        self.btn(dno, T("Označi kao neaktivno", "Mark as inactive"), potvrdi, "Primary").pack(side="right")
+        self.btn(dno, T("Otkaži", "Cancel"), win.destroy).pack(side="right", padx=(0, 8))
+        win.bind("<Escape>", lambda e: win.destroy())
+        win.update_idletasks()
+        win.geometry(f"+{par.winfo_rootx() + max(0, (par.winfo_width() - win.winfo_width()) // 2)}"
+                     f"+{par.winfo_rooty() + max(20, (par.winfo_height() - win.winfo_height()) // 3)}")
+        win.wait_window()
+        return rez["ok"]
+
     def obrisi_grla(self, ids, parent=None):
         ids = [i for i in ids if self.red_za(i) and self.red_za(i).get("status") != "obrisano"]
         if not ids:
@@ -724,8 +774,8 @@ class GrlaEkran:
         mn.add_command(label=(T(f"Izvezi{'' if len(sel) == 1 else f' ({len(sel)} grla)'}…", f"Export{'' if len(sel) == 1 else f' ({len(sel)} animals)'}…")),
                        command=lambda: self.izvezi(oznacena=sel))
         mn.add_separator()
-        mn.add_command(label=(T(f"Obriši{'' if len(sel) == 1 else f' ({len(sel)} grla)'}", f"Delete{'' if len(sel) == 1 else f' ({len(sel)} animals)'}")),
-                       foreground=BAD, command=lambda: self.obrisi_grla(sel))
+        mn.add_command(label=(T(f"Nije aktivno{'' if len(sel) == 1 else f' ({len(sel)} grla)'}…", f"Not active{'' if len(sel) == 1 else f' ({len(sel)} animals)'}…")),
+                       foreground=BAD, command=lambda: self.deaktiviraj_grla(sel))
         try:
             mn.tk_popup(ev.x_root, ev.y_root)
         finally:

@@ -53,7 +53,7 @@ class IstorijaDeo:
         if kar:
             dod.append((T("karenca: ", "withdrawal: ")) + ", ".join(kar))
         if z.get("upisao"):
-            dod.append("📱 " + z["upisao"])
+            dod.append("👤 " + z["upisao"])
         return " · ".join(v for v in [z["opis"]] + dod if v)
 
 

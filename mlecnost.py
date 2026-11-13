@@ -7,6 +7,7 @@ from tkinter import messagebox, ttk
 
 from osnova import EN
 from jezik import DOGADJAJI, MUZNJA, NAMENE_MALI, T, namene_za
+import podaci as _podaci
 from podaci import parsiraj_datum, sada, sort_key
 from izgled import BAD, BG, BRAND, INK, INK2, LINE, OK, SURF, SURF2, WARN
 
@@ -171,11 +172,11 @@ def upisi_muznju(istorija, ix, x, d, litara, mast=None, proteini=None):
                 istorija.zapisi.remove(s)
         if all((z.get(k) or "") == v for k, v in vr.items()):
             return None
-        z.update(vr)
+        z.update(vr, upisao=_podaci.KORISNIK)
         ix.po_grlu.setdefault(x, {})[d] = z
         return "izmena"
     z = dict(grlo=x, datum=dstr, dogadjaj=MUZNJA, opis="", partner="", automatski="", uneto=sada(), ishod="", ter="",
-             karenca_meso="", karenca_mleko="", upisao="", **vr)
+             karenca_meso="", karenca_mleko="", upisao=_podaci.KORISNIK, **vr)
     istorija.zapisi.append(z)
     ix.po_grlu.setdefault(x, {})[d] = z
     return "novo"

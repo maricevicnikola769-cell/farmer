@@ -133,7 +133,9 @@ class OsnovaProzora:
 
         self.shell()
         self.prikazi("grla")
-        root.after(700, self.obavestenja_na_startu)
+        root.after(400, self.korisnik_na_startu)          # ime i prezime – jednom, obavezno (uz promene piše ko ih je uneo)
+        if len(" ".join(str(self.pod.get("korisnik") or "").split()).split()) >= 2:
+            root.after(700, self.obavestenja_na_startu)  # inače posle upisa imena (da se prozori ne preklapaju)
         root.after(10 * 60 * 1000, self.iskacuce_provera)   # zatim na svakih 30 min: nova hitna obaveštenja kao poruka u uglu ekrana
         root.after(1500, self.dnevna_kopija)
         root.after(2500, self.licenca_na_startu)
@@ -276,6 +278,7 @@ class OsnovaProzora:
         jez = tk.Label(foot, text="🌐 " + dict(JEZICI).get(JEZIK, JEZIK) + "  ▾", bg=SURF, fg=BRAND, font=self.f(9, "bold"), cursor="hand2")
         jez.pack(anchor="w", pady=(6, 0))
         jez.bind("<Button-1>", lambda e: self.meni_jezika(jez))
+        self.oznaka_korisnika(foot)
         self.lbl_licenca = tk.Label(foot, text="", bg=SURF, fg=INK2, font=self.f(9, "bold"), cursor="hand2", anchor="w",
                                     justify="left", wraplength=190)
         self.lbl_licenca.pack(anchor="w", pady=(6, 0))

@@ -34,18 +34,20 @@ LS_STORE_ID = 516191          # HerdDoc prodavnica na Lemon Squeezy-ju (isti bro
 LS_VARIJANTE = {}             # {variant_id: "osnovni" | "pro" | "farma"}; dok je prazno, paket se prepoznaje po imenu
 PROBA_DANA = 30
 PROVERA_DANA = 7
-BEZ_INTERNETA_DANA = 90          # udaljene farme bez signala (npr. Australija)
+BEZ_INTERNETA_DANA = 90          # udaljene farme bez signala (npr. Australija) – godišnja pretplata
+BEZ_INTERNETA_MESECNO = 30       # mesečna pretplata: provera bar jednom u 30 dana
 
 # paket -> (najviše aktivnih grla, cena godišnje); None = bez ograničenja
-PAKETI = {"probni": (20, 0), "osnovni": (100, 49), "pro": (500, 99), "farma": (None, 199), "udruzenje": (None, 399)}
-PRODAJNI = ("osnovni", "pro", "farma", "udruzenje")
+PAKETI = {"probni": (20, 0), "mini": (50, 49), "osnovni": (100, 79), "pro": (500, 149), "farma": (None, 299), "udruzenje": (None, 599)}
+MESECNO = {"mini": 5, "osnovni": 7, "pro": 14, "farma": 29, "udruzenje": 59}   # cena mesečne pretplate (€)
+PRODAJNI = ("mini", "osnovni", "pro", "farma", "udruzenje")
 RACUNARA = {"udruzenje": 5}      # aktivacija po ključu (podešava se i u Lemon Squeezy-ju); ostali paketi: 1
 
 _TAJNA = b"HerdDoc-licenca-2027"
 
 
 def naziv_paketa(p):
-    return {"probni": T("Besplatni", "Free"), "osnovni": T("Osnovni", "Basic"), "pro": "Pro",
+    return {"probni": T("Besplatni", "Free"), "mini": "Mini", "osnovni": T("Osnovni", "Basic"), "pro": "Pro",
             "farma": T("Farma", "Farm"), "udruzenje": T("Udruženje", "Association"), "proba": T("Proba", "Trial")}.get(p, p)
 
 
@@ -113,7 +115,7 @@ def stanje(d, danas=None):
         istice, provereno = _dan(d.get("istice")), _dan(d.get("provereno"))
         if istice and istice < danas:
             s["razlog"] = "isteklo"
-        elif not provereno or (danas - provereno).days > BEZ_INTERNETA_DANA:
+        elif not provereno or (danas - provereno).days > (BEZ_INTERNETA_MESECNO if d.get("period") == "mesecno" else BEZ_INTERNETA_DANA):
             s["razlog"] = "bez_provere"
         else:
             s.update(paket=d["paket"], limit=PAKETI[d["paket"]][0], do=istice)
@@ -173,9 +175,17 @@ def paket_iz_odgovora(meta):
         return "farma"
     if re.search(r"\bpro\b", ime):
         return "pro"
+    if re.search(r"\bmini\b", ime):
+        return "mini"
     if re.search(r"osnov|basic|basis|básico|basico|base|standard", ime):
         return "osnovni"
     raise GreskaLicence("paket")
+
+
+def period_iz_odgovora(meta):
+    """Mesečna ili godišnja pretplata (po imenu varijante na Lemon Squeezy-ju)."""
+    ime = f" {(meta or {}).get('product_name', '')} {(meta or {}).get('variant_name', '')} ".lower()
+    return "mesecno" if re.search(r"meseč|mesec|mjeseč|month|monat|mensual|mensal|mensuel", ime) else "godisnje"
 
 
 def _greska(odg):
@@ -197,7 +207,7 @@ def _iz_kljuca(d, odg, danas):
     if status == "disabled":
         raise GreskaLicence("iskljucen")
     paket = paket_iz_odgovora(meta)
-    d.update(paket=paket, istice=(lk.get("expires_at") or "")[:10] or None, provereno=danas.isoformat(),
+    d.update(paket=paket, period=period_iz_odgovora(meta), istice=(lk.get("expires_at") or "")[:10] or None, provereno=danas.isoformat(),
              email=meta.get("customer_email", ""), status=status)
     if status == "expired":
         d["istice"] = d["istice"] or (danas - timedelta(days=1)).isoformat()
@@ -372,7 +382,7 @@ class LicencaDeo:
         if ima_mesta(s, akt, novih):
             return True
         razlog = {"isteklo": T("Pretplata je istekla, pa program radi kao besplatna verzija. ", "The subscription has expired, so the program works as the free version. "),
-                  "bez_provere": T("Licenca nije proverena više od 90 dana (potreban je internet). ", "The licence has not been checked for over 90 days (internet needed). ")
+                  "bez_provere": T("Licenca dugo nije proverena (potreban je internet). ", "The licence has not been checked for a long time (internet needed). ")
                   }.get(s["razlog"], "")
         if messagebox.askyesno(T("Dostignut broj grla", "Animal limit reached"),
                                razlog + T(f"Paket „{naziv_paketa(s['paket'])}“ dozvoljava {s['limit']} aktivnih grla, a sada ih imaš {akt}.\n\n"
@@ -415,10 +425,12 @@ class LicencaDeo:
                     t = T(f"Pretplata „{naziv_paketa(d.get('paket'))}“ je istekla – sada besplatna verzija ({opis_limita(s['limit'])})",
                           f"The “{naziv_paketa(d.get('paket'))}” subscription has expired – now the free version ({opis_limita(s['limit'])})")
                 elif s["razlog"] == "bez_provere":
-                    t = T("Licenca nije proverena više od 90 dana. Poveži računar na internet i klikni „Proveri sada“.",
-                          "The licence has not been checked for over 90 days. Connect to the internet and click “Check now”.")
+                    n_ = BEZ_INTERNETA_MESECNO if d.get("period") == "mesecno" else BEZ_INTERNETA_DANA
+                    t = T(f"Licenca nije proverena više od {n_} dana. Poveži računar na internet i klikni „Proveri sada“.",
+                          f"The licence has not been checked for over {n_} days. Connect to the internet and click “Check now”.")
             else:
                 t = T(f"Paket {naziv_paketa(s['paket'])} – {opis_limita(s['limit'])}", f"{naziv_paketa(s['paket'])} package – {opis_limita(s['limit'])}")
+                t += T(" · mesečno", " · monthly") if d.get("period") == "mesecno" else T(" · godišnje", " · yearly")
             stanje_lbl.config(text=t, fg=OK if s["paket"] in PRODAJNI else (BAD if s["razlog"] else INK))
             red = [T(f"Aktivnih grla: {akt}", f"Active animals: {akt}")]
             if s["paket"] in PRODAJNI and s["do"]:
@@ -437,13 +449,18 @@ class LicencaDeo:
         for i, p in enumerate(PRODAJNI):
             lim, cena = PAKETI[p]
             k = tk.Frame(cf, bg=SURF, highlightthickness=1, highlightbackground="#D5DDD7")
-            k.grid(row=i // 2, column=i % 2, sticky="nsew", padx=(0 if i % 2 == 0 else 8, 0), pady=(0 if i < 2 else 8, 0))
+            k.grid(row=i // 3, column=i % 3, sticky="nsew", padx=(0 if i % 3 == 0 else 8, 0), pady=(0 if i < 3 else 8, 0))
             self.lbl(k, naziv_paketa(p), 11, "bold").pack(anchor="w", padx=10, pady=(8, 0))
             self.lbl(k, T(f"{cena} € godišnje", f"€{cena} per year"), 10, fg=BRAND).pack(anchor="w", padx=10)
+            self.lbl(k, T(f"ili {MESECNO[p]} € mesečno", f"or €{MESECNO[p]} per month"), 9, fg=INK2).pack(anchor="w", padx=10)
             self.lbl(k, opis_limita(lim) + (T(f", do {RACUNARA[p]} računara", f", up to {RACUNARA[p]} computers") if p in RACUNARA else ""),
                      9, fg=INK2).pack(anchor="w", padx=10, pady=(0, 8))
-        cf.columnconfigure(0, weight=1)
-        cf.columnconfigure(1, weight=1)
+        for c_ in range(3):
+            cf.columnconfigure(c_, weight=1)
+        self.lbl(b, T("Prelazak na veći paket: kupi novi paket i upiši novi ključ, a staru pretplatu otkaži u mejlu od Lemon Squeezy-ja. "
+                      "Za više od 5 računara – cena po dogovoru.",
+                      "Moving to a bigger package: buy the new package and enter the new key, then cancel the old subscription in the Lemon Squeezy e-mail. "
+                      "More than 5 computers – price on request."), 8, fg=INK2, wraplength=500, justify="left").pack(anchor="w", pady=(0, 6))
 
         def kupi():
             import webbrowser

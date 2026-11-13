@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "5.9";
+const VERZIJA_TEL = "6.1";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -341,7 +341,7 @@ function ekranKarton(id) {
   ${kartMleka(id, a)}
   <div class="kart"><h2>${t("Potomci", "Offspring")} <small>(${deca.length})</small></h2>${deca.length ? `<div class="cipovi">${deca.map(d => cip(d)).join("")}</div>` : `<span class="mali">${t("nema upisanih", "none recorded")}</span>`}</div>
   <div class="kart"><h2>${t("Istorija", "History")} <small>(${ist.length})</small></h2>${ist.length ? ist.slice(0, 60).map(z =>
-    `<div class="ist ${z.automatski ? "auto" : ""}"><div class="d">${h(z.datum)}${z.partner ? " · " + cip(z.partner) : ""}${z.upisao ? ` · 📱 ${h(z.upisao)}` : ""}</div><b>${h(z.dogadjaj)}</b>${z.vrednost ? ` – ${h(z.vrednost)}` : ""}
+    `<div class="ist ${z.automatski ? "auto" : ""}"><div class="d">${h(z.datum)}${z.partner ? " · " + cip(z.partner) : ""}${z.upisao ? ` · 👤 ${h(z.upisao)}` : ""}</div><b>${h(z.dogadjaj)}</b>${z.vrednost ? ` – ${h(z.vrednost)}` : ""}
       ${z.opis ? `<div class="mali">${h(z.opis)}</div>` : ""}${opisIshoda(z) ? `<div class="mali">${h(opisIshoda(z))}</div>` : ""}</div>`).join("") : `<span class="mali">${t("još nema zapisa", "no records yet")}</span>`}</div>`;
   if (ob.length) vezAkcije($("#ob"), ob);
   $("#napBtn").onclick = () => {
@@ -623,7 +623,7 @@ function ekranIstorija() {
   ekran.innerHTML = `<input class="pretraga" id="iq" type="search" placeholder="🔍 ${t("Traži grlo, događaj, opis…", "Search animal, event, description…")}" value="${h(filtI.q)}">
     <div class="filteri"><button data-d="" class="${!filtI.dog ? "akt" : ""}">${t("Sve", "All")}</button>${dog.map(d => `<button data-d="${h(d)}" class="${filtI.dog === d ? "akt" : ""}">${h(d)}</button>`).join("")}</div>
     <div class="mali" style="margin:0 4px 8px">${t(`${lista.length} upisa`, `${lista.length} entries`)}</div>
-    <div class="kart">${lista.slice(0, 300).map(([z]) => `<div class="ist ${z.automatski ? "auto" : ""}"><div class="d">${h(z.datum)} · ${cip(z.grlo)}${z.partner ? " · " + cip(z.partner) : ""}${z.upisao ? ` · 📱 ${h(z.upisao)}` : ""}</div>
+    <div class="kart">${lista.slice(0, 300).map(([z]) => `<div class="ist ${z.automatski ? "auto" : ""}"><div class="d">${h(z.datum)} · ${cip(z.grlo)}${z.partner ? " · " + cip(z.partner) : ""}${z.upisao ? ` · 👤 ${h(z.upisao)}` : ""}</div>
       <b>${h(z.dogadjaj)}</b>${z.vrednost ? ` – ${h(z.vrednost)}` : ""}${z.opis ? `<div class="mali">${h(z.opis)}</div>` : ""}</div>`).join("") || `<span class="mali">${t("Nema upisa.", "No entries.")}</span>`}
       ${lista.length > 300 ? `<p class="mali">${t("Prikazano je 300 najnovijih.", "Showing the 300 newest.")}</p>` : ""}</div>`;
   $("#iq").onchange = e => { filtI.q = e.target.value; ekranIstorija(); };

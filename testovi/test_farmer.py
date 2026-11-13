@@ -1277,3 +1277,111 @@ def test_ocene_vise_ocenjivaca():
     rac = "Marko Marković:karakter=2@2026-11-14"                                           # Marko promenio na računaru
     s = O.procitaj_ocene(O.spoji_ocene(baza, tel, rac))
     assert s["Marko Marković"][0] == {"karakter": 2} and s["Jovan Jović"][0] == {"karakter": 5}
+
+
+def test_paketi_mini_i_mesecno():
+    """Novi paketi i cene, Mini se prepoznaje, mesečna pretplata traži proveru na 30 dana (godišnja na 90)."""
+    from datetime import date, timedelta
+    import licenca as L
+    assert L.PRODAJNI == ("mini", "osnovni", "pro", "farma", "udruzenje")
+    assert {p: L.PAKETI[p][1] for p in L.PRODAJNI} == {"mini": 49, "osnovni": 79, "pro": 149, "farma": 299, "udruzenje": 599}
+    assert L.PAKETI["mini"][0] == 50 and set(L.MESECNO) == set(L.PRODAJNI)
+    assert L.paket_iz_odgovora({"store_id": 516191, "product_name": "HerdDoc", "variant_name": "Mini – mesečno"}) == "mini"
+    assert L.period_iz_odgovora({"variant_name": "Osnovni – mesečno / Basic monthly"}) == "mesecno"
+    assert L.period_iz_odgovora({"variant_name": "Osnovni / Basic"}) == "godisnje"
+    d0 = date(2027, 3, 1)
+    for period, ok_dana, isto in (("mesecno", 29, 31), ("godisnje", 89, 91)):
+        d = dict(kljuc="X", paket="mini", period=period, istice=None, provereno=(d0 - timedelta(days=ok_dana)).isoformat(), prvi_start="2026-01-01")
+        assert L.stanje(d, d0)["paket"] == "mini"
+        d["provereno"] = (d0 - timedelta(days=isto)).isoformat()
+        assert L.stanje(d, d0)["razlog"] == "bez_provere"
+
+
+def test_zastita_od_precestog_usaglasavanja():
+    from sinhronizacija import cekaj_sinh, NAJVISE_NA_SAT, NAJMANJI_RAZMAK_S
+    v = []
+    assert cekaj_sinh(v, 1000) == 0
+    v.append(1000)
+    assert cekaj_sinh(v, 1003) == NAJMANJI_RAZMAK_S - 3          # prebrzo posle prethodnog
+    assert cekaj_sinh(v, 1000 + NAJMANJI_RAZMAK_S) == 0
+    v[:] = [5000 + i * 20 for i in range(NAJVISE_NA_SAT)]          # pun sat
+    sad = 5000 + NAJVISE_NA_SAT * 20
+    assert cekaj_sinh(v, sad) == 3600 - (sad - 5000)
+    assert cekaj_sinh(v, 5000 + 3600 + 1) == 0                     # najstariji izašao iz sata
+    v[:] = [100]
+    assert cekaj_sinh(v, 100 + 4000) == 0 and v == []              # stari se brišu
+
+
+def test_sinh_samo_izmene():
+    pytest.importorskip("cryptography")
+    import json as _json
+    import random
+    import types
+    import oblak
+    import sinhronizacija
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import lazni_firebase
+    random.seed(5)
+    grla = [dict(id=f"RS{i:05d}", rasa="Simentalac", tezina=str(random.randint(300, 800))) for i in range(3000)]
+    ist = [dict(grlo=f"RS{i % 3000:05d}", dogadjaj="Merenje", vrednost=str(i)) for i in range(9000)]
+    s1 = dict(id="a", grla=grla, istorija=ist, prag=50, rase=[])
+    s2 = _json.loads(_json.dumps(s1))
+    s2["id"] = "b"
+    s2["grla"][245]["tezina"] = "612"                                   # jedna krava izmenjena
+    del s2["grla"][10]                                                  # jedna prodata
+    s2["istorija"].append(dict(grlo="RS00245", dogadjaj="Merenje", vrednost="612"))
+    s2["prag"] = 60
+    del s2["rase"]
+    izm = oblak.napravi_izmene(s1, s2, "v1")
+    assert _json.loads(_json.dumps(oblak.primeni_izmene(s1, _json.loads(_json.dumps(izm)), "v1"))) == s2
+    assert len(_json.dumps(izm)) < 2000 < len(_json.dumps(s2)) // 100          # izmene su sitne
+    with pytest.raises(oblak.OblakGreska):
+        oblak.primeni_izmene(s1, izm, "v0")                                     # nije od tog snimka
+    with pytest.raises(oblak.OblakGreska):
+        oblak.primeni_izmene(dict(s1, grla=grla[:-1]), izm, "v1")               # snimak se ne slaže
+    srv, st, konfig = lazni_firebase.napravi_server()
+    try:
+        farma, kljuc = oblak.novo_gazdinstvo()
+        o = oblak.Oblak(konfig, farma, kljuc)
+        ja = types.SimpleNamespace(_sinh_osnova=None)
+        s = dict(farma=farma, kljuc=kljuc)
+        posalji = lambda snap: sinhronizacija.SinhronizacijaDeo._sinh_novi_snimak(ja, o, s, snap)
+        ja._sinh_osnova = osn = posalji(s1)                                     # prvi put: cela baza
+        s["verzija"] = osn["vrh"]
+        assert osn["lanac"] == [] and o.lista("izmene") == []
+        ja._sinh_osnova = osn = posalji(s2)                                     # posle: samo izmene
+        s["verzija"] = osn["vrh"]
+        assert len(osn["lanac"]) == 1 and len(o.lista("snimci")) == osn["puna_uk"]
+        s3 = _json.loads(_json.dumps(s2))
+        s3["grla"].append(dict(id="RS99999", rasa="Angus", tezina="40"))
+        ja._sinh_osnova = osn = posalji(s3)
+        s["verzija"] = osn["vrh"]
+        pz = o.citaj("stanje", "poslednji")
+        assert len(_json.loads(pz["lanac"])) == 2 and pz["verzija"] == osn["puna"]
+        assert o.procitaj_snimak() == s3                                        # pun + 2 izmene = najnovije
+        sve = _json.loads(_json.dumps(s3))
+        for g in sve["grla"]:
+            g["tezina"] = "1"                                                   # promenjeno skoro sve -> cela baza
+        for z in sve["istorija"]:
+            z["vrednost"] += "x"
+        ja._sinh_osnova = osn = posalji(sve)
+        assert osn["lanac"] == [] and o.lista("izmene") == [] and o.procitaj_snimak() == sve
+        s["verzija"] = "nesto-drugo"                                            # računar ne zna šta je na serveru -> cela baza
+        assert posalji(s3)["lanac"] == []
+    finally:
+        srv.shutdown()
+
+
+def test_ko_je_uneo_promenu(tmp_path):
+    import podaci as P
+    staro = P.KORISNIK
+    try:
+        P.KORISNIK = "Pera Perić"
+        ist = P.Istorija(str(tmp_path / "stado.csv"))
+        z = ist.dodaj("A1", "Merenje težine", vrednost="50")
+        assert z["upisao"] == "Pera Perić"
+        assert ist.dodaj("A1", "Bolest", upisao="Telefon Marko")["upisao"] == "Telefon Marko"   # sa telefona ostaje njegovo ime
+        ist.sacuvaj()
+        assert P.Istorija(str(tmp_path / "stado.csv")).zapisi[0]["upisao"] == "Pera Perić"
+    finally:
+        P.KORISNIK = staro

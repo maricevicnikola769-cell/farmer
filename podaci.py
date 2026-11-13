@@ -7,6 +7,7 @@ from osnova import EN, _uz_tablicu, prevedi_vrednost
 from jezik import NAZIVI, T, vrsta_kanon, vrsta_na_jeziku
 
 
+KORISNIK = ""         # ime i prezime onoga ko radi u programu (upisuje se uz svaki zapis istorije)
 KOLONE = ["id", "markica", "rfid", "vrsta", "rasa", "namena", "autohtona", "pol", "datum_rodjenja", "otac", "majka", "status", "stado",
           "poreklo", "poreklo_od", "stare_markice", "uneto", "napomena", "udeo_krvi", "ocena"]
 # napomena: vidi se svuda gde je grlo; udeo_krvi: ručno upisan sastav rase osnivača ("romanovska=50;pramenka=50")
@@ -468,10 +469,10 @@ class Istorija:
         os.replace(tmp, self.putanja)
 
     def dodaj(self, grlo, dogadjaj, opis="", datum=None, partner="", vrednost="", automatski=False,
-              karenca_meso="", karenca_mleko=""):
+              karenca_meso="", karenca_mleko="", upisao=None):
         z = dict(grlo=grlo, datum=datum or date.today().strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), dogadjaj=dogadjaj, opis=opis,
                  partner=partner, vrednost=vrednost, automatski="1" if automatski else "", uneto=sada(),
-                 ishod="", ter="", karenca_meso=karenca_meso, karenca_mleko=karenca_mleko, upisao="")
+                 ishod="", ter="", karenca_meso=karenca_meso, karenca_mleko=karenca_mleko, upisao=KORISNIK if upisao is None else upisao)
         self.zapisi.append(z)
         return z
 

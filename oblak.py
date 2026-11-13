@@ -1,7 +1,8 @@
 """Oblak: šifrovano usklađivanje telefona i računara preko Firebase-a (Firestore REST, bez dodatnih biblioteka za mrežu).
 
 Kako radi:
-- računar posle svake promene pošalje SNIMAK celog stada (stanje/poslednji + snimci/<verzija>_NNN),
+- računar pošalje SNIMAK celog stada (snimci/<verzija>_NNN), a posle toga samo IZMENE (izmene/<id>_NNN);
+  stanje/poslednji kaže koji je pun snimak i koje izmene idu posle njega (lanac), pa telefon preuzima samo novo,
 - telefon šalje PAKETE sa onim što je promenio (paketi/<pid>_NNN), računar ih spoji i obriše,
 - sve je pre slanja zaključano (AES-256-GCM) ključem iz QR koda; server vidi samo nečitljiv tekst.
 """
@@ -14,6 +15,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from difflib import SequenceMatcher
 
 DEO = 900_000                  # Firestore dokument može do 1 MB – veći podaci idu u više delova
 AAD = b"farmer1"
@@ -103,6 +105,64 @@ def otkljucaj(tekst, kljuc):
     if sirovo[0] == 1:
         podaci = gzip.decompress(podaci)
     return json.loads(podaci.decode("utf-8"))
+
+
+# ---------------------------------------------------------------- izmene snimka (umesto cele baze svaki put)
+NAJVISE_IZMENA = 40            # posle toliko izmena ide nov pun snimak (lanac se ne gomila)
+
+
+def _kanon(x):
+    return json.dumps(x, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def napravi_izmene(stari, novi, od):
+    """Šta se promenilo između dva snimka. Spiskovi (grla, istorija…) idu kao koraci: ["=", n] zadrži n,
+    ["-", n] preskoči n, ["+", [zapisi]] dodaj – pa jedna izmenjena krava znači jedan zapis, ne celu bazu."""
+    liste, polja = {}, {}
+    for k, v in novi.items():
+        s = stari.get(k)
+        if isinstance(v, list) and isinstance(s, list) and len(v) + len(s) > 20:
+            a, b = [_kanon(x) for x in s], [_kanon(x) for x in v]
+            if a == b:
+                continue
+            koraci = []
+            for oznaka, i1, i2, j1, j2 in SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+                if oznaka == "equal":
+                    koraci.append(["=", i2 - i1])
+                    continue
+                if i2 > i1:
+                    koraci.append(["-", i2 - i1])
+                if j2 > j1:
+                    koraci.append(["+", v[j1:j2]])
+            liste[k] = koraci
+        elif k not in stari or _kanon(s) != _kanon(v):
+            polja[k] = v
+    return dict(format="farmer-izmene", od=od, liste=liste, polja=polja, bez=[k for k in stari if k not in novi],
+                n={k: len(novi[k]) for k in liste})
+
+
+def primeni_izmene(snimak, izm, od):
+    """Snimak + izmene = novi snimak (isto radi i telefon). Ako se nešto ne slaže, greška – onda se uzima pun snimak."""
+    if not isinstance(izm, dict) or izm.get("format") != "farmer-izmene" or izm.get("od") != od:
+        raise OblakGreska(T("Izmene ne odgovaraju snimku.", "The changes do not match the snapshot."))
+    rez = dict(snimak)
+    for k in izm.get("bez", []):
+        rez.pop(k, None)
+    rez.update(izm.get("polja", {}))
+    for k, koraci in izm.get("liste", {}).items():
+        stara, nova, i = snimak.get(k) or [], [], 0
+        for op in koraci:
+            if op[0] == "=":
+                nova.extend(stara[i:i + op[1]])
+                i += op[1]
+            elif op[0] == "-":
+                i += op[1]
+            elif op[0] == "+":
+                nova.extend(op[1])
+        if i != len(stara) or len(nova) != izm.get("n", {}).get(k):
+            raise OblakGreska(T("Izmene ne odgovaraju snimku.", "The changes do not match the snapshot."))
+        rez[k] = nova
+    return rez
 
 
 # ---------------------------------------------------------------- Firestore preko REST-a
@@ -215,16 +275,39 @@ class Oblak:
     # ---------- snimak računara i paketi telefona
     def posalji_snimak(self, sadrzaj, stara_verzija=None):
         verzija = f"{int(time.time() * 1000)}{secrets.token_hex(3)}"
-        ukupno = self.upisi_veliko("snimci", verzija, zakljucaj(sadrzaj, self.kljuc))
+        tekst = zakljucaj(sadrzaj, self.kljuc)
+        ukupno = self.upisi_veliko("snimci", verzija, tekst)
         self.upisi("stanje", "poslednji", dict(verzija=verzija, ukupno=ukupno, vreme=time.strftime("%Y-%m-%d %H:%M:%S")))
-        if stara_verzija:                       # stari snimak više ne treba
-            for dok, polja in self.lista("snimci"):
-                if polja.get("pid") != verzija:
-                    try:
-                        self.obrisi("snimci", dok)
-                    except OblakGreska:
-                        pass
+        self.poslednji_snimak = (ukupno, len(tekst))
+        if stara_verzija:                       # stari snimak i izmene posle njega više ne trebaju
+            for kol in ("snimci", "izmene"):
+                for dok, polja in self.lista(kol):
+                    if polja.get("pid") != verzija:
+                        try:
+                            self.obrisi(kol, dok)
+                        except OblakGreska:
+                            pass
         return verzija
+
+    def posalji_izmene(self, tekst, puna, puna_ukupno, lanac):
+        """Pošalji samo izmene (već zaključane) posle punog snimka; vraća (oznaka, novi lanac)."""
+        vid = f"{int(time.time() * 1000)}{secrets.token_hex(3)}"
+        uk = self.upisi_veliko("izmene", vid, tekst)
+        lanac = list(lanac) + [[vid, uk]]
+        self.upisi("stanje", "poslednji", dict(verzija=puna, ukupno=puna_ukupno, lanac=json.dumps(lanac),
+                                               vreme=time.strftime("%Y-%m-%d %H:%M:%S")))
+        return vid, lanac
+
+    def procitaj_snimak(self, meta=None):
+        """Najnoviji snimak: pun snimak + sve izmene iz lanca."""
+        meta = meta or self.citaj("stanje", "poslednji")
+        if not meta or not meta.get("verzija"):
+            return None
+        snimak, od = otkljucaj(self.procitaj_veliko("snimci", meta["verzija"], meta.get("ukupno") or 1), self.kljuc), meta["verzija"]
+        for vid, uk in json.loads(meta.get("lanac") or "[]"):
+            snimak = primeni_izmene(snimak, otkljucaj(self.procitaj_veliko("izmene", vid, uk or 1), self.kljuc), od)
+            od = vid
+        return snimak
 
     def paketi(self):
         """Kompletni paketi sa telefona: [(pid, sadržaj, [dokumenti])], redom kako su poslati."""

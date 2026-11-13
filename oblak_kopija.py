@@ -61,7 +61,7 @@ def preuzmi_kopiju(oblak, kljuc):
         return otkljucaj(oblak.procitaj_veliko("kopije", meta["verzija"], meta.get("ukupno") or 1), kljuc)
     meta = oblak.citaj("stanje", "poslednji")
     if meta and meta.get("verzija"):
-        snimak = otkljucaj(oblak.procitaj_veliko("snimci", meta["verzija"], meta.get("ukupno") or 1), kljuc)
+        snimak = oblak.procitaj_snimak(meta)
         snimak["format"] = "farmer-telefon"
         return snimak
     return None

@@ -250,7 +250,7 @@ class KartonEkran:
                 tekst = (z["dogadjaj"] if z["dogadjaj"] != AUTO else "") + \
                         (" – " if z["dogadjaj"] != AUTO and (z["opis"] or z["partner"] or z["vrednost"]) else "") + \
                         ", ".join(v for v in (z["opis"], (f"partner {z['partner']}" if z["partner"] else ""),
-                                              z["vrednost"], ("📱 " + z["upisao"]) if z.get("upisao") else "") if v)
+                                              z["vrednost"], ("👤 " + z["upisao"]) if z.get("upisao") else "") if v)
                 self.lbl(r, tekst, 9, fg=INK2 if z["automatski"] else INK, wraplength=330,
                          justify="left").pack(side="left", anchor="w")
             lr = tk.Frame(b, bg=SURF)
@@ -284,7 +284,8 @@ class KartonEkran:
             else:
                 if a["pol"]:
                     self.btn(act, (T("Svi partneri", "All partners")), lambda: (win.destroy(), self.idi_na_pretragu(x))).pack(side="left")
-                self.btn(act, (T("Obriši", "Delete")), lambda: self.obrisi_grla([x], parent=win), "Danger").pack(side="left", padx=8)
+                if a["aktivno"]:
+                    self.btn(act, T("Nije aktivno", "Not active"), lambda: self.deaktiviraj_grla([x], parent=win), "Danger").pack(side="left", padx=8)
         win.lift()
 
 
@@ -1010,15 +1011,15 @@ class KartonEkran:
             if dalje:
                 self.forma()
 
-        def obrisi():
-            if self.obrisi_grla([red["id"]], parent=win):
+        def deaktiviraj():
+            if self.deaktiviraj_grla([red["id"]], parent=win):
                 win.destroy()
 
         fb = tk.Frame(win, bg=SURF)
         fb.pack(fill="x", padx=26, pady=(0, 20))
         tk.Frame(win, bg=LINE, height=1).place(in_=fb, relx=0, y=-10, relwidth=1)
-        if red and red.get("status") != "obrisano":
-            self.btn(fb, (T("Obriši grlo", "Delete animal")), obrisi, "Danger").pack(side="left")
+        if red and (red.get("status") or "aktivno") == "aktivno":
+            self.btn(fb, T("Grlo nije aktivno", "Animal not active"), deaktiviraj, "Danger").pack(side="left")
         self.btn(fb, (T("Sačuvaj", "Save")), sacuvaj, "Primary").pack(side="right")
         if not red:
             self.btn(fb, (T("Sačuvaj i dodaj još", "Save and add another")), lambda: sacuvaj(True)).pack(side="right", padx=8)

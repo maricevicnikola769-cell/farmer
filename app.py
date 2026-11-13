@@ -38,8 +38,9 @@ import dnevnik
 from dnevnik import DnevnikDeo
 
 
+from korisnik import KorisnikDeo
 class App(OsnovaProzora, GrlaEkran, ParenjeEkran, KartonEkran, GravidnostDeo, IstorijaDeo, KopijeDeo, ObavestenjaDeo, StampaDeo, TelefonDeo,
-          SinhronizacijaDeo, DnevnikDeo, IzvozDeo, MlecnostDeo, CitacDeo, FinansijeDeo, OblakKopijaDeo, PrirastDeo, DnkDeo, LicencaDeo, VrsteDeo, RaseDeo, MrezaDeo, NovaRasaDeo, IskacuceDeo, OceneDeo):
+          SinhronizacijaDeo, DnevnikDeo, IzvozDeo, MlecnostDeo, CitacDeo, FinansijeDeo, OblakKopijaDeo, PrirastDeo, DnkDeo, LicencaDeo, VrsteDeo, RaseDeo, MrezaDeo, NovaRasaDeo, IskacuceDeo, OceneDeo, KorisnikDeo):
     """Glavni prozor programa, sklopljen iz delova (svaki deo je u svom fajlu)."""
 
 
