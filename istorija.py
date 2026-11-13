@@ -1,4 +1,5 @@
 """Istorija: spisak događaja, upis događaja (parenje, lečenje, porođaj...), izmena grla."""
+import json
 import tkinter as tk
 from datetime import date, timedelta
 from tkinter import messagebox, ttk
@@ -12,6 +13,47 @@ from rodoslov import procena
 
 
 class IstorijaDeo:
+    def vrati_izmenu(self, z):
+        """Vlasnik vraća izmenu: podaci grla dobijaju vrednosti od pre izmene; upisan događaj se briše."""
+        if not z.get("automatski"):
+            if not messagebox.askyesno(T("Vrati izmenu", "Undo change"), T(
+                    f"Poništiti upis „{z['dogadjaj']}“ od {z['datum']}" + (f" (uneo: {z['upisao']})" if z.get("upisao") else "") + "?",
+                    f"Undo the entry “{z['dogadjaj']}” of {z['datum']}" + (f" (entered by: {z['upisao']})" if z.get("upisao") else "") + "?")):
+                return False
+            self.ist.zapisi.remove(z)
+            self.ist.dodaj(z["grlo"], AUTO, T(f"Poništen upis „{z['dogadjaj']}“ od {z['datum']}", f"Entry undone: “{z['dogadjaj']}” of {z['datum']}")
+                           + (f" (👤 {z['upisao']})" if z.get("upisao") else ""), automatski=True)
+            self.promena(T("Upis je poništen.", "The entry was undone."))
+            return True
+        try:
+            pre = json.loads(z.get("pre") or "{}")
+        except ValueError:
+            pre = {}
+        red = self.red_za(z["grlo"])
+        if not isinstance(pre, dict) or not pre or red is None:
+            self.toast(T("Ova automatska promena ne može da se vrati.", "This automatic change cannot be undone."))
+            return False
+        if not messagebox.askyesno(T("Vrati izmenu", "Undo change"), T(
+                f"Vratiti podatke grla {z['grlo']} kakvi su bili pre ove izmene?\n\n{z['opis']}",
+                f"Restore the details of {z['grlo']} as they were before this change?\n\n{z['opis']}")):
+            return False
+        if pre.get("status") == "aktivno" and (red.get("status") or "aktivno") != "aktivno" and not self.ima_mesta_za_grla(1):
+            return False
+        sada_ = {k: red.get(k) or "" for k in pre}
+        for k, v in pre.items():
+            red[k] = v
+        from rodoslov import Model
+        try:
+            self.model = Model(self.tab.redovi)
+        except Exception as e:                       # npr. roditelj više ne može biti roditelj – vrati kako je bilo
+            red.update(sada_)
+            messagebox.showerror("HerdDoc", str(e))
+            return False
+        self.ist.dodaj(z["grlo"], AUTO, T("Vraćena izmena – ", "Change undone – ") + z["opis"] + (f" (👤 {z['upisao']})" if z.get("upisao") else ""),
+                       automatski=True, pre=json.dumps(sada_, ensure_ascii=False))
+        self.promena(T(f"Vraćeno: {z['grlo']}", f"Undone: {z['grlo']}"))
+        return True
+
     """Istorija: spisak događaja, upis događaja (parenje, lečenje, porođaj...), izmena grla."""
 
 
@@ -283,9 +325,15 @@ class IstorijaDeo:
                 return None
             return self.ist.zapisi[int(sel[0])]
 
+        def samo_vlasnik():
+            if hasattr(self, "ja_sam_vlasnik") and self.nalozi() and not self.ja_sam_vlasnik():
+                self.toast(T("Upisano menja, briše i vraća samo vlasnik farme.", "Only the farm owner edits, deletes and undoes entries."))
+                return False
+            return True
+
         def izmeni():
             z = izabran()
-            if not z:
+            if not z or not samo_vlasnik():
                 return
             if z["automatski"]:
                 self.toast((T("Automatski zapisi se ne menjaju.", "Automatic records cannot be changed.")))
@@ -294,14 +342,21 @@ class IstorijaDeo:
 
         def obrisi():
             z = izabran()
-            if not z:
+            if not z or not samo_vlasnik():
                 return
             if z["automatski"]:
                 self.toast((T("Automatski zapisi se ne brišu.", "Automatic records cannot be deleted.")))
                 return
             if messagebox.askyesno((T("Obriši zapis", "Delete record")), (T(f"Obrisati zapis „{z['dogadjaj']}“ od {z['datum']}?", f"Delete the record \"{z['dogadjaj']}\" of {z['datum']}?"))):
                 self.ist.zapisi.remove(z)
+                self.ist.dodaj(z["grlo"], AUTO, T(f"Obrisan događaj „{z['dogadjaj']}“ od {z['datum']}", f"Event deleted: “{z['dogadjaj']}” of {z['datum']}")
+                               + (f" (👤 {z['upisao']})" if z.get("upisao") else ""), automatski=True)
                 self.ist.sacuvaj()
+                osvezi()
+
+        def vrati():
+            z = izabran()
+            if z and samo_vlasnik() and self.vrati_izmenu(z):
                 osvezi()
 
         if x and not bez_dodaj:
@@ -309,6 +364,7 @@ class IstorijaDeo:
                 side="left", padx=(0, 8))
         self.btn(dugmad, (T("Izmeni zapis", "Edit record")), izmeni).pack(side="left")
         self.btn(dugmad, (T("Obriši zapis", "Delete record")), obrisi, "Danger").pack(side="left", padx=8)
+        self.btn(dugmad, T("↶ Vrati izmenu", "↶ Undo change"), vrati).pack(side="left")
         self.lbl(dugmad, (T("Dvoklik menja zapis. Sivo = automatske promene.", "Double-click edits a record. Grey = automatic changes.")), 9,
                  fg=INK2).pack(side="left", padx=8)
         cb.bind("<<ComboboxSelected>>", lambda e: (st.update(grupa=""), osvezi()))

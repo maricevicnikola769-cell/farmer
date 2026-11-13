@@ -56,6 +56,11 @@ class KorisnikDeo:
     def nalog(self, ime):
         return next((n for n in self.nalozi() if isto_ime(n["ime"], ime)), None)
 
+    def nalozi_za_telefon(self):
+        """Isti radnici i šifre i u aplikaciji (samo otisci šifri; ceo snimak je i tako zaključan ključem farme)."""
+        return [dict(ime=n["ime"], so=n["so"], otisak=n["otisak"], vlasnik=bool(n.get("vlasnik"))) for n in self.nalozi()
+                if n.get("so") and n.get("otisak")]
+
     def ja_sam_vlasnik(self):
         n = self.nalog(podaci.KORISNIK)
         return bool(n and n.get("vlasnik"))

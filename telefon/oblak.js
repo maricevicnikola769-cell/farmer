@@ -231,9 +231,33 @@ function spoji3(baza, tel, rac, kljuc, kolone) {
   }
   return rez;
 }
+// računar je primio naše pakete: ono što smo poslali postaje osnova – tada se uzima verzija računara
+// (npr. vlasnik je vratio izmenu radnika), a telefon ne šalje ponovo staro
+function uvaziPrimljeno(baza, snap) {
+  const prim = new Set(snap.primljeni || []), gotovi = (S.cekaju || []).filter(c => prim.has(c.pid));
+  if (!gotovi.length) return baza;
+  const tel = { grla: S.grla, istorija: S.istorija, podsetnici: S.podsetnici, finansije: S.finansije || [] };
+  const klj = { grla: kljucGrla, istorija: kljucIst, podsetnici: kljucPod, finansije: kljucFin };
+  const isti = (a, b) => { const kol = [...new Set(Object.keys(a || {}).concat(Object.keys(b || {})))]; return potpis(a, kol) === potpis(b, kol); };
+  const nova = Object.assign({}, baza);
+  for (const ime of Object.keys(klj)) {
+    const B = indeksiraj(baza[ime] || [], klj[ime]).mapa, T = indeksiraj(tel[ime], klj[ime]).mapa;
+    let menjano = false;
+    for (const c of gotovi) for (const s of (c.r && c.r[ime]) || []) {
+      const x = s.t || s.b;
+      if (!x) continue;
+      const kk = `${klj[ime](x)}#${s.n}`;
+      if (s.t && isti(T.get(kk), s.t)) { B.set(kk, s.t); menjano = true; }          // posle slanja nije menjano na telefonu
+      else if (!s.t && !T.has(kk)) { B.delete(kk); menjano = true; }
+    }
+    if (menjano) nova[ime] = [...B.values()];
+  }
+  S.cekaju = (S.cekaju || []).filter(c => !prim.has(c.pid));
+  return nova;
+}
 function primeniSnimak(snap) {
   S.jezik = jezikTelefona(snap.jezik);
-  const baza = S.osnova || { grla: [], istorija: [], podsetnici: [] };
+  const baza = uvaziPrimljeno(S.osnova || { grla: [], istorija: [], podsetnici: [] }, snap);
   const kolG = [...new Set(KOLONE_GRLA.concat(...(snap.grla || []).map(Object.keys), ...S.grla.map(Object.keys)))];
   const telOc = {}, bazOc = {}, racOc = {};
   for (const g of S.grla) telOc[g.id] = g.ocena || "";
@@ -260,6 +284,7 @@ function primeniSnimak(snap) {
     if (!snap.mreza || !S.mreza || S.mreza.udr !== snap.mreza.udr) S.mrezaPodaci = null;
     S.mreza = snap.mreza || null;
   }
+  if (Array.isArray(snap.nalozi)) S.nalozi = snap.nalozi.filter(n => n && n.ime && n.so && n.otisak);   // radnici i šifre sa računara
   if (S.sinh) S.sinh.spisak = snap.telefoni || null;   // računar zna za ove telefone
   osveziModel();
 }
@@ -375,6 +400,7 @@ async function usaglasi(rucno, dubina = 0) {
       paket.slike = slikeZa(Object.values(paket.razlike.istorija || []).map(d => d && d.t));   // slike DNK nalaza iz izmenjenih zapisa
       const pid = `${Date.now()}${Math.random().toString(16).slice(2, 8)}`;
       await o.upisiVeliko("paketi", pid, await zakljucaj(paket, S.sinh.kljuc));
+      S.cekaju = (S.cekaju || []).concat([{ pid, r: paket.razlike }]).slice(-30);   // dok računar ne javi da je primio
       S.poslato = (S.poslato || []).concat(S.promene.slice(0, n)).slice(-100);
       S.promene.splice(0, n);
       S.podesIzmene = null;                         // rase/vrste sa telefona su poslate
@@ -427,6 +453,7 @@ async function usaglasi(rucno, dubina = 0) {
   if (novo) osveziPosleSinh();
 }
 function osveziPosleSinh() {
+  if (typeof proveriIme === "function") proveriIme();   // nova šifra ili uklonjen radnik -> ponovo prijava
   const { ekran: e } = delovi();
   if (["", "grla", "karton", "danas", "parenje", "vise", "prenos", "sinh"].includes(e)) prikazi();
   else meni(e);                                      // forma je otvorena – ne diramo je

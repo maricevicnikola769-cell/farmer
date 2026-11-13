@@ -677,7 +677,8 @@ class GrlaEkran:
             razlog = " ".join(v.get().split())
             for i in ids:
                 self.red_za(i)["status"] = "neaktivno"
-                self.ist.dodaj(i, AUTO, T("Grlo više nije aktivno", "Animal no longer active") + (f" – {razlog}" if razlog else ""), automatski=True)
+                self.ist.dodaj(i, AUTO, T("Grlo više nije aktivno", "Animal no longer active") + (f" – {razlog}" if razlog else ""), automatski=True,
+                               pre='{"status": "aktivno"}')
             if self.ui.get("partner") in ids:
                 self.ui.update(partner="", partner_upit="")
             rez["ok"] = True

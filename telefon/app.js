@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "6.1";
+const VERZIJA_TEL = "6.2";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -39,7 +39,7 @@ const kopija = o => (typeof structuredClone === "function" ? structuredClone(o) 
 const stanjeZaCuvanje = () => ({ jezik: S.jezik, jezikIzabran: S.jezikIzabran || null, prag: S.prag, grav: S.grav, grla: S.grla, istorija: S.istorija,
   podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false,
   sinh: S.sinh || null, poslato: S.poslato || [], slike: S.slike || {}, licenca: S.licenca || null, vrste: S.vrste || [], rase: S.rase || [],
-  korisnik: S.korisnik || "", novaRasa: S.novaRasa || null, finansije: S.finansije || [], valuta: S.valuta || "", obav: S.obav || null, podesIzmene: S.podesIzmene || null, mreza: S.mreza || null, mrezaPodaci: S.mrezaPodaci || null, mrezaToken: S.mrezaToken || null });
+  korisnik: S.korisnik || "", novaRasa: S.novaRasa || null, finansije: S.finansije || [], valuta: S.valuta || "", obav: S.obav || null, podesIzmene: S.podesIzmene || null, mreza: S.mreza || null, mrezaPodaci: S.mrezaPodaci || null, mrezaToken: S.mrezaToken || null, nalozi: S.nalozi || null, prijava: S.prijava || null, cekaju: S.cekaju || [] });
 function sacuvajStaro(podaci) {
   try { localStorage.setItem(KLJUC, JSON.stringify(podaci)); return true; }
   catch (e) { poruka(t("Podaci nisu sačuvani u telefonu: ", "Data was not saved on the phone: ") + e.message); return false; }
@@ -590,6 +590,7 @@ function ekranFinansije() {
 }
 function ekranFinUpis(_, upit) {
   const izm = upit && upit.get("i") != null ? finansije()[+upit.get("i")] : null;
+  if (izm && !jeVlasnik()) { poruka(t("Upisano menja, briše i vraća samo vlasnik farme.", "Only the farm owner edits, deletes and undoes entries.")); return idi("finansije"); }
   let vrsta = izm ? izm.vrsta : (upit && upit.get("v") === PRIHOD ? PRIHOD : TROSAK);
   postaviVrh(izm ? t("Izmena upisa", "Edit entry") : t("Novi upis", "New entry"), true); meni("vise");
   const pd = izm ? parsirajDatum(izm.datum) : danas();
@@ -1207,7 +1208,8 @@ function ekranVise() {
     <a class="red" href="#statistika"><span style="font-size:24px">📊</span><div class="sred"><b>${t("Statistika", "Statistics")}</b><span>${t("stado u brojevima, inbriding, očevi", "herd in numbers, inbreeding, sires")}</span></div></a>
     <a class="red" href="#rase"><span style="font-size:24px">🧬</span><div class="sred"><b>${t("Moje rase", "My breeds")}</b><span>${t("rasa se upiše jednom, sa namenom", "enter a breed once, with its purpose")}</span></div></a>
     <a class="red" href="#vrste"><span style="font-size:24px">🦌</span><div class="sred"><b>${t("Moje vrste", "My species")}</b><span>${t("magarci, bivoli, jeleni…", "donkeys, buffalo, deer…")}</span></div></a>
-    <a class="red" href="#" id="jaIme"><span style="font-size:24px">👤</span><div class="sred"><b>${h(S.korisnik || t("Ime i prezime nije upisano", "Name not entered"))}</b><span>${t("ko radi u aplikaciji – dodirni za promenu", "who is using the app – tap to change")}</span></div></a>
+    ${(S.nalozi || []).length ? `<a class="red" href="#" id="jaIme"><span style="font-size:24px">🔒</span><div class="sred"><b>${t("Odjavi se", "Sign out")} – ${h(S.korisnik || "")}</b><span>${t("drugi radnik se prijavljuje svojom šifrom", "another worker signs in with their own password")}</span></div></a>`
+      : `<a class="red" href="#" id="jaIme"><span style="font-size:24px">👤</span><div class="sred"><b>${h(S.korisnik || t("Ime i prezime nije upisano", "Name not entered"))}</b><span>${t("ko radi u aplikaciji – dodirni za promenu", "who is using the app – tap to change")}</span></div></a>`}
     <a class="red" href="#rang"><span style="font-size:24px">⭐</span><div class="sred"><b>${t("Rang lista grla", "Animal ranking")}</b><span>${t("najbolja grla za priplod", "best animals for breeding")}</span></div></a>
     <a class="red" href="#srodstvo"><span style="font-size:24px">⚯</span><div class="sred"><b>${t("Srodstvo dva grla", "Relationship of two animals")}</b><span>${t("koliko su srodni, zajednički preci", "how related they are, common ancestors")}</span></div></a>
     <a class="red" href="#novo"><span style="font-size:24px">＋</span><div class="sred"><b>${t("Novo grlo", "New animal")}</b><span>${t("kupljeno ili rođeno", "bought or born")}</span></div></a>
@@ -1226,7 +1228,7 @@ function ekranVise() {
   $("#problem").onclick = ev => { ev.preventDefault(); prijaviProblem(); };
   $("#obUk").onclick = ev => { ev.preventDefault(); if (stanjeObavestenja()[0] !== "da") ukljuciObavestenja(); else poruka(stanjeObavestenja()[1]); };
   $("#jezikV").onchange = e => { izaberiJezik(e.target.value); prikazi(); };
-  $("#jaIme").onclick = ev => { ev.preventDefault(); traziIme(!!S.korisnik); };
+  $("#jaIme").onclick = ev => { ev.preventDefault(); if ((S.nalozi || []).length) odjaviSe(); else traziIme(!!S.korisnik); };
   osveziInstalaciju();
 }
 
@@ -1487,7 +1489,57 @@ function traziIme(menja = false) {
   if (menja) $("#kOtk").onclick = () => d.remove();
   setTimeout(() => $("#kIme").focus(), 50);
 }
-const proveriIme = () => { if (imaPodatke() && !cistoIme(S.korisnik || "")) traziIme(); };
+// ---- prijava šifrom: isti radnici i iste šifre kao na računaru (stižu pri povezivanju sa računarom)
+async function otisakSifre(sifra, so) {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(sifra), "PBKDF2", false, ["deriveBits"]);
+  const salt = new Uint8Array((so.match(/../g) || []).map(x => parseInt(x, 16)));
+  const b = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 120000 }, k, 256));
+  return Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+}
+function traziPrijavu() {
+  if (document.querySelector(".prijava-okvir")) return;
+  document.querySelectorAll(".ime-okvir").forEach(x => x.remove());
+  const nal = S.nalozi || [], pocetno = (S.prijava && S.prijava.ime) || S.korisnik || "";
+  const d = document.createElement("div");
+  d.className = "obavesti prijava-okvir";
+  d.innerHTML = `<div class="okvir"><h2>🔒 ${t("Prijava", "Sign in")}</h2>
+    <p class="mali" style="margin:0 0 12px">${t("Izaberi svoje ime i upiši istu šifru kao na računaru.", "Choose your name and enter the same password as on the computer.")}</p>
+    <label class="polje"><span>${t("Korisnik", "User")}</span><select class="unos" id="pIme">${nal.map(n => `<option${n.ime === pocetno ? " selected" : ""}>${h(n.ime)}</option>`).join("")}</select></label>
+    <label class="polje"><span>${t("Šifra", "Password")}</span><input class="unos" id="pSif" type="password" autocomplete="current-password"></label>
+    <div class="greska" id="pGr"></div>
+    <button class="dug glavno puno" id="pOk">${t("Prijavi se", "Sign in")}</button>
+    <p class="mali" style="margin:10px 0 0">${t("Zaboravljena šifra: vlasnik je menja na računaru (👤 → Radnici).", "Forgot password: the owner changes it on the computer (👤 → Workers).")}</p></div>`;
+  document.body.appendChild(d);
+  let pokusaji = 0;
+  const ok = async () => {
+    const n = nal.find(x => x.ime === $("#pIme").value);
+    if (!n || $("#pOk").disabled) return;
+    $("#pOk").disabled = true;
+    let o = "";
+    try { o = await otisakSifre($("#pSif").value, n.so); } catch (e) { /* */ }
+    if (o !== n.otisak) {
+      pokusaji++;
+      $("#pSif").value = "";
+      $("#pGr").textContent = t("Pogrešna šifra.", "Wrong password.");
+      setTimeout(() => { const b = $("#pOk"); if (b) b.disabled = false; }, pokusaji >= 5 ? 5000 * (pokusaji - 4) : 0);   // usporava pogađanje
+      return;
+    }
+    S.prijava = { ime: n.ime, otisak: n.otisak };
+    S.korisnik = n.ime;
+    sacuvaj(); d.remove();
+    poruka(t(`Prijavljen: ${n.ime}`, `Signed in: ${n.ime}`));
+    prikazi();
+    setTimeout(obavestiPriUlasku, 300);
+  };
+  $("#pOk").onclick = ok;
+  $("#pSif").onkeydown = e => { if (e.key === "Enter") ok(); };
+  setTimeout(() => $("#pSif").focus(), 50);
+}
+function odjaviSe() { S.prijava = null; sacuvaj(); traziPrijavu(); }
+const proveriIme = () => {
+  if ((S.nalozi || []).length) { if (!prijavljenNalog()) traziPrijavu(); return; }    // povezan sa računarom: šifra
+  if (imaPodatke() && !cistoIme(S.korisnik || "")) traziIme();
+};
 
 // ---------------------------------------------------------------- start
 ekran.innerHTML = `<div class="prazno">${t("Učitavam…", "Loading…")}</div>`;
@@ -1497,7 +1549,7 @@ ucitajIzTelefona().then(() => {
   prikazi();
   pokreniUsaglasavanje();
   proveriIme();
-  setTimeout(obavestiPriUlasku, 600);
+  setTimeout(() => { if (!document.querySelector(".prijava-okvir")) obavestiPriUlasku(); }, 600);
   setTimeout(() => { const sd = new Date(), hm = `${String(sd.getHours()).padStart(2, "0")}:${String(sd.getMinutes()).padStart(2, "0")}`; for (const p of S.podsetnici) if (normVreme(p.vreme) && normVreme(p.vreme) <= hm && +(parsirajDatum(p.datum) || 0) === +danas()) _vrJavljeno.add(`${p.grlo}|${p.tip}|${p.datum}|${p.vreme}`); zakaziVremenske(); }, 700);   // već prošla vremena pokriva prozor pri ulasku
   planUskoro();
 });

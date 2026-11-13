@@ -320,6 +320,9 @@ class FinansijeDeo:
             sel = [po_iid[i] for i in tv.selection() if i in po_iid]
             if not sel:
                 return
+            if hasattr(self, "ja_sam_vlasnik") and self.nalozi() and not self.ja_sam_vlasnik():
+                self.toast(T("Upisano menja, briše i vraća samo vlasnik farme.", "Only the farm owner edits, deletes and undoes entries."))
+                return
             if messagebox.askyesno(T("Brisanje", "Delete"), T(f"Obrisati izabrane upise ({len(sel)})?", f"Delete the selected entries ({len(sel)})?")):
                 for z in sel:
                     if z in self.fin.zapisi:

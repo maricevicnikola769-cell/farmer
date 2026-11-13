@@ -147,7 +147,7 @@ class SinhronizacijaDeo:
         return hashlib.sha256(json.dumps([self.tab.redovi, self.ist.zapisi, self.pods.zapisi, self.prag, EN,
                                           self.pod.get("gravidnost2", {}), self.spisak_telefona_za_snimak(),
                                           self.pod.get("vrste_moje", []), self.pod.get("rase_moje", []), self.mreza_za_telefon(), self.obav_za_telefon(),
-                                          self.fin.zapisi, self.valuta(), self.pod.get("nova_rasa")],
+                                          self.fin.zapisi, self.valuta(), self.pod.get("nova_rasa"), self.nalozi_za_telefon()],
                                          ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
     # ---------------------------------------------------------- spisak uparenih telefona
@@ -244,10 +244,12 @@ class SinhronizacijaDeo:
         primljeno, broj = [], 0
         if paketi:
             self.napravi_kopiju("automatic" if EN else "automatske", time.strftime("%Y-%m-%d_%H-%M-%S") + T("_pre_telefona", "_before_phone"))
+        sinh_ = self.pod.setdefault("sinh", {})
         for pid, sadrzaj, dok in paketi:
             try:
                 broj += self._primeni_paket(sadrzaj)
                 primljeno.append(dok)
+                sinh_["primljeni"] = (sinh_.get("primljeni", []) + [pid])[-50:]   # telefon tako zna da je njegov paket ušao
             except Exception as e:
                 self.sinh_status(T(f"☁ Paket sa telefona nije mogao da se primeni: {e}", f"☁ A phone package could not be applied: {e}"), BAD)
         if primljeno:
@@ -257,12 +259,14 @@ class SinhronizacijaDeo:
             self._sinh_iskljuci = None
             ostali = {t: dict(v) for t, v in self.telefoni().items() if t != tid}
             snimak = dict(self.paket_za_telefon(), telefoni={t: v.get("ime", "") for t, v in ostali.items()},
-                          mreza=self.mreza_za_telefon(), obav=self.obav_za_telefon())
+                          mreza=self.mreza_za_telefon(), obav=self.obav_za_telefon(), nalozi=self.nalozi_za_telefon(),
+                          primljeni=self.pod.get("sinh", {}).get("primljeni", []))
             threading.Thread(target=self._sinh_rotiraj, args=(o, s, snimak, primljeno, broj, tid, ostali), daemon=True).start()
             return
         hes = self._sinh_hes()
         snimak = dict(self.paket_za_telefon(), telefoni=self.spisak_telefona_za_snimak(),
-                      mreza=self.mreza_za_telefon(), obav=self.obav_za_telefon()) \
+                      mreza=self.mreza_za_telefon(), obav=self.obav_za_telefon(), nalozi=self.nalozi_za_telefon(),
+                          primljeni=self.pod.get("sinh", {}).get("primljeni", [])) \
             if (hes != s.get("hes") or primljeno or not s.get("verzija")) else None
         threading.Thread(target=self._sinh_posalji, args=(o, s, snimak, hes, primljeno, broj), daemon=True).start()
 

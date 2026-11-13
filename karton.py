@@ -1,4 +1,5 @@
 """Karton grla, rodoslovno stablo, potomci, bočni srodnici i forma za upis/izmenu grla."""
+import json
 import tkinter as tk
 from datetime import date
 from tkinter import messagebox, ttk
@@ -972,7 +973,9 @@ class KartonEkran:
                 promene = [f"{n}: {red.get(k) or '–'} → {novi.get(k) or '–'}" for k, n in nazivi_polja.items()
                            if (red.get(k) or "") != (novi.get(k) or "")]
                 if promene:
-                    self.ist.dodaj(nid, AUTO, (T("Izmena podataka – ", "Details changed – ")) + "; ".join(promene), automatski=True)
+                    stare = {k: red.get(k) or "" for k in nazivi_polja if (red.get(k) or "") != (novi.get(k) or "")}
+                    self.ist.dodaj(nid, AUTO, (T("Izmena podataka – ", "Details changed – ")) + "; ".join(promene), automatski=True,
+                                   pre=json.dumps(stare, ensure_ascii=False))
                 red.update(novi)
                 if staro != nid:
                     for r in self.tab.redovi:

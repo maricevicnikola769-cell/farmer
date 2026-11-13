@@ -153,7 +153,7 @@ EN_KOL = {"id": "id", "markica": "ear_tag", "rfid": "rfid", "vrsta": "species", 
 EN_IST = {"grlo": "animal", "datum": "date", "dogadjaj": "event", "opis": "description", "partner": "partner",
           "vrednost": "value", "automatski": "automatic", "uneto": "added", "ishod": "outcome", "ter": "heat",
           "karenca_meso": "withdrawal_meat_days", "karenca_mleko": "withdrawal_milk_days", "upisao": "entered_by",
-          "mast": "fat_pct", "proteini": "protein_pct", "lab": "lab", "uzorak": "sample", "fajl": "file", "izvestaj": "report"}
+          "mast": "fat_pct", "proteini": "protein_pct", "lab": "lab", "uzorak": "sample", "fajl": "file", "izvestaj": "report", "pre": "previous"}
 
 
 EN_POD = {"grlo": "animal", "datum": "date", "tip": "type", "tekst": "text", "ponavljanje": "repeat_days",
@@ -418,7 +418,7 @@ def _obradi_tablicu(sirovo, excel=False):
 # =============================================================== istorija grla
 
 IST_KOLONE = ["grlo", "datum", "dogadjaj", "opis", "partner", "vrednost", "automatski", "uneto", "ishod",
-              "ter", "karenca_meso", "karenca_mleko", "upisao", "mast", "proteini", "lab", "uzorak", "fajl", "izvestaj"]   # DNK test: lab, uzorak, fajl (nalazi, „|“), izvestaj (tekst)
+              "ter", "karenca_meso", "karenca_mleko", "upisao", "mast", "proteini", "lab", "uzorak", "fajl", "izvestaj", "pre"]   # pre: stare vrednosti (vlasnik vraća izmenu); DNK test: lab, uzorak, fajl (nalazi, „|“), izvestaj (tekst)
 
 
 class Istorija:
@@ -469,10 +469,10 @@ class Istorija:
         os.replace(tmp, self.putanja)
 
     def dodaj(self, grlo, dogadjaj, opis="", datum=None, partner="", vrednost="", automatski=False,
-              karenca_meso="", karenca_mleko="", upisao=None):
+              karenca_meso="", karenca_mleko="", upisao=None, pre=""):
         z = dict(grlo=grlo, datum=datum or date.today().strftime(("%d/%m/%Y" if EN else "%d.%m.%Y")), dogadjaj=dogadjaj, opis=opis,
                  partner=partner, vrednost=vrednost, automatski="1" if automatski else "", uneto=sada(),
-                 ishod="", ter="", karenca_meso=karenca_meso, karenca_mleko=karenca_mleko, upisao=KORISNIK if upisao is None else upisao)
+                 ishod="", ter="", karenca_meso=karenca_meso, karenca_mleko=karenca_mleko, upisao=KORISNIK if upisao is None else upisao, pre=pre)
         self.zapisi.append(z)
         return z
 

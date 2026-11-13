@@ -3,7 +3,7 @@
 "use strict";
 
 const IST_KOLONE = ["grlo", "datum", "dogadjaj", "opis", "partner", "vrednost", "automatski", "uneto", "ishod",
-  "ter", "karenca_meso", "karenca_mleko", "upisao", "mast", "proteini", "lab", "uzorak", "fajl", "izvestaj"];
+  "ter", "karenca_meso", "karenca_mleko", "upisao", "mast", "proteini", "lab", "uzorak", "fajl", "izvestaj", "pre"];
 const POD_KOLONE = ["grlo", "datum", "tip", "tekst", "ponavljanje", "gotovo", "uneto", "vreme"];
 // '7', '7:5', '07.30' -> '07:00', '07:05', '07:30'; neispravno -> ''
 function normVreme(v) {
@@ -345,11 +345,14 @@ function osveziModel() { M = new Model(S.grla); }
 // ko je upisao: ime ovog telefona (podešava se pri uparivanju), da se na računaru vidi koji radnik je šta uneo
 function imeTelefona() { return (S.sinh && S.sinh.ime) || S.imeTelefona || t("Telefon", "Phone"); }
 // ko upisuje: ime i prezime korisnika (obavezno u aplikaciji), inače ime telefona
+// radnici i šifre sa računara (S.nalozi: ime, so, otisak, vlasnik) – prijava istom šifrom kao na računaru
+function prijavljenNalog() { return (S.nalozi || []).find(n => S.prijava && n.ime === S.prijava.ime && n.otisak === S.prijava.otisak) || null; }
+function jeVlasnik() { return !(S.nalozi || []).length || !!(prijavljenNalog() || {}).vlasnik; }
 function koUpisuje() { return cistoIme(S.korisnik || "") || imeTelefona(); }
 function dodaj(grlo, dogadjaj, o = {}) {
   const z = { grlo, datum: o.datum || fmtD(danas()), dogadjaj, opis: o.opis || "", partner: o.partner || "", vrednost: o.vrednost || "",
     automatski: o.automatski ? "1" : "", uneto: sada(), ishod: "", ter: "", karenca_meso: o.karenca_meso || "", karenca_mleko: o.karenca_mleko || "", upisao: koUpisuje(),
-    mast: o.mast || "", proteini: o.proteini || "", lab: o.lab || "", uzorak: o.uzorak || "", fajl: "" };
+    mast: o.mast || "", proteini: o.proteini || "", lab: o.lab || "", uzorak: o.uzorak || "", fajl: "", pre: o.pre || "" };
   S.istorija.push(z);
   return z;
 }
@@ -1204,9 +1207,11 @@ function izmeniGrlo(id, v, celaRasa = true) {
     poreklo_od: t("poreklo od", "origin from"), napomena: t("napomena", "note"), udeo_krvi: t("udeo krvi", "breed share") };
   const promene = Object.keys(nazivi).filter(k => (r[k] || "") !== (novi[k] || "")).map(k => `${nazivi[k]}: ${r[k] || "–"} → ${novi[k] || "–"}`);
   if (!promene.length) return { id, promene: [], rasaGrla: 0 };
+  const pre = {};                                   // stare vrednosti: vlasnik na računaru može da vrati izmenu
+  for (const k of Object.keys(nazivi)) if (k !== "markica" && (r[k] || "") !== (novi[k] || "")) pre[k] = r[k] || "";
   if (norm(r.markica) !== norm(mk) && r.markica) r.stare_markice = [...stareLista(r), r.markica].join(", ");   // stara markica se pamti
   Object.assign(r, novi);
-  dodaj(id, K().AUTO, { opis: t("Izmena podataka – ", "Details changed – ") + promene.join("; "), automatski: true });
+  dodaj(id, K().AUTO, { opis: t("Izmena podataka – ", "Details changed – ") + promene.join("; "), automatski: true, pre: Object.keys(pre).length ? JSON.stringify(pre) : "" });
   let rasaGrla = 0;
   if (celaRasa && novi.namena && cistaRasaTel(novi.rasa))                 // namena važi za celu rasu
     for (const x of S.grla)

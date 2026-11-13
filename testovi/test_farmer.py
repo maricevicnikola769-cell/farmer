@@ -1396,3 +1396,11 @@ def test_sifre_radnika():
     kod = K.novi_kod_za_vracanje()
     assert len(K._cist_kod(kod)) == 12 and K._cist_kod(kod.lower()) == K._cist_kod(kod)
     assert K.isto_ime("pera perić", "Pera  Perić")
+
+
+def test_izmena_pamti_staro(tmp_path):
+    import podaci as P
+    ist = P.Istorija(str(tmp_path / "stado.csv"))
+    ist.dodaj("A1", "Automatski", "Izmena podataka – stado: A → B", automatski=True, pre='{"stado": "A"}')
+    ist.sacuvaj()
+    assert P.Istorija(str(tmp_path / "stado.csv")).zapisi[0]["pre"] == '{"stado": "A"}'     # vlasnik može da vrati
