@@ -1,5 +1,5 @@
 // HerdDoc za telefon – radi i bez interneta: svi fajlovi aplikacije se čuvaju u telefonu.
-const VERZIJA = "farmer-tel-6.2";
+const VERZIJA = "farmer-tel-6.3";
 const FAJLOVI = ["./", "index.html", "app.js", "skener.js", "oblak.js", "oblak-konfig.js", "zxing.min.js", "logika.js", "konstante.js", "prevodi.js", "manifest.webmanifest",
   "ikone/ikona-192.png", "ikone/ikona-512.png", "ikone/ikona-maskable-512.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(VERZIJA).then(c => c.addAll(FAJLOVI.map(f => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting())));

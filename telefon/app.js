@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "6.2";
+const VERZIJA_TEL = "6.3";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -1543,7 +1543,8 @@ const proveriIme = () => {
 
 // ---------------------------------------------------------------- start
 ekran.innerHTML = `<div class="prazno">${t("Učitavam…", "Loading…")}</div>`;
-ucitajIzTelefona().then(() => {
+// start tek kad su učitani svi delovi aplikacije (oblak.js je poslednji) – inače na sporom internetu prvi ekran pukne
+const pokreniAplikaciju = () => ucitajIzTelefona().then(() => {
   window.addEventListener("hashchange", prikazi);
   window.addEventListener("hashchange", proveriIme);
   prikazi();
@@ -1553,5 +1554,6 @@ ucitajIzTelefona().then(() => {
   setTimeout(() => { const sd = new Date(), hm = `${String(sd.getHours()).padStart(2, "0")}:${String(sd.getMinutes()).padStart(2, "0")}`; for (const p of S.podsetnici) if (normVreme(p.vreme) && normVreme(p.vreme) <= hm && +(parsirajDatum(p.datum) || 0) === +danas()) _vrJavljeno.add(`${p.grlo}|${p.tip}|${p.datum}|${p.vreme}`); zakaziVremenske(); }, 700);   // već prošla vremena pokriva prozor pri ulasku
   planUskoro();
 });
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", pokreniAplikaciju); else pokreniAplikaciju();
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
