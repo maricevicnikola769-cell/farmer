@@ -344,9 +344,11 @@ function osveziModel() { M = new Model(S.grla); }
 
 // ko je upisao: ime ovog telefona (podešava se pri uparivanju), da se na računaru vidi koji radnik je šta uneo
 function imeTelefona() { return (S.sinh && S.sinh.ime) || S.imeTelefona || t("Telefon", "Phone"); }
+// ko upisuje: ime i prezime korisnika (obavezno u aplikaciji), inače ime telefona
+function koUpisuje() { return cistoIme(S.korisnik || "") || imeTelefona(); }
 function dodaj(grlo, dogadjaj, o = {}) {
   const z = { grlo, datum: o.datum || fmtD(danas()), dogadjaj, opis: o.opis || "", partner: o.partner || "", vrednost: o.vrednost || "",
-    automatski: o.automatski ? "1" : "", uneto: sada(), ishod: "", ter: "", karenca_meso: o.karenca_meso || "", karenca_mleko: o.karenca_mleko || "", upisao: imeTelefona(),
+    automatski: o.automatski ? "1" : "", uneto: sada(), ishod: "", ter: "", karenca_meso: o.karenca_meso || "", karenca_mleko: o.karenca_mleko || "", upisao: koUpisuje(),
     mast: o.mast || "", proteini: o.proteini || "", lab: o.lab || "", uzorak: o.uzorak || "", fajl: "" };
   S.istorija.push(z);
   return z;
@@ -413,6 +415,341 @@ function merenjaTezine(x) {
   return [...poDanu.entries()].sort((a, b) => a[0] - b[0]).map(([d, kg]) => [new Date(d), kg]);
 }
 function prirastG(a, b) { const dana = Math.round((b[0] - a[0]) / 86400000); return dana > 0 ? Math.round((b[1] - a[1]) * 1000 / dana) : null; }
+
+// ---------------------------------------------------------------- Nova rasa (nova_rasa.py, rodoslov.py): udeo krvi kroz generacije
+const NEPOZNATO = "?", BLIZU = 0.0625;
+function procitajUdeo(tekst) {
+  const rez = {};
+  for (const deo of String(tekst || "").split(/;|\n|,(?=\s*[^\d\s])/)) {
+    const mt = /^\s*(.+?)\s*[=:]?\s*(\d+(?:[.,]\d+)?)\s*%?\s*$/.exec(deo);
+    if (!mt) continue;
+    const ime = mt[1].replace(/^[\s=:]+|[\s=:]+$/g, "").split(/\s+/).join(" ").toLowerCase(), br = parseFloat(mt[2].replace(",", "."));
+    if (ime && br > 0) rez[ime] = (rez[ime] || 0) + br;
+  }
+  const uk = Object.values(rez).reduce((s, v) => s + v, 0);
+  if (!Object.keys(rez).length || uk > 100.5) return {};
+  for (const k of Object.keys(rez)) rez[k] /= 100;
+  if (uk < 99.5) rez[NEPOZNATO] = (100 - uk) / 100;
+  return rez;
+}
+const zapisiUdeo = s => Object.entries(s).filter(([k]) => k !== NEPOZNATO).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}=${+(v * 100).toFixed(2)}`).join(";");
+function sastav(x) {
+  if (!x) return { [NEPOZNATO]: 1 };
+  const kes = M._sast || (M._sast = {});
+  if (kes[x]) return kes[x];
+  const r = S.grla.find(g => g.id === x), ud = r ? procitajUdeo(r.udeo_krvi) : {};
+  let rez = {};
+  if (Object.keys(ud).length) rez = ud;
+  else {
+    const [o, m] = M.P[x] || [null, null];
+    if (o || m) for (const p of [o, m]) for (const [k, v] of Object.entries(sastav(p))) rez[k] = (rez[k] || 0) + v / 2;
+    const a = M.A[x] || {}, cista = cistaRasaTel(a.rasa) ? String(a.rasa).trim().split(/\s+/).join(" ").toLowerCase() : "";
+    const nep = Object.keys(rez).length ? (rez[NEPOZNATO] || 0) : 1;
+    delete rez[NEPOZNATO];
+    if (nep > 1e-9) { if (cista) rez[cista] = (rez[cista] || 0) + nep; else rez[NEPOZNATO] = nep; }
+  }
+  return (kes[x] = rez);
+}
+function generacijaUkrstanja(x) {
+  const kes = M._gu || (M._gu = {});
+  if (kes[x]) return kes[x];
+  const s = sastav(x);
+  let rez;
+  if ((s[NEPOZNATO] || 0) >= 0.5) rez = [t("nepoznato", "unknown"), null];
+  else if (Math.max(...Object.values(s)) >= 0.999) rez = [t("čistokrvno", "purebred"), 0];
+  else {
+    const [o, m] = M.P[x] || [null, null], go = o ? generacijaUkrstanja(o)[1] : null, gm = m ? generacijaUkrstanja(m)[1] : null;
+    if (go == null || gm == null) rez = [t("ukršteno", "crossbred"), null];
+    else if (go === 0 && gm === 0) rez = ["F1", 1];
+    else if (go === 0 || gm === 0) rez = [t("povratno ukrštanje", "backcross"), Math.max(go, gm) + 1];
+    else rez = [`F${Math.max(go, gm) + 1}`, Math.max(go, gm) + 1];
+  }
+  return (kes[x] = rez);
+}
+function sastavPotomka(a, b) { const r = {}; for (const s of [a, b]) for (const [k, v] of Object.entries(s)) r[k] = (r[k] || 0) + v / 2; return r; }
+function odstupanje(s, cilj) {
+  if (!cilj || !Object.keys(cilj).length) return null;
+  const kl = new Set([...Object.keys(s), ...Object.keys(cilj)]);
+  let z = 0; for (const k of kl) z += Math.abs((s[k] || 0) - (k !== NEPOZNATO ? (cilj[k] || 0) : 0));
+  return z / 2;
+}
+function tekstUdela(s, najvise = 4) {
+  const red = Object.entries(s).filter(([, v]) => v > 1e-9).sort((a, b) => (a[0] === NEPOZNATO) - (b[0] === NEPOZNATO) || b[1] - a[1] || a[0].localeCompare(b[0]));
+  const d = red.slice(0, najvise).map(([k, v]) => `${k === NEPOZNATO ? t("nepoznato", "unknown") : k} ${pct(v)}`);
+  if (red.length > najvise) d.push(t("ostalo", "other") + " " + pct(red.slice(najvise).reduce((x, [, v]) => x + v, 0)));
+  return d.join(" · ");
+}
+const programRase = () => (S.novaRasa && typeof S.novaRasa === "object" ? S.novaRasa : {});
+function sacuvajCiljRase(vrsta, ime, redovi) {
+  const novi = {};
+  for (const [r, p] of redovi) {
+    const n = String(r || "").trim().split(/\s+/).join(" ").toLowerCase(), br = parseFloat(String(p || "").trim().replace(",", ".").replace("%", ""));
+    if (!n && !String(p || "").trim()) continue;
+    if (!n || !(br > 0)) return t("Za svaku rasu upiši naziv i udeo veći od nule.", "For each breed enter a name and a share above zero.");
+    novi[n] = (novi[n] || 0) + br;
+  }
+  const zb = Object.values(novi).reduce((s, v) => s + v, 0);
+  if (Object.keys(novi).length && Math.abs(zb - 100) > 0.5) return t(`Zbir udela je ${String(+zb.toFixed(2)).replace(".", ",")} %, a mora biti 100 %.`, `The shares add up to ${+zb.toFixed(2)} %, but must be 100 %.`);
+  S.novaRasa = { vrsta, ime: String(ime || "").trim().split(/\s+/).join(" "), cilj: novi };
+  podesIzmene().nova_rasa = S.novaRasa;
+  zabelezi(t("Cilj nove rase", "New breed goal"));
+  return null;
+}
+function paroviZaCilj(grla, cilj, koliko = 40) {
+  const zenke = grla.filter(a => a.pol === "z" && (sastav(a.id)[NEPOZNATO] || 0) < 0.5).map(a => a.id);
+  const muski = grla.filter(a => a.pol === "m" && (sastav(a.id)[NEPOZNATO] || 0) < 0.5 && (!a.datum || (danas() - a.datum) / 86400000 >= 182)).map(a => a.id);
+  const rez = [];
+  for (const z of zenke.slice(0, 400)) for (const mu of muski.slice(0, 150)) {
+    const s = sastavPotomka(sastav(z), sastav(mu));
+    rez.push([Math.round(odstupanje(s, cilj) * 1e6) / 1e6, M.kinship(z, mu), z, mu, s]);
+  }
+  const rizik = f => f > S.prag;
+  rez.sort((a, b) => rizik(a[1]) - rizik(b[1]) || a[0] - b[0] || a[1] - b[1]);
+  return rez.slice(0, koliko);
+}
+
+// ---------------------------------------------------------------- finansije (finansije.py): prihodi i troškovi
+const PRIHOD = "prihod", TROSAK = "trosak";
+function kategorijeFin(vrsta) {
+  return vrsta === PRIHOD ? [t("Prodaja mleka", "Milk sales"), t("Prodaja grla", "Animal sales"), t("Prodaja mesa", "Meat sales"), t("Subvencije", "Subsidies"), t("Ostali prihodi", "Other income")]
+    : [t("Hrana (koncentrat, seno, silaža)", "Feed (concentrate, hay, silage)"), t("Veterinar i lekovi", "Vet and medicines"), t("Osemenjavanje", "Insemination"),
+       t("Kupovina grla", "Animal purchases"), t("Radnici", "Labour"), t("Gorivo i struja", "Fuel and electricity"), t("Oprema i popravke", "Equipment and repairs"),
+       t("Zakup zemlje", "Land rent"), t("Ostali troškovi", "Other costs")];
+}
+function brojIznos(v) {
+  let s = String(v == null ? "" : v).trim().replace(/[\s\u00a0]/g, "");
+  if (!s) return null;
+  if (s.includes(",") && s.includes(".")) s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  else s = s.replace(",", ".");
+  const x = Number(s);
+  return Number.isFinite(x) ? x : null;
+}
+function fmtNovac(x, valuta) {
+  const ceo = Math.abs(x - Math.round(x)) < 0.005;
+  let s = x.toLocaleString(EN() ? "en-US" : "de-DE", { minimumFractionDigits: ceo ? 0 : 2, maximumFractionDigits: ceo ? 0 : 2 });
+  return `${s} ${valuta || S.valuta || (EN() ? "EUR" : "RSD")}`.trim();
+}
+const finansije = () => (Array.isArray(S.finansije) ? S.finansije : (S.finansije = []));
+function sacuvajFin(v, staro) {
+  const d = parsirajDatum(v.datum), x = brojIznos(v.iznos);
+  if (!d) return t("Datum nije ispravan.", "The date is not valid.");
+  if (x === null || x <= 0) return t("Upiši iznos (npr. 12500 ili 12.500,50).", "Enter the amount (e.g. 12500 or 12,500.50).");
+  if (!String(v.kategorija || "").trim()) return t("Izaberi ili upiši kategoriju.", "Choose or type a category.");
+  const g = String(v.grlo || "").trim(), gid = g ? M.nadji(g) : "";
+  if (g && !gid) return t(`Grlo „${g}“ nije nađeno.`, `Animal “${g}” not found.`);
+  const z = { datum: fmtD(d), vrsta: v.vrsta === PRIHOD ? PRIHOD : TROSAK, kategorija: String(v.kategorija).trim(), iznos: String(Math.round(x * 100) / 100),
+    grlo: gid || "", stado: String(v.stado || "").trim(), opis: String(v.opis || "").trim(), uneto: staro ? staro.uneto : sada() };
+  if (staro) Object.assign(staro, z); else finansije().push(z);
+  zabelezi(t("Finansije: ", "Finances: ") + z.kategorija);
+  return null;
+}
+function obrisiFin(z) { S.finansije = finansije().filter(x => x !== z); zabelezi(t("Finansije: obrisan upis", "Finances: entry deleted")); }
+function periodFin(izbor, d = danas()) {
+  const g = d.getFullYear(), m = d.getMonth();
+  if (izbor === "mesec") return [new Date(g, m, 1), d];
+  if (izbor === "prosli_mesec") return [new Date(g, m - 1, 1), new Date(g, m, 0)];
+  if (izbor === "godina") return [new Date(g, 0, 1), d];
+  if (izbor === "prosla_godina") return [new Date(g - 1, 0, 1), new Date(g - 1, 11, 31)];
+  return [null, null];
+}
+function finUPeriodu(od, doo) {
+  return finansije().map(z => [z, parsirajDatum(z.datum)]).filter(([, d]) => d && (!od || d >= od) && (!doo || d <= doo))
+    .sort((a, b) => b[1] - a[1] || String(b[0].uneto).localeCompare(String(a[0].uneto))).map(([z]) => z);
+}
+function zbirFin(lista) {
+  let pr = 0, tr = 0; const kat = {}, grla = {};
+  for (const z of lista) {
+    const x = brojIznos(z.iznos) || 0, pri = z.vrsta === PRIHOD;
+    if (pri) pr += x; else tr += x;
+    const k = `${pri ? "+" : "-"}${z.kategorija || t("bez kategorije", "uncategorised")}`; kat[k] = (kat[k] || 0) + x;
+    if (z.grlo) { grla[z.grlo] = grla[z.grlo] || [0, 0]; grla[z.grlo][pri ? 0 : 1] += x; }
+  }
+  return { pr, tr, kat, grla };
+}
+
+// ---------------------------------------------------------------- Moje rase i Moje vrste sa telefona
+// Promene se šalju računaru u paketu (S.podesIzmene) – računar ih upiše u svoja podešavanja.
+function podesIzmene() { if (!S.podesIzmene) S.podesIzmene = { rase: [], rase_skloni: [], vrste: [], vrste_skloni: [] }; return S.podesIzmene; }
+const kljucRase = (vrsta, ime) => `${vrstaKanon(vrsta) || vrsta}|${_imeRase(ime)}`;
+// {vrsta, ime, namena, autohtona}; staro = postojeća rasa (izmena) ili null; vraća string (greška) ili { promena grla }
+function sacuvajRasu(v, staro) {
+  const ime = normRasa(v.ime), vrsta = vrstaKanon(v.vrsta) || v.vrsta;
+  if (!ime || !cistaRasaTel(ime)) return t("Upiši naziv rase (ne melez ni hibrid – oni se ne upisuju kao rasa).", "Enter the breed name (not a crossbred or hybrid – those are not entered as a breed).");
+  const izb = nameneZa(vrsta);
+  if (izb.length && !izb.includes(v.namena)) return t("Izaberi namenu rase (", "Choose the breed purpose (") + izb.join(" / ") + ").";
+  const dupla = mojaRasa(vrsta, ime);
+  if (dupla && dupla !== staro) return t(`Rasa „${ime}“ već postoji na spisku.`, `The breed “${ime}” is already on the list.`);
+  if (!Array.isArray(S.rase)) S.rase = [];
+  const nova = { vrsta, ime, namena: izb.length ? v.namena : "", autohtona: v.autohtona ? "1" : "" };
+  let grla = 0;
+  if (staro && kljucRase(staro.vrsta, staro.ime) !== kljucRase(vrsta, ime)) {          // novi naziv: i grla te rase
+    for (const r of S.grla) if (r.status !== "obrisano" && vrstaKanon(r.vrsta) === vrstaKanon(staro.vrsta) && _imeRase(r.rasa) === _imeRase(staro.ime)) {
+      dodaj(r.id, K().AUTO, { opis: t(`Rasa: ${r.rasa} → ${ime}`, `Breed: ${r.rasa} → ${ime}`), automatski: true }); r.rasa = ime; grla++;
+    }
+    podesIzmene().rase_skloni.push(kljucRase(staro.vrsta, staro.ime));
+  }
+  if (nova.namena) for (const r of S.grla)
+    if (r.status !== "obrisano" && vrstaKanon(r.vrsta) === vrstaKanon(vrsta) && _imeRase(r.rasa) === _imeRase(ime) && (r.namena || "") !== nova.namena) {
+      dodaj(r.id, K().AUTO, { opis: t(`Namena rase: ${r.namena || "–"} → ${nova.namena}`, `Breed purpose: ${r.namena || "–"} → ${nova.namena}`), automatski: true }); r.namena = nova.namena; grla++;
+    }
+  if (staro) Object.assign(staro, nova); else S.rase.push(nova);
+  const pi = podesIzmene(); pi.rase = pi.rase.filter(x => kljucRase(x.vrsta, x.ime) !== kljucRase(vrsta, ime)).concat([nova]);
+  pi.rase_skloni = pi.rase_skloni.filter(k => k !== kljucRase(vrsta, ime));
+  zabelezi(t("Rasa: ", "Breed: ") + ime);
+  osveziModel();
+  return { grla };
+}
+function skloniRasu(r) {
+  S.rase = mojeRase().filter(x => x !== r);
+  const pi = podesIzmene(), k = kljucRase(r.vrsta, r.ime);
+  pi.rase = pi.rase.filter(x => kljucRase(x.vrsta, x.ime) !== k); pi.rase_skloni.push(k);
+  zabelezi(t("Rasa sklonjena: ", "Breed removed: ") + r.ime);
+}
+// grla koja bi promena namene/naziva rase dotakla (za pitanje pre čuvanja)
+function grlaRase(vrsta, ime) { return S.grla.filter(r => r.status !== "obrisano" && vrstaKanon(r.vrsta) === vrstaKanon(vrsta) && _imeRase(r.rasa) === _imeRase(ime)); }
+const primeriVrsta = () => [
+  [t("magarci", "donkeys"), t("magarac", "jack"), t("magarica", "jenny"), t("magare", "foal"), t("magarad", "foals"), 355, 380, 365, 23],
+  [t("bivoli", "buffalo"), t("bivo", "bull"), t("bivolica", "cow"), t("bivolče", "calf"), t("bivolčad", "calves"), 300, 320, 310, 21],
+  [t("alpake", "alpacas"), t("mužjak", "male"), t("ženka", "female"), t("mladunče", "cria"), t("mladunčad", "crias"), 330, 350, 340, 0],
+  [t("kunići", "rabbits"), t("mužjak", "buck"), t("ženka", "doe"), t("kunić", "kit"), t("kunići", "kits"), 29, 34, 31, 0],
+  [t("psi", "dogs"), t("pas", "dog"), t("kuja", "bitch"), t("štene", "puppy"), t("štenad", "puppies"), 58, 68, 63, 0],
+  [t("jeleni", "deer"), t("jelen", "stag"), t("košuta", "hind"), t("lane", "fawn"), t("lanad", "fawns"), 225, 240, 233, 18]];
+// isto kao ocisti_vrstu na računaru
+function ocistiVrstu(v) {
+  const ime = String(v.ime || "").trim().split(/\s+/).join(" ").toLowerCase().slice(0, 30);
+  const [gmin, gmax, gpr, cik] = ["gmin", "gmax", "gpr", "ciklus"].map(k => parseInt(v[k] || 0, 10));
+  if (!ime || [gmin, gmax, gpr, cik].some(Number.isNaN) || !(10 <= gmin && gmin <= gpr && gpr <= gmax && gmax <= 500) || !(0 <= cik && cik <= 120)) return null;
+  const tx = (k, d) => String(v[k] || "").trim().split(/\s+/).join(" ").slice(0, 30) || d;
+  return { ime, m: tx("m", t("mužjak", "male")), z: tx("z", t("ženka", "female")), ml: tx("ml", t("mladunče", "young")), mlm: tx("mlm", t("mladunčad", "young")), gmin, gmax, gpr, ciklus: cik };
+}
+function sacuvajVrstu(v, staroIme) {
+  const c = ocistiVrstu(v);
+  if (!c) return t("Upiši naziv i ispravne dane gravidnosti (od ≤ prosek ≤ do, 10–500 dana) i ciklus (0–120).", "Enter the name and valid gestation days (from ≤ average ≤ to, 10–500 days) and cycle (0–120).");
+  if (KONST.sr.VRSTE.includes(c.ime) || KONST.en.VRSTE.includes(c.ime)) return t(`„${c.ime}“ već postoji među osnovnim vrstama.`, `“${c.ime}” is already one of the basic species.`);
+  if (mojeVrste().some(x => x.ime === c.ime && x.ime !== staroIme)) return t(`Vrsta „${c.ime}“ već postoji.`, `The species “${c.ime}” already exists.`);
+  if (staroIme && staroIme !== c.ime && S.grla.some(r => vrstaKanon(r.vrsta) === staroIme)) return t("Naziv vrste koja već ima grla ne može da se menja.", "The name of a species that already has animals cannot be changed.");
+  S.vrste = mojeVrste().filter(x => x.ime !== (staroIme || c.ime)).concat([c]);
+  const pi = podesIzmene(); pi.vrste = pi.vrste.filter(x => x.ime !== c.ime).concat([c]);
+  if (staroIme && staroIme !== c.ime) pi.vrste_skloni.push(staroIme);
+  pi.vrste_skloni = pi.vrste_skloni.filter(x => x !== c.ime);
+  zabelezi(t("Vrsta: ", "Species: ") + c.ime);
+  osveziModel();
+  return null;
+}
+function skloniVrstu(ime) {
+  if (S.grla.some(r => r.status !== "obrisano" && vrstaKanon(r.vrsta) === ime)) return t("Ova vrsta ima grla – ne može da se skloni.", "This species has animals – it cannot be removed.");
+  S.vrste = mojeVrste().filter(x => x.ime !== ime);
+  const pi = podesIzmene(); pi.vrste = pi.vrste.filter(x => x.ime !== ime); pi.vrste_skloni.push(ime);
+  zabelezi(t("Vrsta sklonjena: ", "Species removed: ") + ime);
+  osveziModel();
+  return null;
+}
+
+// ---------------------------------------------------------------- ocene grla (ocene.py): 1–5 ★
+// ručne ocene u koloni "ocena": "karakter=4;gradja=3@2026-11-11"; automatske: prirast, plodnost, zdravlje
+const rucneOsobine = () => [
+  ["karakter", t("Karakter (ćud)", "Temperament"), t("5 = mirno i lako za rad · 1 = agresivno ili plašljivo", "5 = calm and easy to handle · 1 = aggressive or nervous"), false],
+  ["gradja", t("Građa (eksterijer)", "Conformation"), t("5 = odlična građa za rasu · 1 = loša", "5 = excellent for the breed · 1 = poor"), false],
+  ["noge", t("Noge i papci", "Legs and feet"), t("5 = zdrave, pravilne · 1 = česti problemi", "5 = sound, correct · 1 = frequent problems"), false],
+  ["vime", t("Vime", "Udder"), t("5 = pravilno, zdravo · 1 = loše", "5 = well formed, healthy · 1 = poor"), true],
+  ["majka", t("Majčinska svojstva", "Mothering ability"), t("5 = brine o mladima, lako se porađa · 1 = odbacuje mlade", "5 = cares for young, easy births · 1 = rejects young"), true]];
+const autoOsobine = () => [["prirast", t("Prirast", "Weight gain")], ["plodnost", t("Plodnost", "Fertility")], ["zdravlje", t("Zdravlje", "Health")]];
+// više ocenjivača: "Marko Marković:karakter=4@2026-11-12|Jovan Jović:karakter=5@…" (stari zapis bez imena = "")
+const cistoIme = s => String(s || "").replace(/[|:;=@]/g, " ").trim().split(/\s+/).filter(Boolean).join(" ").slice(0, 60);
+function procitajOcene(tekst) {
+  const rez = {};
+  for (let seg of String(tekst || "").split("|")) {
+    seg = seg.trim(); if (!seg) continue;
+    let ime = ""; const dv = seg.indexOf(":"), jed = seg.indexOf("=");
+    if (dv !== -1 && (jed === -1 || dv < jed)) { ime = cistoIme(seg.slice(0, dv)); seg = seg.slice(dv + 1); }
+    const [oc, dat] = jednaOcena(seg);
+    if (Object.keys(oc).length) rez[ime] = [oc, dat];
+  }
+  return rez;
+}
+const zapisiOcene = mapa => Object.entries(mapa).filter(([, [oc]]) => Object.keys(oc).length).map(([ime, [oc, dat]]) => (cistoIme(ime) ? cistoIme(ime) + ":" : "") + zapisiOcenu(oc, dat)).join("|");
+function procitajOcenu(tekst) {                 // prosek svih ocenjivača
+  const sve = Object.values(procitajOcene(tekst)), zb = {};
+  sve.forEach(([oc]) => Object.entries(oc).forEach(([k, v]) => (zb[k] = zb[k] || []).push(v)));
+  const rez = {}; for (const [k, l] of Object.entries(zb)) rez[k] = Math.round(l.reduce((s, v) => s + v, 0) / l.length * 100) / 100;
+  return [rez, sve.map(([, d]) => d).filter(Boolean).sort().pop() || ""];
+}
+function spojiOcene(baza, moja, njihova) {
+  const B = procitajOcene(baza), Mo = procitajOcene(moja), rez = procitajOcene(njihova);
+  for (const ime of new Set([...Object.keys(B), ...Object.keys(Mo)]))
+    if (JSON.stringify(Mo[ime] || null) !== JSON.stringify(B[ime] || null)) { if (Mo[ime]) rez[ime] = Mo[ime]; else delete rez[ime]; }
+  return zapisiOcene(rez);
+}
+const korisnik = () => cistoIme(S.korisnik || "");
+function jednaOcena(tekst) {
+  let s = String(tekst || ""), dat = "";
+  if (s.includes("@")) { dat = s.slice(s.lastIndexOf("@") + 1).trim(); s = s.slice(0, s.lastIndexOf("@")); }
+  const rez = {};
+  for (const deo of s.split(";")) { const i = deo.indexOf("="); if (i < 0) continue; const v = parseInt(deo.slice(i + 1), 10); if (v >= 1 && v <= 5) rez[deo.slice(0, i).trim()] = v; }
+  return [rez, dat];
+}
+const zapisiOcenu = (oc, dat) => Object.keys(oc).length ? Object.entries(oc).map(([k, v]) => `${k}=${v}`).join(";") + "@" + (dat || lokIso(new Date())) : "";
+const lokIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const zvezdice = n => n == null ? "–" : "★".repeat(Math.round(n)) + "☆".repeat(5 - Math.round(n));
+function rangOcena(v, sve) {
+  if (v == null || sve.length < 3) return null;
+  const bolji = sve.filter(x => x > v).length;
+  return 5 - Math.min(4, Math.floor(bolji / sve.length * 5));
+}
+// vime: samo ženke koje nisu mlečne rase (kod mlečnih se prati mlečnost)
+function vimeSeOcenjuje(x) {
+  const r = S.grla.find(g => g.id === x) || {};
+  return r.pol === "z" && !(nameneZa(r.vrsta).join() === K().NAMENE_MALI.join() && r.namena === K().NAMENE_MALI[0]);
+}
+function velicinaLegla(x) {
+  const poDanu = {};
+  for (const [y, [, mj]] of Object.entries(M.P)) if (mj === x && M.A[y] && !M.A[y].osnivac && M.A[y].datum) { const k = +M.A[y].datum; poDanu[k] = (poDanu[k] || 0) + 1; }
+  const v = Object.values(poDanu);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}
+function brojLecenja(x, dana = 365) {
+  const od = dodajDane(danas(), -dana), leci = K().LECENJE;
+  return S.istorija.filter(z => z.grlo === x && z.dogadjaj === leci && (parsirajDatum(z.datum) || danas()) >= od).length;
+}
+function vrednostiVrste(vrsta) {
+  const pr = {}, le = {};
+  for (const a of M.grla(true)) {
+    if (a.vrsta !== vrsta) continue;
+    const m = merenjaTezine(a.id);
+    if (m.length >= 2) { const g = prirastG(m[0], m[m.length - 1]); if (g != null) pr[a.id] = g; }
+    if (a.pol === "z") { const v = velicinaLegla(a.id); if (v != null) le[a.id] = v; }
+  }
+  return [pr, le];
+}
+function oceneGrla(x, kes) {
+  const a = M.A[x], red = S.grla.find(g => g.id === x) || {};
+  const [rucne, dat] = procitajOcenu(red.ocena);
+  if (!vimeSeOcenjuje(x)) delete rucne.vime;
+  const [pr, le] = kes || vrednostiVrste(a.vrsta), auto = {};
+  const p = pr[x];
+  auto.prirast = [rangOcena(p, Object.values(pr)), p != null ? `${p > 0 ? "+" : ""}${p} ${t("g/dan", "g/day")}` : t("nema merenja", "no weighings")];
+  if (a.pol === "z") {
+    const v = le[x];
+    auto.plodnost = [rangOcena(v, Object.values(le)), v != null ? `${v.toFixed(1).replace(".", EN() ? "." : ",")}${t(" mladih po porođaju", " young per birth")}` : t("nema upisanih mladih", "no recorded young")];
+  }
+  const n = brojLecenja(x);
+  auto.zdravlje = [Math.max(1, 5 - n), t(`${n} lečenja za 12 meseci`, `${n} treatments in 12 months`)];
+  const sve = Object.values(rucne).concat(Object.entries(auto).filter(([k, [o]]) => o != null && k !== "zdravlje").map(([, [o]]) => o));
+  if (sve.length) sve.push(auto.zdravlje[0]);
+  return { rucne, datum: dat, auto, ukupno: sve.length ? sve.reduce((s, v) => s + v, 0) / sve.length : null };
+}
+// sačuva ručne ocene ovog ocenjivača (prazno = briše njegovu ocenu) i upiše u istoriju
+function sacuvajOcene(x, oc) {
+  const r = S.grla.find(g => g.id === x);
+  if (!r) return;
+  const cist = {}; for (const [k, v] of Object.entries(oc)) if (v >= 1 && v <= 5) cist[k] = v;
+  const mapa = procitajOcene(r.ocena), ime = korisnik();
+  if (Object.keys(cist).length) mapa[ime] = [cist, lokIso(new Date())]; else delete mapa[ime];
+  r.ocena = zapisiOcene(mapa);
+  const kr = { karakter: t("Karakter", "Temper"), gradja: t("Građa", "Conform."), noge: t("Noge", "Legs"), vime: t("Vime", "Udder"), majka: t("Majka", "Mothering") };
+  dodaj(x, K().AUTO, { opis: t("Ocena: ", "Score: ") + (ime ? `(${ime}) ` : "") + (Object.entries(cist).map(([k, v]) => `${kr[k] || k} ${v}`).join(", ") || t("obrisana", "removed")), automatski: true });
+  zabelezi(t("Ocena: ", "Score: ") + x);
+}
 
 // ---------------------------------------------------------------- gravidnost (gravidnost.py)
 function roditeljiParenja(z) {
@@ -834,6 +1171,69 @@ function novoGrlo(v) {
   return { id: nid, preimenovano: nid !== uneto ? uneto : "" };
 }
 
+// izmena podataka grla (oznaka se ne menja; grlo se ne briše) – isto kao forma na računaru
+// v: polja kao kod novoGrlo; vraća string (greška) ili { id, promene, rasaGrla } (rasaGrla = koliko drugih grla rase dobija namenu)
+function izmeniGrlo(id, v, celaRasa = true) {
+  const r = S.grla.find(x => x.id === id);
+  if (!r) return t("Grlo nije nađeno.", "Animal not found.");
+  const mk = String(v.markica || "").trim().split(/\s+/).join(" ");
+  if (norm(mk) !== norm(r.markica)) { const z = markicaZauzeta(mk, r); if (z) return z; }
+  const rfid = String(v.rfid || "").trim().split(/\s+/).join(" ");
+  const rz = rfid && S.grla.find(x => x !== r && norm(x.rfid) === norm(rfid));
+  if (rz) return t(`Elektronski broj ${rfid} je već upisan za grlo ${rz.id}.`, `Electronic ID ${rfid} is already entered for animal ${rz.id}.`);
+  if (v.pol !== "m" && v.pol !== "z") return t("Izaberi pol.", "Choose the sex.");
+  const vrsta = vrstaNorm(v.vrsta) || r.vrsta, izbori = nameneZa(vrsta);
+  if (izbori.length && !izbori.includes(v.namena)) return (t("Izaberi namenu rase (", "Choose the breed purpose (")) + izbori.join(" / ") + ").";
+  if (v.status !== "aktivno" && v.status !== "neaktivno") return t("Izaberi da li je grlo aktivno (na farmi) ili neaktivno.", "Choose whether the animal is active (on the farm) or inactive.");
+  const dat = (v.datum_rodjenja || "").trim();
+  if (dat && !parsirajDatum(dat)) return t("Datum nije ispravan.", "The date is not valid.");
+  const o = (v.otac || "").trim(), mj = (v.majka || "").trim();
+  if (id === o || id === mj) return t("Grlo ne može biti sopstveni roditelj.", "An animal cannot be its own parent.");
+  for (const [rod, n] of [[o, t("otac", "sire")], [mj, t("majka", "dam")]]) {          // roditelj ne sme biti potomak ovog grla
+    const rid = rod && M.nadji(rod);
+    if (rid && jePredak(id, rid)) return t(`${rod} ne može biti ${n} – on je potomak grla ${id}.`, `${rod} cannot be the ${n} – it is a descendant of ${id}.`);
+  }
+  if (v.status === "aktivno" && (r.status || "aktivno") !== "aktivno") { const pl = porukaLimita(1); if (pl) return pl; }
+  const novi = { markica: mk, rfid, vrsta, rasa: normRasa(v.rasa), namena: izbori.length ? v.namena : "", autohtona: v.autohtona ? "1" : "", pol: v.pol,
+    datum_rodjenja: dat ? fmtD(parsirajDatum(dat)) : "", otac: o, majka: mj, status: v.status, stado: (v.stado || "").trim(),
+    poreklo: (v.poreklo || "").trim(), poreklo_od: (v.poreklo_od || "").trim(), napomena: String(v.napomena || "").trim().split(/\s+/).join(" "),
+    udeo_krvi: String(v.udeo_krvi == null ? (r.udeo_krvi || "") : v.udeo_krvi).trim() };
+  const nazivi = { markica: t("markica", "ear tag"), rfid: t("elektronski broj", "electronic ID"), vrsta: t("vrsta", "species"), rasa: t("rasa", "breed"),
+    namena: t("namena", "purpose"), autohtona: t("autohtona", "native breed"), pol: t("pol", "sex"), datum_rodjenja: t("datum rođenja", "date of birth"),
+    otac: t("otac", "sire"), majka: t("majka", "dam"), status: t("status", "status"), stado: t("stado", "herd"), poreklo: t("poreklo", "origin"),
+    poreklo_od: t("poreklo od", "origin from"), napomena: t("napomena", "note"), udeo_krvi: t("udeo krvi", "breed share") };
+  const promene = Object.keys(nazivi).filter(k => (r[k] || "") !== (novi[k] || "")).map(k => `${nazivi[k]}: ${r[k] || "–"} → ${novi[k] || "–"}`);
+  if (!promene.length) return { id, promene: [], rasaGrla: 0 };
+  if (norm(r.markica) !== norm(mk) && r.markica) r.stare_markice = [...stareLista(r), r.markica].join(", ");   // stara markica se pamti
+  Object.assign(r, novi);
+  dodaj(id, K().AUTO, { opis: t("Izmena podataka – ", "Details changed – ") + promene.join("; "), automatski: true });
+  let rasaGrla = 0;
+  if (celaRasa && novi.namena && cistaRasaTel(novi.rasa))                 // namena važi za celu rasu
+    for (const x of S.grla)
+      if (x !== r && x.status !== "obrisano" && vrstaKanon(x.vrsta) === vrstaKanon(vrsta) && _imeRase(x.rasa) === _imeRase(novi.rasa) && (x.namena || "") !== novi.namena) {
+        dodaj(x.id, K().AUTO, { opis: t(`Namena rase: ${x.namena || "–"} → ${novi.namena}`, `Breed purpose: ${x.namena || "–"} → ${novi.namena}`), automatski: true });
+        x.namena = novi.namena; rasaGrla++;
+      }
+  zabelezi(t("Izmenjeno grlo: ", "Animal edited: ") + id);
+  osveziModel();
+  return { id, promene, rasaGrla };
+}
+// da li je a predak grla x (preko M.P: id -> [otac, majka])
+function jePredak(a, x, vidjeno = new Set()) {
+  for (const r of (M.P[x] || [])) {
+    if (!r || vidjeno.has(r)) continue;
+    if (r === a) return true;
+    vidjeno.add(r);
+    if (jePredak(a, r, vidjeno)) return true;
+  }
+  return false;
+}
+// koliko drugih grla iste rase ima drugačiju namenu (za pitanje pre čuvanja)
+function drugaNamenaRase(id, vrsta, rasa, namena) {
+  if (!namena || !cistaRasaTel(rasa)) return 0;
+  return S.grla.filter(x => x.id !== id && x.status !== "obrisano" && vrstaKanon(x.vrsta) === vrstaKanon(vrstaNorm(vrsta) || vrsta) && _imeRase(x.rasa) === _imeRase(normRasa(rasa)) && (x.namena || "") !== namena).length;
+}
+
 // ---------------------------------------------------------------- mlečnost (isto kao mlecnost.py na računaru)
 function broj(v) {
   const t = String(v == null ? "" : v).trim().replace(/\s/g, "").replace(",", ".");
@@ -995,7 +1395,7 @@ function smanjiSliku(fajl, maks = 1600, kvalitet = 0.78) {
   });
 }
 
-if (typeof module !== "undefined") module.exports = { S, K, Model, M: () => M, osveziModel, parsirajDatum, fmtD, pct, procena, nazivi, rasaPotomka, normRasa, namenaRase, danaUnapred, obavSat, normVreme, raseZaVrstu, mojaRasa,
+if (typeof module !== "undefined") module.exports = { S, K, Model, M: () => M, osveziModel, parsirajDatum, fmtD, pct, procena, nazivi, rasaPotomka, normRasa, namenaRase, danaUnapred, obavSat, normVreme, izmeniGrlo, drugaNamenaRase, rucneOsobine, autoOsobine, procitajOcenu, procitajOcene, zapisiOcene, spojiOcene, korisnik, oceneGrla, sacuvajOcene, vrednostiVrste, zvezdice, vimeSeOcenjuje, procitajUdeo, zapisiUdeo, sastav, generacijaUkrstanja, sastavPotomka, odstupanje, tekstUdela, programRase, sacuvajCiljRase, paroviZaCilj, kategorijeFin, brojIznos, fmtNovac, sacuvajFin, obrisiFin, periodFin, finUPeriodu, zbirFin, PRIHOD, TROSAK, sacuvajRasu, skloniRasu, grlaRase, primeriVrsta, ocistiVrstu, sacuvajVrstu, skloniVrstu, mojeRase, raseZaVrstu, mojaRasa,
   vrstaNorm, upisiDogadjaj, rodjenje, upisUListu, novoGrlo, teraSe, neTeraSe, oznaciNeuspelo, podsetnikUradjen, podsetnikOdlozi, noviPodsetnik,
   obavestenja, cekajuPorodjaj, cekajuMindjusu, granicePorodjaja, opisIshoda, partneri, karenca, opisKarence, ucitajSaRacunara, paketZaRacunar,
   leglo, danas, dodajDane, istorijaZa, markicaZauzeta, roditeljiParenja, podaciLegla, sortKey };

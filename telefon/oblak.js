@@ -207,6 +207,8 @@ function normVr(k, v) {
 }
 const kljucGrla = x => x.id || "";
 const kljucIst = z => `${z.grlo || ""}|${z.uneto || ""}|${normVr("dogadjaj", z.dogadjaj)}`;
+const FIN_KOLONE = ["datum", "vrsta", "kategorija", "iznos", "grlo", "stado", "opis", "uneto"];
+const kljucFin = z => `${z.uneto || ""}|${z.vrsta || ""}|${z.grlo || ""}`;
 const kljucPod = z => `${z.grlo || ""}|${z.uneto || ""}|${normVr("tip", z.tip)}`;
 function indeksiraj(lista, kljuc) {
   const brojac = {}, mapa = new Map(), red = [];
@@ -233,10 +235,20 @@ function primeniSnimak(snap) {
   S.jezik = jezikTelefona(snap.jezik);
   const baza = S.osnova || { grla: [], istorija: [], podsetnici: [] };
   const kolG = [...new Set(KOLONE_GRLA.concat(...(snap.grla || []).map(Object.keys), ...S.grla.map(Object.keys)))];
+  const telOc = {}, bazOc = {}, racOc = {};
+  for (const g of S.grla) telOc[g.id] = g.ocena || "";
+  for (const g of baza.grla || []) bazOc[g.id] = g.ocena || "";
+  for (const g of snap.grla || []) racOc[g.id] = g.ocena || "";
   S.grla = spoji3(baza.grla, S.grla, snap.grla || [], kljucGrla, kolG);
+  for (const g of S.grla)                          // ocene: svaki ocenjivač menja samo svoju – spajaju se
+    if (g.id in telOc && g.id in racOc && telOc[g.id] !== (bazOc[g.id] || "") && racOc[g.id] !== (bazOc[g.id] || ""))
+      g.ocena = spojiOcene(bazOc[g.id] || "", telOc[g.id], racOc[g.id]);
   S.istorija = spoji3(baza.istorija, S.istorija, snap.istorija || [], kljucIst, IST_KOLONE);
   S.podsetnici = spoji3(baza.podsetnici, S.podsetnici, snap.podsetnici || [], kljucPod, POD_KOLONE);
-  S.osnova = JSON.parse(JSON.stringify({ grla: snap.grla || [], istorija: snap.istorija || [], podsetnici: snap.podsetnici || [] }));
+  if (Array.isArray(snap.finansije)) S.finansije = spoji3(baza.finansije || [], S.finansije || [], snap.finansije, kljucFin, FIN_KOLONE);
+  if (snap.valuta) S.valuta = snap.valuta;
+  if ("nova_rasa" in snap) S.novaRasa = snap.nova_rasa || null;
+  S.osnova = JSON.parse(JSON.stringify({ grla: snap.grla || [], istorija: snap.istorija || [], podsetnici: snap.podsetnici || [], finansije: snap.finansije || baza.finansije || [] }));
   S.prag = +snap.prag || S.prag;
   S.grav = gravNaJeziku(snap.gravidnost) || S.grav;
   S.izvoz = { id: snap.id, datum: snap.izvezeno, stada: snap.stada || [] };
@@ -256,13 +268,16 @@ function razlike() {
   const baza = S.osnova || { grla: [], istorija: [], podsetnici: [] }, rez = {};
   const kolG = [...new Set(KOLONE_GRLA.concat(...S.grla.map(Object.keys)))];
   for (const [ime, lista, osn, kljuc, kolone] of [["grla", S.grla, baza.grla, kljucGrla, kolG],
-    ["istorija", S.istorija, baza.istorija, kljucIst, IST_KOLONE], ["podsetnici", S.podsetnici, baza.podsetnici, kljucPod, POD_KOLONE]]) {
+    ["istorija", S.istorija, baza.istorija, kljucIst, IST_KOLONE], ["podsetnici", S.podsetnici, baza.podsetnici, kljucPod, POD_KOLONE],
+    ["finansije", S.finansije || [], baza.finansije || [], kljucFin, FIN_KOLONE]]) {
     const B = indeksiraj(osn || [], kljuc).mapa, T = indeksiraj(lista, kljuc);
     rez[ime] = [];
     for (const k of T.red) {
       const b = B.get(k) || null, tt = T.mapa.get(k);
       if (potpis(b, kolone) !== potpis(tt, kolone)) rez[ime].push({ n: +k.slice(k.lastIndexOf("#") + 1), b, t: tt });
     }
+    if (ime === "finansije")                       // obrisan upis finansija (grla, istorija i podsetnici se ne brišu sa telefona)
+      for (const [k, b] of B) if (!T.mapa.has(k)) rez[ime].push({ n: +k.slice(k.lastIndexOf("#") + 1), b, t: null });
   }
   return rez;
 }
@@ -295,12 +310,13 @@ async function usaglasi(rucno, dubina = 0) {
       const n = S.promene.length;
       const paket = { format: "farmer-paket", verzija: 1, napravljeno: sada(), jezik: S.jezik, osnova_verzija: S.sinh.verzija || null,
         tel: { tid: S.sinh.tid, ime: imeTelefona(), javni: { x: S.sinh.ec.x, y: S.sinh.ec.y } },
-        razlike: razlike(), promene: S.promene.slice(0, n) };
+        razlike: razlike(), promene: S.promene.slice(0, n), podesavanja: S.podesIzmene || null };
       paket.slike = slikeZa(Object.values(paket.razlike.istorija || []).map(d => d && d.t));   // slike DNK nalaza iz izmenjenih zapisa
       const pid = `${Date.now()}${Math.random().toString(16).slice(2, 8)}`;
       await o.upisiVeliko("paketi", pid, await zakljucaj(paket, S.sinh.kljuc));
       S.poslato = (S.poslato || []).concat(S.promene.slice(0, n)).slice(-100);
       S.promene.splice(0, n);
+      S.podesIzmene = null;                         // rase/vrste sa telefona su poslate
       S.sinh.predstavi = false;
       poslato = true;
       S.sinh.predstavljenNa = S.sinh.verzija;

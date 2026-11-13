@@ -113,6 +113,10 @@ def _kljuc_ist(z):
     return f"{z.get('grlo', '')}|{z.get('uneto', '')}|{_normalizuj('dogadjaj', z.get('dogadjaj', ''))}"
 
 
+def _kljuc_fin(z):
+    return f"{z.get('uneto', '')}|{z.get('vrsta', '')}|{z.get('grlo', '')}"
+
+
 def _kljuc_pod(z):
     return f"{z.get('grlo', '')}|{z.get('uneto', '')}|{_normalizuj('tip', z.get('tip', ''))}"
 
@@ -141,7 +145,8 @@ class TelefonDeo:
                     prag=self.prag, gravidnost=grav, stada=self.sva_stada(),
                     grla=[dict(r) for r in self.tab.redovi], istorija=[dict(z) for z in self.ist.zapisi],
                     podsetnici=[dict(z) for z in self.pods.zapisi], licenca=self.licenca_za_telefon(),
-                    vrste=self.pod.get("vrste_moje", []), rase=self.moje_rase())
+                    vrste=self.pod.get("vrste_moje", []), rase=self.moje_rase(),
+                    finansije=[dict(z) for z in self.fin.zapisi], valuta=self.valuta(), nova_rasa=self.pod.get("nova_rasa"))
 
     def posalji_na_telefon(self):
         pocetni = self.pod.get("kopija2") if self.pod.get("kopija2") and os.path.isdir(self.pod.get("kopija2")) else APP_DIR

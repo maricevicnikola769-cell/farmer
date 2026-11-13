@@ -384,10 +384,19 @@ SABLONI = [
 "The program will notify you when the day comes (and {0} days before).",
 "now ({0})",
 " at {0}",
+"Animal score ({0}): {1}",
+"average of {0} scorers",
 ]
 SABLONI = set(SABLONI)
 PREVODI = {
 "fr": {
+"Scored by (first and last name) *": "Noté par (prénom et nom) *",
+"Also scored by: ": "Également noté par : ",
+"earlier": "auparavant",
+"Everyone scores for themselves – the average of all scores counts.": "Chacun note pour soi – c'est la moyenne de toutes les notes qui compte.",
+"Enter the first and last name of the person scoring.": "Saisissez le prénom et le nom de la personne qui note.",
+"Animal score ({0}): {1}": "Note de l'animal ({0}) : {1}",
+"average of {0} scorers": "moyenne de {0} évaluateurs",
 "Time (optional)": "Heure (facultatif)",
 "If you enter a time, the program notifies you exactly at that time on that day (e.g. 10:00 – vet).": "Si vous indiquez une heure, le programme vous prévient exactement à cette heure ce jour-là (p. ex. 10:00 – vétérinaire).",
 "The time is not valid. Enter it as 10:00.": "L'heure n'est pas valide. Saisissez-la comme 10:00.",
@@ -2257,6 +2266,13 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Acheter un forfait sur le site…"
 },
 "de": {
+"Scored by (first and last name) *": "Bewertet von (Vor- und Nachname) *",
+"Also scored by: ": "Ebenfalls bewertet von: ",
+"earlier": "früher",
+"Everyone scores for themselves – the average of all scores counts.": "Jeder bewertet für sich – es zählt der Durchschnitt aller Bewertungen.",
+"Enter the first and last name of the person scoring.": "Geben Sie Vor- und Nachnamen der bewertenden Person ein.",
+"Animal score ({0}): {1}": "Bewertung des Tieres ({0}): {1}",
+"average of {0} scorers": "Durchschnitt von {0} Bewertern",
 "Time (optional)": "Uhrzeit (optional)",
 "If you enter a time, the program notifies you exactly at that time on that day (e.g. 10:00 – vet).": "Wenn Sie eine Uhrzeit angeben, benachrichtigt Sie das Programm an diesem Tag genau zu dieser Zeit (z. B. 10:00 – Tierarzt).",
 "The time is not valid. Enter it as 10:00.": "Die Uhrzeit ist ungültig. Geben Sie sie als 10:00 ein.",
@@ -4126,6 +4142,13 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Paket auf der Website kaufen…"
 },
 "es": {
+"Scored by (first and last name) *": "Puntuado por (nombre y apellido) *",
+"Also scored by: ": "También puntuado por: ",
+"earlier": "antes",
+"Everyone scores for themselves – the average of all scores counts.": "Cada uno puntúa por sí mismo: cuenta el promedio de todas las puntuaciones.",
+"Enter the first and last name of the person scoring.": "Introduzca el nombre y apellido de quien puntúa.",
+"Animal score ({0}): {1}": "Puntuación del animal ({0}): {1}",
+"average of {0} scorers": "promedio de {0} evaluadores",
 "Time (optional)": "Hora (opcional)",
 "If you enter a time, the program notifies you exactly at that time on that day (e.g. 10:00 – vet).": "Si indica una hora, el programa le avisa exactamente a esa hora ese día (p. ej. 10:00 – veterinario).",
 "The time is not valid. Enter it as 10:00.": "La hora no es válida. Escríbala como 10:00.",
@@ -5995,6 +6018,13 @@ PREVODI = {
 "🛒 Buy a package on the website…": "🛒 Comprar un paquete en el sitio web…"
 },
 "pt": {
+"Scored by (first and last name) *": "Pontuado por (nome e apelido) *",
+"Also scored by: ": "Também pontuado por: ",
+"earlier": "antes",
+"Everyone scores for themselves – the average of all scores counts.": "Cada um pontua por si – conta a média de todas as pontuações.",
+"Enter the first and last name of the person scoring.": "Introduza o nome e apelido de quem pontua.",
+"Animal score ({0}): {1}": "Pontuação do animal ({0}): {1}",
+"average of {0} scorers": "média de {0} avaliadores",
 "Time (optional)": "Hora (opcional)",
 "If you enter a time, the program notifies you exactly at that time on that day (e.g. 10:00 – vet).": "Se indicar uma hora, o programa avisa exatamente a essa hora nesse dia (p. ex. 10:00 – veterinário).",
 "The time is not valid. Enter it as 10:00.": "A hora não é válida. Escreva-a como 10:00.",

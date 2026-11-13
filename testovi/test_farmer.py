@@ -1217,3 +1217,63 @@ def test_podsetnik_sa_vremenom(tmp_path, monkeypatch):
     a.ist = type("I", (), {"dodaj": lambda *_a, **_k: None})()
     a.podsetnik_uradjen(a.pods.zapisi[0])
     assert a.pods.aktivni("Mina")[0]["vreme"] == "10:00"
+
+
+def test_rase_i_vrste_sa_telefona():
+    """Rase i vrste dodate/izmenjene/sklonjene na telefonu stižu u podešavanja računara."""
+    import jezik
+    import sinhronizacija
+    from rase import RaseDeo
+    from vrste import VrsteDeo
+
+    class A(sinhronizacija.SinhronizacijaDeo, RaseDeo, VrsteDeo):
+        def __init__(self):
+            self.pod = {"rase_moje": [dict(vrsta="ovce", ime="pramenka", namena="kombinovana", autohtona="1"),
+                                      dict(vrsta="ovce", ime="cigaja", namena="kombinovana", autohtona="")],
+                        "vrste_moje": [dict(ime="psi", m="pas", z="kuja", ml="štene", mlm="štenad", gmin=58, gmax=68, gpr=63, ciklus=0)]}
+            self.tab = type("T", (), {"redovi": [dict(id="Mina", vrsta="ovce", rasa="pramenka")]})()
+        def sacuvaj_podesavanja(self):
+            pass
+    a = A()
+    a._primeni_podesavanja_telefona(dict(
+        rase=[dict(vrsta="ovce", ime="pramenka", namena="tovna", autohtona="1"), dict(vrsta="ovce", ime="Virtemberg", namena="tovna"),
+              dict(vrsta="ovce", ime="hibrid A×B", namena="tovna")],
+        rase_skloni=["ovce|cigaja"],
+        vrste=[dict(ime="Jeleni", m="jelen", z="košuta", ml="lane", mlm="lanad", gmin=225, gmax=240, gpr=233, ciklus=18),
+               dict(ime="loše", gmin=5, gmax=4, gpr=3)],
+        vrste_skloni=["psi"]))
+    assert sorted((r["ime"], r["namena"]) for r in a.pod["rase_moje"]) == [("pramenka", "tovna"), ("virtemberg", "tovna")]
+    assert [v["ime"] for v in a.pod["vrste_moje"]] == ["jeleni"] and "jeleni" in jezik.VRSTE
+    a._primeni_podesavanja_telefona(dict(nova_rasa=dict(vrsta="ovce", ime="  Šumadijska ", cilj={"Romanovska": 62.5, "pramenka": 37.5})))
+    assert a.pod["nova_rasa"] == {"vrsta": "ovce", "ime": "Šumadijska", "cilj": {"romanovska": 62.5, "pramenka": 37.5}}
+    a._primeni_podesavanja_telefona(dict(nova_rasa=dict(vrsta="ovce", ime="x", cilj={"a": 10})))     # zbir nije 100 – ne prihvata se
+    assert a.pod["nova_rasa"]["ime"] == "Šumadijska"
+    jezik.postavi_moje_vrste([])
+
+
+def test_finansije_sa_telefona():
+    """Upis finansija sa telefona (nov, izmenjen, obrisan) stiže u finansije računara."""
+    from telefon_prenos import _kljuc_fin, spoji_razlike
+    from finansije import FIN_KOLONE
+    rac = [dict(datum="01.11.2026", vrsta="prihod", kategorija="Prodaja mleka", iznos="12500", grlo="", stado="", opis="", uneto="A"),
+           dict(datum="02.11.2026", vrsta="trosak", kategorija="Hrana", iznos="3000", grlo="", stado="", opis="", uneto="B")]
+    novo = dict(datum="03.11.2026", vrsta="trosak", kategorija="Veterinar i lekovi", iznos="3200.5", grlo="Mina", stado="", opis="", uneto="C")
+    izm = dict(rac[0], iznos="13000")
+    stavke = [dict(n=0, b=None, t=novo), dict(n=0, b=dict(rac[0]), t=izm), dict(n=0, b=dict(rac[1]), t=None)]
+    rez, stat = spoji_razlike(stavke, rac, _kljuc_fin, FIN_KOLONE)
+    assert sorted((z["uneto"], z["iznos"]) for z in rez) == [("A", "13000"), ("C", "3200.5")] and stat["sa_telefona"] == 3
+
+
+def test_ocene_vise_ocenjivaca():
+    """Svaki ocenjivač ima svoju ocenu; računa se prosek; spajanje sa dva mesta ne gubi ničiju ocenu; stari zapis radi."""
+    import ocene as O
+    assert O.procitaj_ocene("karakter=4;gradja=3@2026-11-01") == {"": ({"karakter": 4, "gradja": 3}, "2026-11-01")}
+    z = O.zapisi_ocene({"Marko Marković": ({"karakter": 4, "gradja": 3}, "2026-11-12"), "Jovan Jović": ({"karakter": 5}, "2026-11-13")})
+    assert z == "Marko Marković:karakter=4;gradja=3@2026-11-12|Jovan Jović:karakter=5@2026-11-13"
+    assert O.procitaj_ocenu(z) == ({"karakter": 4.5, "gradja": 3.0}, "2026-11-13")
+    assert O.cisto_ime(" Ana|Anić:=@ ") == "Ana Anić"
+    baza = "Marko Marković:karakter=4@2026-11-12"
+    tel = "Marko Marković:karakter=4@2026-11-12|Jovan Jović:karakter=5@2026-11-13"          # Jovan ocenio na telefonu
+    rac = "Marko Marković:karakter=2@2026-11-14"                                           # Marko promenio na računaru
+    s = O.procitaj_ocene(O.spoji_ocene(baza, tel, rac))
+    assert s["Marko Marković"][0] == {"karakter": 2} and s["Jovan Jović"][0] == {"karakter": 5}

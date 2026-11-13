@@ -18,7 +18,7 @@ from rodoslov import Model
 from oblak import Oblak, OblakGreska, link_za_uparivanje, novi_kod, novo_gazdinstvo, objavi_kod, obrisi_kod, omotaj_za
 from oblak_konfig import FIREBASE
 import dnevnik
-from telefon_prenos import _kljuc_ist, _kljuc_pod, spoji_razlike
+from telefon_prenos import _kljuc_fin, _kljuc_ist, _kljuc_pod, spoji_razlike
 
 INTERVAL_MS = 60_000          # dok se nešto dešava; kad je mirno, ređe (štedi besplatnu kvotu servera)
 
@@ -118,7 +118,8 @@ class SinhronizacijaDeo:
     def _sinh_hes(self):
         return hashlib.sha256(json.dumps([self.tab.redovi, self.ist.zapisi, self.pods.zapisi, self.prag, EN,
                                           self.pod.get("gravidnost2", {}), self.spisak_telefona_za_snimak(),
-                                          self.pod.get("vrste_moje", []), self.pod.get("rase_moje", []), self.mreza_za_telefon(), self.obav_za_telefon()],
+                                          self.pod.get("vrste_moje", []), self.pod.get("rase_moje", []), self.mreza_za_telefon(), self.obav_za_telefon(),
+                                          self.fin.zapisi, self.valuta(), self.pod.get("nova_rasa")],
                                          ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
     # ---------------------------------------------------------- spisak uparenih telefona
@@ -148,14 +149,68 @@ class SinhronizacijaDeo:
         from dnk import sacuvaj_slike_sa_telefona
         sacuvaj_slike_sa_telefona(self.tab.putanja, sadrzaj.get("slike"))   # slike DNK nalaza slikane telefonom
         kol_g = list(dict.fromkeys(KOLONE + [k for x in r.get("grla", []) for k in (x.get("t") or {})]))
+        from ocene import spoji_ocene                 # ocene: svaki ocenjivač menja samo svoju – spajaju se, ne prepisuju
+        po_id = {red.get("id", ""): red for red in self.tab.redovi}
+        for s_ in r.get("grla", []):
+            b_, t_ = s_.get("b") or {}, s_.get("t")
+            if t_ and (t_.get("ocena") or "") != (b_.get("ocena") or "") and t_.get("id") in po_id:
+                t_["ocena"] = spoji_ocene(b_.get("ocena"), t_.get("ocena"), po_id[t_["id"]].get("ocena"))
         g, sg = spoji_razlike(r.get("grla", []), self.tab.redovi, lambda x: x.get("id", ""), kol_g)
         i, si = spoji_razlike(r.get("istorija", []), self.ist.zapisi, _kljuc_ist, IST_KOLONE)
         p, sp = spoji_razlike(r.get("podsetnici", []), self.pods.zapisi, _kljuc_pod, Podsetnici.KOLONE)
+        from finansije import FIN_KOLONE
+        f, sf = spoji_razlike(r.get("finansije", []), self.fin.zapisi, _kljuc_fin, FIN_KOLONE)
         Model(g)                                     # provera pre nego što se išta promeni
         self.tab.dodatne = list(dict.fromkeys(self.tab.dodatne + [k for x in g for k in x if k not in KOLONE]))
         self.tab.redovi, self.ist.zapisi, self.pods.zapisi = g, i, p
+        self.fin.zapisi = [{k: z.get(k, "") for k in FIN_KOLONE} for z in f]
+        self._primeni_podesavanja_telefona(sadrzaj.get("podesavanja"))
         self._zapamti_telefon(sadrzaj)
-        return len(sadrzaj.get("promene", [])) or sum(s["sa_telefona"] for s in (sg, si, sp))
+        return len(sadrzaj.get("promene", [])) or sum(s["sa_telefona"] for s in (sg, si, sp, sf))
+
+    def _primeni_podesavanja_telefona(self, pz):
+        """Moje rase i Moje vrste dodate ili izmenjene na telefonu."""
+        if not isinstance(pz, dict):
+            return
+        import jezik as _j
+        from rase import ocisti_rasu, _ime
+        from jezik import vrsta_kanon
+        if pz.get("rase") or pz.get("rase_skloni"):
+            skloni = {str(k) for k in pz.get("rase_skloni") or []}
+            lista = [r for r in self.moje_rase() if f"{r['vrsta']}|{_ime(r['ime'])}" not in skloni]
+            for x in pz.get("rase") or []:
+                c = ocisti_rasu(x) if isinstance(x, dict) else None
+                if not c:
+                    continue
+                st = next((r for r in lista if r["vrsta"] == c["vrsta"] and _ime(r["ime"]) == _ime(c["ime"])), None)
+                if st is None:
+                    lista.append(c)
+                else:
+                    st.update(c)
+            self.pod["rase_moje"] = lista
+        nr = pz.get("nova_rasa")
+        if isinstance(nr, dict) and isinstance(nr.get("cilj"), dict):      # cilj programa nove rase sa telefona
+            cilj = {}
+            for k, v in nr["cilj"].items():
+                try:
+                    v = float(v)
+                except (TypeError, ValueError):
+                    continue
+                if str(k).strip() and v > 0:
+                    cilj[" ".join(str(k).split()).lower()] = v
+            if not cilj or abs(sum(cilj.values()) - 100) <= 0.5:
+                self.pod["nova_rasa"] = {"vrsta": str(nr.get("vrsta") or ""), "ime": " ".join(str(nr.get("ime") or "").split()), "cilj": cilj}
+        if pz.get("vrste") or pz.get("vrste_skloni"):
+            skloni = {str(k) for k in pz.get("vrste_skloni") or []}
+            u_upotrebi = {vrsta_kanon(r.get("vrsta")) for r in self.tab.redovi}
+            lista = [v for v in self.pod.get("vrste_moje", []) if v.get("ime") not in skloni or v.get("ime") in u_upotrebi]
+            for x in pz.get("vrste") or []:
+                c = _j.ocisti_vrstu(x) if isinstance(x, dict) else None
+                if c:
+                    lista = [v for v in lista if v.get("ime") != c["ime"]] + [c]
+            self.pod["vrste_moje"] = lista
+            self.ucitaj_moje_vrste()
+        self.sacuvaj_podesavanja()
 
     def _sinh_spoji(self, o, s, paketi):             # glavni deo programa
         primljeno, broj = [], 0

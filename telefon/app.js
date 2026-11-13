@@ -1,6 +1,6 @@
 // HerdDoc za telefon – ekrani. Podaci se čuvaju u telefonu (radi i bez interneta).
 "use strict";
-const VERZIJA_TEL = "5.4";
+const VERZIJA_TEL = "5.9";
 const PODRSKA = "herddoc7@gmail.com";   // e-pošta za prijavu problema
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -39,7 +39,7 @@ const kopija = o => (typeof structuredClone === "function" ? structuredClone(o) 
 const stanjeZaCuvanje = () => ({ jezik: S.jezik, jezikIzabran: S.jezikIzabran || null, prag: S.prag, grav: S.grav, grla: S.grla, istorija: S.istorija,
   podsetnici: S.podsetnici, osnova: S.osnova, izvoz: S.izvoz, promene: S.promene, pocetak: S.pocetak || false,
   sinh: S.sinh || null, poslato: S.poslato || [], slike: S.slike || {}, licenca: S.licenca || null, vrste: S.vrste || [], rase: S.rase || [],
-  obav: S.obav || null, mreza: S.mreza || null, mrezaPodaci: S.mrezaPodaci || null, mrezaToken: S.mrezaToken || null });
+  korisnik: S.korisnik || "", novaRasa: S.novaRasa || null, finansije: S.finansije || [], valuta: S.valuta || "", obav: S.obav || null, podesIzmene: S.podesIzmene || null, mreza: S.mreza || null, mrezaPodaci: S.mrezaPodaci || null, mrezaToken: S.mrezaToken || null });
 function sacuvajStaro(podaci) {
   try { localStorage.setItem(KLJUC, JSON.stringify(podaci)); return true; }
   catch (e) { poruka(t("Podaci nisu sačuvani u telefonu: ", "Data was not saved on the phone: ") + e.message); return false; }
@@ -113,7 +113,7 @@ function prikazi() {
   window.scrollTo(0, 0);
   if (!imaPodatke() && e !== "prenos" && e !== "sinh") return dobrodoslica();
   const ekrani = { grla: ekranGrla, karton: ekranKarton, danas: ekranDanas, dogadjaj: ekranDogadjaj, parenje: ekranParenje, srodstvo: ekranSrodstvo,
-    vise: ekranVise, prenos: ekranPrenos, sinh: ekranSinh, novo: ekranNovoGrlo, rodjenje: ekranRodjenje, mindjuse: ekranMindjuse, podsetnik: ekranPodsetnik, muznja: ekranMuznja, dnk: ekranDnk, udruzenje: ekranUdruzenje };
+    vise: ekranVise, prenos: ekranPrenos, sinh: ekranSinh, novo: ekranNovoGrlo, rodjenje: ekranRodjenje, mindjuse: ekranMindjuse, podsetnik: ekranPodsetnik, muznja: ekranMuznja, dnk: ekranDnk, udruzenje: ekranUdruzenje, oceni: ekranOceni, rang: ekranRang, rase: ekranRase, vrste: ekranVrste, novarasa: ekranNovaRasa, rodoslov: ekranRodoslov, finansije: ekranFinansije, finupis: ekranFinUpis, istorija: ekranIstorija, statistika: ekranStatistika };
   (ekrani[e] || ekranGrla)(arg, upit);
 }
 
@@ -325,6 +325,9 @@ function ekranKarton(id) {
   </div>
   <div class="dugmad" style="margin-bottom:12px">
     <a class="dug glavno" href="#dogadjaj?grlo=${encodeURIComponent(id)}">＋ ${t("Upiši događaj", "Record event")}</a>
+    <a class="dug" href="#podsetnik?grlo=${encodeURIComponent(id)}">⏰ ${t("Podsetnik", "Reminder")}</a>
+    <a class="dug" href="#novo?izmena=${encodeURIComponent(id)}">✎ ${t("Izmeni podatke", "Edit details")}</a>
+    <a class="dug" href="#rodoslov/${encodeURIComponent(id)}">🖨 ${t("Rodoslovni list", "Pedigree")}</a>
     ${a.pol ? `<a class="dug" href="#parenje/${encodeURIComponent(id)}">⚭ ${t("Partneri", "Partners")}</a>` : ""}
     <a class="dug" href="#srodstvo?a=${encodeURIComponent(id)}">${t("Srodstvo", "Relationship")}</a>
     <button class="dug" id="napBtn">⚠ ${a.napomena ? t("Izmeni napomenu", "Edit note") : t("Dodaj napomenu", "Add note")}</button></div>
@@ -333,6 +336,7 @@ function ekranKarton(id) {
     ${preci2.some(Boolean) ? `<h2 style="margin-top:14px">${t("Babe i dede", "Grandparents")}</h2><div class="cipovi">${preci2.map(p => (p ? cip(p) : `<span class="cip siv">?</span>`)).join("")}</div>` : ""}
   </div>
   ${kartPrirasta(id)}
+  ${kartOcene(id)}
   ${kartDnk(id)}
   ${kartMleka(id, a)}
   <div class="kart"><h2>${t("Potomci", "Offspring")} <small>(${deca.length})</small></h2>${deca.length ? `<div class="cipovi">${deca.map(d => cip(d)).join("")}</div>` : `<span class="mali">${t("nema upisanih", "none recorded")}</span>`}</div>
@@ -470,6 +474,299 @@ function srediTekst(s) {
   return String(s || "").replace(/\r/g, "").split("\n").map(r => r.split(/\s+/).filter(Boolean).join(" "))
     .join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
+// ---------------------------------------------------------------- ocene grla (kao na računaru)
+function kartOcene(id) {
+  const o = oceneGrla(id), dec = v => v.toFixed(1).replace(".", EN() ? "." : ",");
+  const nOc = Object.keys(procitajOcene((S.grla.find(g => g.id === id) || {}).ocena)).length;
+  const redovi = rucneOsobine().filter(([k]) => k in o.rucne).map(([k, n]) => `<dt>${h(n)}</dt><dd style="color:var(--warn)">${zvezdice(o.rucne[k])}${o.rucne[k] % 1 ? ` <span class="mali">${dec(o.rucne[k])}</span>` : ""}</dd>`)
+    .concat(autoOsobine().filter(([k]) => k in o.auto).map(([k, n]) => `<dt>${h(n)}</dt><dd><span style="color:var(--warn)">${zvezdice(o.auto[k][0])}</span> <span class="mali">${h(o.auto[k][1])}</span></dd>`));
+  return `<div class="kart"><h2>⭐ ${t("Ocena grla", "Animal score")} ${o.ukupno != null ? `<span style="color:var(--warn)">${zvezdice(o.ukupno)} ${dec(o.ukupno)}</span>` : ""}</h2>
+    ${nOc > 1 ? `<p class="mali" style="margin:0 0 6px">${t(`prosek ${nOc} ocenjivača`, `average of ${nOc} scorers`)}</p>` : ""}<dl class="polja">${redovi.join("")}</dl>
+    ${Object.keys(o.rucne).length ? "" : `<p class="mali">${t("Karakter, građa, noge… još nisu ocenjeni.", "Temperament, conformation, legs… not scored yet.")}</p>`}
+    <div class="dugmad" style="margin-top:10px"><a class="dug" href="#oceni/${encodeURIComponent(id)}">⭐ ${t("Oceni", "Score")}</a><a class="dug" href="#rang">${t("Rang lista", "Ranking")}</a></div></div>`;
+}
+function ekranOceni(id) {
+  const x = M.nadji(id);
+  if (!x) return idi("grla");
+  postaviVrh(t(`Oceni: ${x}`, `Score: ${x}`), true); meni("grla");
+  if (!korisnik()) { traziIme(); return idi(`karton/${encodeURIComponent(x)}`); }
+  const sve = procitajOcene((S.grla.find(g => g.id === x) || {}).ocena), oc = { ...((sve[korisnik()] || [{}])[0]) };
+  const drugi = Object.entries(sve).filter(([i]) => i !== korisnik());
+  const osobine = rucneOsobine().filter(([k, , , samoZ]) => !samoZ || (M.A[x].pol === "z" && (k !== "vime" || vimeSeOcenjuje(x))));
+  ekran.innerHTML = `<div class="kart"><p style="margin:0 0 4px"><b>👤 ${h(korisnik())}</b></p>
+    <p class="mali" style="margin-top:0">${t("Svako ocenjuje za sebe – na kraju se računa prosek svih ocena.", "Everyone scores for themselves – the average of all scores counts.")}
+    ${t("Dodirni zvezdice (1 = loše, 5 = odlično). Ponovni dodir iste zvezdice briše ocenu.", "Tap the stars (1 = poor, 5 = excellent). Tapping the same star again clears it.")}</p>
+    ${drugi.length ? `<p class="mali">${t("Ocenili su i:", "Also scored by:")} ${drugi.map(([i, [o_]]) => `<b>${h(i || t("ranije", "earlier"))}</b> (${Object.entries(o_).map(([k, v]) => `${(rucneOsobine().find(r => r[0] === k) || [k, k])[1].split(" (")[0]} ${v}`).join(", ")})`).join("; ")}</p>` : ""}
+    ${osobine.map(([k, n, opis]) => `<div class="polje"><b>${h(n)}</b><div class="mali">${h(opis)}</div>
+      <div class="zvezde" data-k="${k}">${[1, 2, 3, 4, 5].map(i => `<button data-v="${i}" aria-label="${i}">☆</button>`).join("")}</div></div>`).join("")}
+    <p class="mali">${t("Prirast, plodnost i zdravlje program računa sam iz merenja, porođaja i lečenja.", "Gain, fertility and health are calculated from weighings, births and treatments.")}</p>
+    <button class="dug glavno puno" id="sac">${t("Sačuvaj ocenu", "Save score")}</button></div>`;
+  const crtaj = () => ekran.querySelectorAll(".zvezde").forEach(z => z.querySelectorAll("button").forEach(b => { const on = +b.dataset.v <= (oc[z.dataset.k] || 0); b.textContent = on ? "★" : "☆"; b.classList.toggle("akt", on); }));
+  ekran.querySelectorAll(".zvezde").forEach(z => z.onclick = e => { const b = e.target.closest("button"); if (!b) return; const v = +b.dataset.v; if (oc[z.dataset.k] === v) delete oc[z.dataset.k]; else oc[z.dataset.k] = v; crtaj(); });
+  crtaj();
+  $("#sac").onclick = () => { sacuvajOcene(x, oc); promena(t("Ocena je sačuvana.", "Score saved.")); idi(`karton/${encodeURIComponent(x)}`); };
+}
+// ---------------------------------------------------------------- Moje rase (kao na računaru): rasa se upiše jednom
+function ekranRase(_, upit) {
+  postaviVrh(t("Moje rase", "My breeds"), true); meni("vise");
+  const k = K(), izm = upit && upit.get("i") != null ? mojeRase()[+upit.get("i")] : null;
+  const vrste = [...new Set(k.VRSTE.concat(mojeVrste().map(v => v.ime)))];
+  const sve = mojeRase().map((r, i) => [r, i]).sort((a, b) => (a[0].vrsta + a[0].ime).localeCompare(b[0].vrsta + b[0].ime));
+  ekran.innerHTML = `<div class="kart"><h2>${izm ? t(`Izmena: ${h(izm.ime)}`, `Editing: ${h(izm.ime)}`) : t("Nova rasa", "New breed")}</h2>
+    <p class="mali" style="margin-top:0">${t("Rasu upišeš jednom, sa namenom. Posle je kod novog grla samo izabereš, a namena se sama popuni.", "Enter a breed once, with its purpose. Then just pick it for a new animal and the purpose fills in.")}</p>
+    <div class="dve"><label class="polje"><span>${t("Vrsta *", "Species *")}</span><select class="unos" id="rv">${vrste.map(v => `<option ${izm && vrstaKanon(izm.vrsta) === vrstaKanon(v) ? "selected" : ""}>${h(v)}</option>`).join("")}</select></label>
+      <label class="polje"><span>${t("Naziv rase *", "Breed name *")}</span><input class="unos" id="ri" value="${h(izm ? izm.ime : "")}"></label></div>
+    <label class="polje" id="rn-p"><span>${t("Namena", "Purpose")}</span><select class="unos" id="rn"></select></label>
+    <label class="polje" style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="ra" style="width:22px;height:22px" ${izm && izm.autohtona ? "checked" : ""}><span style="font-weight:700">${t("Autohtona rasa", "Native breed")}</span></label>
+    <div class="greska" id="gr"></div>
+    <div class="dugmad">${izm ? `<a class="dug" href="#rase">${t("Otkaži", "Cancel")}</a><button class="dug" id="rs">${t("Skloni sa spiska", "Remove from list")}</button>` : ""}<button class="dug glavno" id="sac">${t("Sačuvaj rasu", "Save breed")}</button></div></div>
+    <div class="kart"><h2>${t("Spisak", "List")} <small>(${sve.length})</small></h2>${sve.length ? `<div class="lista">${sve.map(([r, i]) =>
+      `<a class="red" href="#rase?i=${i}"><div class="sred"><b>${h(r.ime)}${r.autohtona ? " ★" : ""}</b><span>${h(vrstaNorm(r.vrsta) || r.vrsta)} · ${h(r.namena || "–")} · ${t(`${grlaRase(r.vrsta, r.ime).length} grla`, `${grlaRase(r.vrsta, r.ime).length} animals`)}</span></div><span>✎</span></a>`).join("")}</div>`
+      : `<span class="mali">${t("Još nema rasa.", "No breeds yet.")}</span>`}</div>`;
+  const namene = () => { const izb = nameneZa($("#rv").value), sad = $("#rn").value || (izm ? izm.namena : "");
+    $("#rn-p").classList.toggle("skriveno", !izb.length);
+    $("#rn").innerHTML = `<option value="">${t("– izaberi –", "– choose –")}</option>` + izb.map(x => `<option ${x === sad ? "selected" : ""}>${h(x)}</option>`).join(""); };
+  $("#rv").onchange = namene; namene();
+  $("#ri").oninput = () => { if (autohtonaRasa($("#ri").value)) $("#ra").checked = true; };
+  $("#sac").onclick = () => {
+    const v = { vrsta: $("#rv").value, ime: $("#ri").value, namena: $("#rn").value, autohtona: $("#ra").checked };
+    const pogodjena = grlaRase(v.vrsta, v.ime).filter(r => v.namena && (r.namena || "") !== v.namena).length + (izm && kljucR(izm) !== kljucR(v) ? grlaRase(izm.vrsta, izm.ime).length : 0);
+    if (pogodjena && !confirm(t(`Promena važi i za ${pogodjena} grla te rase. Nastaviti?`, `The change also applies to ${pogodjena} animals of this breed. Continue?`))) return;
+    const rez = sacuvajRasu(v, izm);
+    if (typeof rez === "string") return ($("#gr").textContent = rez);
+    promena(t(`Rasa „${normRasa(v.ime)}“ je sačuvana.`, `Breed “${normRasa(v.ime)}” saved.`));
+    idi("rase");
+  };
+  if (izm) $("#rs").onclick = () => { if (confirm(t(`Skloniti rasu „${izm.ime}“ sa spiska? Grla zadržavaju svoju rasu.`, `Remove the breed “${izm.ime}” from the list? Animals keep their breed.`))) { skloniRasu(izm); promena(t("Rasa je sklonjena sa spiska.", "Breed removed from the list.")); idi("rase"); } };
+}
+const kljucR = r => `${vrstaKanon(r.vrsta) || r.vrsta}|${String(r.ime || "").trim().toLowerCase()}`;
+// ---------------------------------------------------------------- Moje vrste (kao na računaru)
+function ekranVrste(_, upit) {
+  postaviVrh(t("Moje vrste", "My species"), true); meni("vise");
+  const izm = upit && upit.get("v") ? mojeVrste().find(v => v.ime === upit.get("v")) : null;
+  const polja = [["ime", t("Naziv vrste (množina) *", "Species name (plural) *"), "text"], ["m", t("Mužjak", "Male"), "text"], ["z", t("Ženka", "Female"), "text"],
+    ["ml", t("Mladunče", "Young (one)"), "text"], ["mlm", t("Mladunčad", "Young (many)"), "text"], ["gmin", t("Gravidnost od (dana) *", "Gestation from (days) *"), "number"],
+    ["gmax", t("Gravidnost do (dana) *", "Gestation to (days) *"), "number"], ["gpr", t("Gravidnost prosek (dana) *", "Gestation average (days) *"), "number"],
+    ["ciklus", t("Ciklus teranja (dana, 0 = bez)", "Heat cycle (days, 0 = none)"), "number"]];
+  ekran.innerHTML = `<div class="kart"><h2>${izm ? t(`Izmena: ${h(izm.ime)}`, `Editing: ${h(izm.ime)}`) : t("Nova vrsta", "New species")}</h2>
+    ${izm ? "" : `<p class="mali" style="margin-top:0">${t("Brzi primeri – dodirni i sve se popuni:", "Quick examples – tap and everything fills in:")}</p><div class="filteri">${primeriVrsta().map((p, i) => `<button data-pr="${i}">${h(p[0])}</button>`).join("")}</div>`}
+    ${polja.map(([k, n, tip]) => `<label class="polje"><span>${n}</span><input class="unos" id="v_${k}" type="${tip}" ${tip === "number" ? 'inputmode="numeric"' : ""} value="${h(izm ? izm[k] : (k === "ciklus" ? "0" : ""))}"></label>`).join("")}
+    <div class="greska" id="gr"></div>
+    <div class="dugmad">${izm ? `<a class="dug" href="#vrste">${t("Otkaži", "Cancel")}</a><button class="dug" id="vs">${t("Skloni", "Remove")}</button>` : ""}<button class="dug glavno" id="sac">${t("Sačuvaj vrstu", "Save species")}</button></div></div>
+    <div class="kart"><h2>${t("Moje vrste", "My species")} <small>(${mojeVrste().length})</small></h2>${mojeVrste().length ? `<div class="lista">${mojeVrste().map(v =>
+      `<a class="red" href="#vrste?v=${encodeURIComponent(v.ime)}"><div class="sred"><b>${h(v.ime)}</b><span>${h(v.z)} · ${h(v.m)} · ${t(`gravidnost ${v.gpr} d.`, `gestation ${v.gpr} d.`)}</span></div><span>✎</span></a>`).join("")}</div>`
+      : `<span class="mali">${t("Osnovne vrste (goveda, ovce, koze, svinje, konji) su već tu. Ovde dodaješ druge.", "Basic species (cattle, sheep, goats, pigs, horses) are already there. Add others here.")}</span>`}</div>`;
+  ekran.querySelectorAll("[data-pr]").forEach(b => b.onclick = () => { const p = primeriVrsta()[+b.dataset.pr];
+    ["ime", "m", "z", "ml", "mlm", "gmin", "gmax", "gpr", "ciklus"].forEach((k, i) => { $("#v_" + k).value = p[i]; }); });
+  $("#sac").onclick = () => {
+    const v = {}; ["ime", "m", "z", "ml", "mlm", "gmin", "gmax", "gpr", "ciklus"].forEach(k => { v[k] = $("#v_" + k).value; });
+    const g = sacuvajVrstu(v, izm ? izm.ime : null);
+    if (g) return ($("#gr").textContent = g);
+    promena(t("Vrsta je sačuvana.", "Species saved.")); idi("vrste");
+  };
+  if (izm) $("#vs").onclick = () => { const g = skloniVrstu(izm.ime); if (g) return ($("#gr").textContent = g); promena(t("Vrsta je sklonjena.", "Species removed.")); idi("vrste"); };
+}
+
+// ---------------------------------------------------------------- Finansije (kao na računaru)
+const filtF = { period: "mesec" };
+function ekranFinansije() {
+  postaviVrh(t("Finansije", "Finances"), true); meni("vise");
+  const [od, doo] = periodFin(filtF.period), lista = finUPeriodu(od, doo), z = zbirFin(lista), raz = z.pr - z.tr;
+  const per = [["mesec", t("Ovaj mesec", "This month")], ["prosli_mesec", t("Prošli mesec", "Last month")], ["godina", t("Ova godina", "This year")],
+    ["prosla_godina", t("Prošla godina", "Last year")], ["sve", t("Sve", "All")]];
+  const kat = Object.entries(z.kat).sort((a, b) => b[1] - a[1]), mx = Math.max(1, ...kat.map(([, v]) => v));
+  ekran.innerHTML = `<div class="filteri">${per.map(([k, n]) => `<button data-per="${k}" class="${filtF.period === k ? "akt" : ""}">${n}</button>`).join("")}</div>
+    <div class="kart"><dl class="polja"><dt>${t("Prihodi", "Income")}</dt><dd style="color:var(--ok)">${fmtNovac(z.pr)}</dd>
+      <dt>${t("Troškovi", "Costs")}</dt><dd style="color:var(--bad)">${fmtNovac(z.tr)}</dd>
+      <dt>${t("Razlika", "Balance")}</dt><dd style="color:var(--${raz >= 0 ? "ok" : "bad"});font-size:18px">${raz >= 0 ? "+" : "−"}${fmtNovac(Math.abs(raz))}</dd></dl>
+      <div class="dugmad" style="margin-top:12px"><a class="dug glavno" href="#finupis?v=trosak">− ${t("Trošak", "Cost")}</a><a class="dug glavno" href="#finupis?v=prihod">+ ${t("Prihod", "Income")}</a></div></div>
+    ${kat.length ? `<div class="kart"><h2>${t("Po kategoriji", "By category")}</h2>${kat.map(([k, v]) => `<div style="margin:8px 0"><div class="mali" style="display:flex;justify-content:space-between"><span>${h(k.slice(1))}</span><b>${fmtNovac(v)}</b></div>
+      <div style="height:8px;border-radius:4px;background:var(--line)"><div style="height:8px;border-radius:4px;width:${Math.round(v / mx * 100)}%;background:var(--${k[0] === "+" ? "ok" : "bad"})"></div></div></div>`).join("")}</div>` : ""}
+    <div class="kart"><h2>${t("Upisi", "Entries")} <small>(${lista.length})</small></h2>${lista.length ? `<div class="lista">${lista.slice(0, 200).map(x => `<a class="red" href="#finupis?i=${finansije().indexOf(x)}">
+      <div class="sred"><b>${h(x.kategorija)}</b><span>${h(x.datum)}${x.grlo ? " · " + h(x.grlo) : ""}${x.opis ? " · " + h(x.opis) : ""}</span></div>
+      <b style="color:var(--${x.vrsta === PRIHOD ? "ok" : "bad"});white-space:nowrap">${x.vrsta === PRIHOD ? "+" : "−"}${fmtNovac(brojIznos(x.iznos) || 0)}</b></a>`).join("")}</div>`
+      : `<span class="mali">${t("Nema upisa u ovom periodu.", "No entries in this period.")}</span>`}</div>`;
+  ekran.querySelectorAll("[data-per]").forEach(b => b.onclick = () => { filtF.period = b.dataset.per; ekranFinansije(); });
+}
+function ekranFinUpis(_, upit) {
+  const izm = upit && upit.get("i") != null ? finansije()[+upit.get("i")] : null;
+  let vrsta = izm ? izm.vrsta : (upit && upit.get("v") === PRIHOD ? PRIHOD : TROSAK);
+  postaviVrh(izm ? t("Izmena upisa", "Edit entry") : t("Novi upis", "New entry"), true); meni("vise");
+  const pd = izm ? parsirajDatum(izm.datum) : danas();
+  ekran.innerHTML = `<div class="kart"><div class="izbor" id="fv"><button data-v="trosak">− ${t("Trošak", "Cost")}</button><button data-v="prihod">+ ${t("Prihod", "Income")}</button></div><div style="height:12px"></div>
+    <div class="dve"><label class="polje"><span>${t("Datum *", "Date *")}</span><input class="unos" id="fd" type="date" value="${uIso(pd || danas())}"></label>
+      <label class="polje"><span>${t("Iznos *", "Amount *")} (${h(S.valuta || (EN() ? "EUR" : "RSD"))})</span><input class="unos" id="fi" inputmode="decimal" value="${h(izm ? izm.iznos : "")}"></label></div>
+    <label class="polje"><span>${t("Kategorija *", "Category *")}</span><input class="unos" id="fk" list="dl-fk" value="${h(izm ? izm.kategorija : "")}"></label><datalist id="dl-fk"></datalist>
+    <label class="polje"><span>${t("Grlo (nije obavezno)", "Animal (optional)")}</span><input class="unos" id="fg" list="dl-fg" autocomplete="off" value="${h(izm ? izm.grlo : "")}"></label>${datalistGrla("dl-fg", M.grla(false))}
+    <label class="polje"><span>${t("Opis", "Description")}</span><input class="unos" id="fo" value="${h(izm ? izm.opis : "")}"></label>
+    <div class="greska" id="gr"></div>
+    <div class="dugmad">${izm ? `<button class="dug" id="fx">🗑 ${t("Obriši upis", "Delete entry")}</button>` : ""}<button class="dug glavno" id="sac">${t("Sačuvaj", "Save")}</button></div></div>`;
+  const vr = () => { $("#fv").querySelectorAll("button").forEach(b => b.classList.toggle("akt", b.dataset.v === vrsta));
+    $("#dl-fk").innerHTML = kategorijeFin(vrsta).map(k => `<option value="${h(k)}">`).join(""); };
+  $("#fv").onclick = e => { const b = e.target.closest("button"); if (b) { vrsta = b.dataset.v; vr(); } }; vr();
+  $("#sac").onclick = () => {
+    const g = sacuvajFin({ vrsta, datum: $("#fd").value ? fmtD(parsirajDatum($("#fd").value)) : "", iznos: $("#fi").value, kategorija: $("#fk").value, grlo: $("#fg").value, opis: $("#fo").value }, izm);
+    if (g) return ($("#gr").textContent = g);
+    promena(t("Sačuvano.", "Saved.")); idi("finansije");
+  };
+  if (izm) $("#fx").onclick = () => { if (confirm(t("Obrisati ovaj upis?", "Delete this entry?"))) { obrisiFin(izm); promena(t("Upis je obrisan.", "Entry deleted.")); idi("finansije"); } };
+}
+// ---------------------------------------------------------------- Istorija cele farme
+const filtI = { dog: "", q: "" };
+function ekranIstorija() {
+  postaviVrh(t("Istorija", "History"), true); meni("vise");
+  const dog = [...new Set(S.istorija.map(z => z.dogadjaj).filter(Boolean))];
+  const q = filtI.q.trim().toLowerCase();
+  const lista = S.istorija.map(z => [z, parsirajDatum(z.datum)]).filter(([z]) => (!filtI.dog || z.dogadjaj === filtI.dog) &&
+      (!q || [z.grlo, z.dogadjaj, z.vrednost, z.opis, z.partner].join(" ").toLowerCase().includes(q)))
+    .sort((a, b) => (b[1] || 0) - (a[1] || 0) || String(b[0].uneto || "").localeCompare(String(a[0].uneto || "")));
+  ekran.innerHTML = `<input class="pretraga" id="iq" type="search" placeholder="🔍 ${t("Traži grlo, događaj, opis…", "Search animal, event, description…")}" value="${h(filtI.q)}">
+    <div class="filteri"><button data-d="" class="${!filtI.dog ? "akt" : ""}">${t("Sve", "All")}</button>${dog.map(d => `<button data-d="${h(d)}" class="${filtI.dog === d ? "akt" : ""}">${h(d)}</button>`).join("")}</div>
+    <div class="mali" style="margin:0 4px 8px">${t(`${lista.length} upisa`, `${lista.length} entries`)}</div>
+    <div class="kart">${lista.slice(0, 300).map(([z]) => `<div class="ist ${z.automatski ? "auto" : ""}"><div class="d">${h(z.datum)} · ${cip(z.grlo)}${z.partner ? " · " + cip(z.partner) : ""}${z.upisao ? ` · 📱 ${h(z.upisao)}` : ""}</div>
+      <b>${h(z.dogadjaj)}</b>${z.vrednost ? ` – ${h(z.vrednost)}` : ""}${z.opis ? `<div class="mali">${h(z.opis)}</div>` : ""}</div>`).join("") || `<span class="mali">${t("Nema upisa.", "No entries.")}</span>`}
+      ${lista.length > 300 ? `<p class="mali">${t("Prikazano je 300 najnovijih.", "Showing the 300 newest.")}</p>` : ""}</div>`;
+  $("#iq").onchange = e => { filtI.q = e.target.value; ekranIstorija(); };
+  ekran.querySelectorAll("[data-d]").forEach(b => b.onclick = () => { filtI.dog = b.dataset.d; ekranIstorija(); });
+}
+// ---------------------------------------------------------------- Statistika i pregled stada
+function stubici(naslov, podaci, boja = "brand", fmt = v => v) {
+  if (!podaci.length || !podaci.some(([, v]) => v)) return `<div class="kart"><h2>${naslov}</h2><span class="mali">${t("Još nema podataka.", "No data yet.")}</span></div>`;
+  const mx = Math.max(1, ...podaci.map(([, v]) => v));
+  return `<div class="kart"><h2>${naslov}</h2><div style="display:flex;align-items:flex-end;gap:6px;height:150px;margin-top:8px">${podaci.map(([k, v]) =>
+    `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0"><b style="font-size:12px">${v ? fmt(v) : ""}</b>
+      <div style="width:70%;height:${Math.max(2, Math.round(v / mx * 110))}px;background:var(--${boja});border-radius:4px 4px 0 0"></div>
+      <span class="mali" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${h(String(k))}</span></div>`).join("")}</div></div>`;
+}
+function ekranStatistika() {
+  postaviVrh(t("Statistika", "Statistics"), true); meni("vise");
+  const akt = M.grla(true);
+  if (!akt.length) { ekran.innerHTML = `<div class="kart mali">${t("U zapatu još nema grla.", "There are no animals in the herd yet.")}</div>`; return; }
+  const fs = akt.map(a => M.inbr(a.id)), zen = akt.filter(a => a.pol === "z").length, muz = akt.filter(a => a.pol === "m").length, iznad = fs.filter(f => f > S.prag).length;
+  const rase = {}; akt.forEach(a => { const k = a.rasa || t("bez rase", "no breed"); rase[k] = (rase[k] || 0) + 1; });
+  const god = {}; M.grla(false).forEach(a => { if (a.datum) god[a.datum.getFullYear()] = (god[a.datum.getFullYear()] || 0) + 1; });
+  const kl = [0, 0, 0, 0, 0]; fs.forEach(f => kl[f === 0 ? 0 : f < 0.03125 ? 1 : f < 0.0625 ? 2 : f < 0.125 ? 3 : 4]++);
+  const d = danas(), meseci = [...Array(12)].map((_, i) => new Date(d.getFullYear(), d.getMonth() - 11 + i, 1)), por = meseci.map(() => 0);
+  S.istorija.forEach(z => { if (z.dogadjaj !== K().POROD) return; const pd = parsirajDatum(z.datum); if (!pd) return;
+    const i = meseci.findIndex(m => m.getFullYear() === pd.getFullYear() && m.getMonth() === pd.getMonth()); if (i >= 0) por[i]++; });
+  const ocevi = {}; akt.forEach(a => { const o = (M.P[a.id] || [])[0]; if (o) ocevi[o] = (ocevi[o] || 0) + 1; });
+  const top = Object.entries(ocevi).sort((a, b) => b[1] - a[1]).slice(0, 5), dec = n => EN() ? n : String(n).replace(".", ",");
+  ekran.innerHTML = `<div class="kart"><dl class="polja"><dt>${t("Grla u zapatu", "Animals in herd")}</dt><dd>${akt.length}</dd>
+      <dt>${t("Ženska / muška", "Female / male")}</dt><dd>${zen} / ${muz}</dd>
+      <dt>${t("Prosečan inbriding", "Average inbreeding")}</dt><dd>${pct(fs.reduce((s, f) => s + f, 0) / fs.length)}</dd>
+      <dt>${t("Iznad granice rizika", "Above the risk limit")}</dt><dd style="color:var(--${iznad ? "bad" : "ok"})">${iznad}</dd></dl></div>
+    ${stubici(t("Grla po rasi", "Animals by breed"), Object.entries(rase).sort((a, b) => b[1] - a[1]).slice(0, 8))}
+    ${stubici(t("Rođena grla po godinama", "Animals born per year"), Object.entries(god).sort().slice(-8), "brand")}
+    ${stubici(t("Inbriding grla u zapatu", "Inbreeding of animals in the herd"), [["0%", kl[0]], [dec("<3.1%"), kl[1]], [dec("<6.25%"), kl[2]], [dec("<12.5%"), kl[3]], [dec("≥12.5%"), kl[4]]], "warn")}
+    ${stubici(t("Porođaji u poslednjih 12 meseci", "Births in the last 12 months"), meseci.map((m, i) => [String(m.getMonth() + 1), por[i]]), "ok")}
+    <div class="kart"><h2>${t("Najčešći očevi", "Most common sires")}</h2>${top.length ? top.map(([o, n]) => `<div style="margin:6px 0">${cip(o)} <span class="mali">${t(`${n} potomaka u zapatu`, `${n} offspring in the herd`)}</span></div>`).join("")
+      + `<p class="mali">${t("Kad jedan mužjak ima previše potomaka, sledeća generacija postaje srodna.", "When one male has too many offspring, the next generation becomes related.")}</p>` : `<span class="mali">${t("Još nema upisanih očeva.", "No sires recorded yet.")}</span>`}</div>
+    ${M.warn && M.warn.length ? `<div class="kart"><h2>⚠ ${t("Greške u podacima", "Data problems")}</h2>${M.warn.slice(0, 30).map(w => `<div class="mali" style="margin:4px 0">${h(w)}</div>`).join("")}</div>` : ""}`;
+}
+
+// ---------------------------------------------------------------- Nova rasa (kao na računaru)
+function ekranNovaRasa(_, upit) {
+  postaviVrh(t("Nova rasa", "New breed"), true); meni("vise");
+  const sva = M.grla(true);
+  if (!sva.length) { ekran.innerHTML = `<div class="kart mali">${t("U zapatu još nema grla.", "There are no animals in the herd yet.")}</div>`; return; }
+  const prog = programRase(), vrste = [...new Set(sva.map(a => a.vrsta))];
+  const izabrana = (upit && upit.get("v")) || vrste.find(v => vrstaKanon(v) === vrstaKanon(prog.vrsta)) || vrste[0];
+  const grla = sva.filter(a => vrstaKanon(a.vrsta) === vrstaKanon(izabrana)), isti = vrstaKanon(prog.vrsta) === vrstaKanon(izabrana);
+  const cilj = {}; if (isti) for (const [k, v] of Object.entries(prog.cilj || {})) cilj[k] = v / 100;
+  const rase = [...new Set(grla.flatMap(a => Object.keys(sastav(a.id))).filter(k => k !== NEPOZNATO).concat(Object.keys(cilj)))].sort();
+  const stari = isti ? Object.entries(prog.cilj || {}).sort((a, b) => b[1] - a[1]) : [];
+  const pod = grla.map(a => { const s = sastav(a.id), d = odstupanje(s, cilj); return [d == null ? 9 : d, s[NEPOZNATO] || 0, a, s, d]; }).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2].id.localeCompare(b[2].id));
+  const uCilju = pod.filter(x => x[4] != null && x[4] <= BLIZU + 1e-9).length;
+  const parovi = Object.keys(cilj).length ? paroviZaCilj(grla, cilj) : [];
+  const osnivaci = grla.filter(a => !(M.P[a.id] || []).some(Boolean));
+  ekran.innerHTML = `<div class="kart"><h2>${t("Cilj programa", "Breeding goal")}</h2>
+    <p class="mali" style="margin-top:0">${t("Upiši koje rase i u kom odnosu treba da ima nova rasa. Zbir mora biti 100 %.", "Enter which breeds the new breed should have and in what share. The total must be 100 %.")}</p>
+    <div class="dve"><label class="polje"><span>${t("Vrsta", "Species")}</span><select class="unos" id="nv">${vrste.map(v => `<option ${v === izabrana ? "selected" : ""}>${h(v)}</option>`).join("")}</select></label>
+      <label class="polje"><span>${t("Naziv nove rase", "Name of the new breed")}</span><input class="unos" id="ni" value="${h(isti ? prog.ime || "" : "")}"></label></div>
+    <datalist id="dl-nr">${rase.map(r => `<option value="${h(r)}">`).join("")}</datalist>
+    ${[0, 1, 2, 3].map(i => `<div class="dve"><label class="polje"><span>${t("Rasa", "Breed")}</span><input class="unos" id="nr${i}" list="dl-nr" value="${h(stari[i] ? stari[i][0] : "")}"></label>
+      <label class="polje"><span>${t("Udeo %", "Share %")}</span><input class="unos" id="np${i}" inputmode="decimal" value="${h(stari[i] ? String(stari[i][1]).replace(".", EN() ? "." : ",") : "")}"></label></div>`).join("")}
+    <div class="greska" id="gr"></div><button class="dug glavno puno" id="sac">${t("Sačuvaj cilj", "Save goal")}</button></div>
+    <div class="kart"><h2>${t("Grla po udelu krvi", "Animals by breed share")}</h2>
+      ${Object.keys(cilj).length ? `<p class="mali" style="margin-top:0;color:var(--${uCilju ? "ok" : "ink2"})">${t(`Cilju odgovara ${uCilju} od ${pod.length} grla (razlika do ${pct(BLIZU)}).`, `${uCilju} of ${pod.length} animals match the goal (difference up to ${pct(BLIZU)}).`)}</p>` : ""}
+      <div class="lista">${pod.slice(0, 200).map(([, , a, s, d]) => `<a class="red" href="#karton/${encodeURIComponent(a.id)}"><div class="sred"><b>${h(a.id)} ${a.pol === "m" ? "♂" : "♀"} <span class="mali">${h(generacijaUkrstanja(a.id)[0])}</span></b>
+        <span style="white-space:normal">${h(tekstUdela(s))}</span></div>${d != null ? `<b style="color:var(--${d <= BLIZU + 1e-9 ? "ok" : "ink2"});white-space:nowrap">${pct(d)}</b>` : ""}</a>`).join("")}</div></div>
+    ${Object.keys(cilj).length ? `<div class="kart"><h2>${t("Parenja koja vode ka cilju", "Matings that lead to the goal")}</h2>
+      <p class="mali" style="margin-top:0">${t("Na vrhu su parovi čiji je potomak najbliži cilju, uz manji inbriding. Rizični parovi su na dnu.", "At the top are pairs whose offspring is closest to the goal, with lower inbreeding. Risky pairs are at the bottom.")}</p>
+      ${parovi.length ? `<div class="lista">${parovi.map(([d, f, z, mu, s]) => { const [tx, kl] = procena(f, S.prag); return `<a class="red" href="#srodstvo?a=${encodeURIComponent(z)}&b=${encodeURIComponent(mu)}"><div class="sred"><b>${h(z)} ♀ × ${h(mu)} ♂</b>
+        <span style="white-space:normal">${h(tekstUdela(s))}</span><span>${t("razlika", "difference")} ${pct(d)} · F ${pct(f)} · <span class="znak ${kl}">${h(tx)}</span></span></div></a>`; }).join("")}</div>`
+        : `<span class="mali">${t("Nema dovoljno mužjaka i ženki sa poznatim udelom krvi.", "Not enough males and females with a known breed share.")}</span>`}</div>` : ""}
+    <div class="kart"><h2>${t("Udeo krvi osnivača", "Breed share of founders")}</h2>
+      <p class="mali" style="margin-top:0">${t("Grlima bez upisanih roditelja (npr. kupljenim melezima) upiši udeo krvi: otvori grlo → ✎ Izmeni podatke → Udeo krvi.", "For animals without recorded parents (e.g. purchased crossbreds) enter the breed share: open the animal → ✎ Edit details → Breed share.")}</p>
+      ${osnivaci.length ? `<div class="cipovi">${osnivaci.map(a => `<a class="cip" href="#novo?izmena=${encodeURIComponent(a.id)}">${h(a.id)}</a>`).join("")}</div>` : `<span class="mali">${t("Sva grla ove vrste imaju upisane roditelje.", "All animals of this species have recorded parents.")}</span>`}</div>`;
+  $("#nv").onchange = e => idi(`novarasa?v=${encodeURIComponent(e.target.value)}`);
+  $("#sac").onclick = () => {
+    const g = sacuvajCiljRase($("#nv").value, $("#ni").value, [0, 1, 2, 3].map(i => [$("#nr" + i).value, $("#np" + i).value]));
+    if (g) return ($("#gr").textContent = g);
+    promena(t("Cilj je sačuvan.", "Goal saved.")); ekranNovaRasa(_, upit);
+  };
+}
+// ---------------------------------------------------------------- rodoslovni list za štampu / PDF (kao na računaru)
+function ekranRodoslov(id, upit) {
+  const x = M.nadji(id);
+  if (!x) return idi("grla");
+  const kolena = Math.min(6, Math.max(2, +(upit && upit.get("k")) || 4));
+  postaviVrh(t("Rodoslovni list", "Pedigree"), true); meni("grla");
+  const a = M.A[x], f = M.inbr(x), [o, mj] = M.P[x] || [null, null];
+  let niz = [[x]];
+  for (let g = 0; g < kolena; g++) niz.push(niz[g].flatMap(y => (y ? (M.P[y] || [null, null]) : [null, null])));
+  let gens = 2; for (let g = 1; g <= kolena; g++) if (niz[g].some(Boolean)) gens = Math.max(gens, g);
+  const redovi = 2 ** gens, imena = [t("Roditelji", "Parents"), t("Babe i dede", "Grandparents"), t("Prababe i pradede", "Great-grandparents")];
+  let tab = `<table class="rod"><tr>${[...Array(gens)].map((_, g) => `<th>${g < 3 ? imena[g] : t(`${g + 1}. koleno`, `Generation ${g + 1}`)}</th>`).join("")}</tr>`;
+  for (let r = 0; r < redovi; r++) {
+    tab += "<tr>";
+    for (let g = 1; g <= gens; g++) {
+      const span = redovi / 2 ** g;
+      if (r % span) continue;
+      const y = niz[g][r / span], b = y && M.A[y];
+      if (b && !b.osnivac) { const fy = M.inbr(y), det = [b.markica, b.rasa, b.datum ? b.datum.getFullYear() : ""].filter(Boolean).join(" · ");
+        tab += `<td rowspan="${span}" class="${b.pol === "m" ? "m" : "z"}"><b>${h(y)}</b>${det && gens < 6 ? `<br><small>${h(det)}</small>` : ""}${fy > 0 ? `<br><small>F ${pct(fy)}</small>` : ""}</td>`; }
+      else if (y) tab += `<td rowspan="${span}" class="${g && niz[g].indexOf(y) % 2 ? "z" : "m"}"><b>${h(y)}</b></td>`;
+      else tab += `<td rowspan="${span}" class="n">${t("nepoznat", "unknown")}</td>`;
+    }
+    tab += "</tr>";
+  }
+  tab += "</table>";
+  const deca = Object.entries(M.P).filter(([y, p]) => p.includes(x) && M.A[y] && !M.A[y].osnivac).map(([y]) => y);
+  const red = (k, v) => (v ? `<tr><td>${h(k)}</td><td><b>${h(v)}</b></td></tr>` : "");
+  const dok = `<div class="rodlist"><h1>${t("Rodoslovni list", "Pedigree certificate")}</h1>
+    <table class="podaci">${red(t("Oznaka", "ID"), x)}${red(t("Ušna markica", "Ear tag"), a.markica)}${red(t("Vrsta", "Species"), a.vrsta)}${red(t("Rasa", "Breed"), a.rasa)}
+      ${red(t("Pol", "Sex"), M.polNaziv(x))}${red(t("Datum rođenja", "Date of birth"), a.datum ? fmtD(a.datum) : "")}${red(t("Otac", "Sire"), o)}${red(t("Majka", "Dam"), mj)}
+      ${red(t("Stado", "Herd"), a.stado)}${red(t("Udeo krvi", "Breed share"), (S.grla.find(g => g.id === x) || {}).udeo_krvi ? tekstUdela(sastav(x)) : "")}${red(t("Inbriding (F)", "Inbreeding (F)"), pct(f))}</table>
+    <h2>${t("Rodoslov", "Pedigree")}</h2>${tab}
+    ${deca.length ? `<h2>${t("Potomci", "Offspring")} (${deca.length})</h2><p>${deca.map(h).join(", ")}</p>` : ""}
+    <p class="potpis">${t("Datum", "Date")}: ${fmtD(danas())} &nbsp; · &nbsp; HerdDoc</p></div>`;
+  ekran.innerHTML = `<div class="kart ne-stampa"><div class="filteri">${[3, 4, 5, 6].map(k => `<button data-k="${k}" class="${k === kolena ? "akt" : ""}">${t(`${k} kolena`, `${k} generations`)}</button>`).join("")}</div>
+    <button class="dug glavno puno" id="stampa">🖨 ${t("Štampaj / Sačuvaj kao PDF", "Print / Save as PDF")}</button>
+    <p class="mali">${t("U prozoru za štampu izaberi štampač ili „Sačuvaj kao PDF“.", "In the print window choose a printer or “Save as PDF”.")}</p></div>${dok}`;
+  ekran.querySelectorAll("[data-k]").forEach(b => b.onclick = () => idi(`rodoslov/${encodeURIComponent(x)}?k=${b.dataset.k}`));
+  $("#stampa").onclick = () => { document.body.classList.add("stampam"); setTimeout(() => { window.print(); document.body.classList.remove("stampam"); }, 50); };
+}
+
+const filtR = { vrsta: "", pol: "" };
+function ekranRang() {
+  postaviVrh(t("⭐ Rang lista", "⭐ Ranking"), true); meni("grla");
+  const sva = M.grla(true), vrste = [...new Set(sva.map(a => a.vrsta).filter(Boolean))];
+  if (!filtR.vrsta || !vrste.includes(filtR.vrsta)) filtR.vrsta = vrste[0] || "";
+  const kes = vrednostiVrste(filtR.vrsta);
+  const lista = sva.filter(a => a.vrsta === filtR.vrsta && (!filtR.pol || a.pol === filtR.pol)).map(a => [a, oceneGrla(a.id, kes)])
+    .filter(([, o]) => o.ukupno != null).sort((a, b) => b[1].ukupno - a[1].ukupno);
+  const dec = v => v.toFixed(1).replace(".", EN() ? "." : ",");
+  ekran.innerHTML = `<div class="dve-izbor"><select id="rV" class="stado-izbor">${vrste.map(v => `<option${v === filtR.vrsta ? " selected" : ""}>${h(v)}</option>`).join("")}</select>
+    <select id="rP" class="stado-izbor">${[["", t("Svi", "All")], ["z", t("Ženska", "Females")], ["m", t("Muška", "Males")]].map(([k, n]) => `<option value="${k}"${k === filtR.pol ? " selected" : ""}>${n}</option>`).join("")}</select></div>
+    ${lista.length ? `<div class="lista">${lista.map(([a, o], i) => `<a class="red" href="#karton/${encodeURIComponent(a.id)}"><span style="font-size:18px;font-weight:800;min-width:28px">${i + 1}.</span>
+      <div class="sred"><b>${h(a.id)}</b><span>${h([a.rasa, a.pol === "m" ? "♂" : "♀"].filter(Boolean).join(" · "))} · ${Object.entries(o.rucne).map(([k, v]) => `${(rucneOsobine().find(r => r[0] === k) || [k, k])[1].split(" (")[0]} ${v}`).join(", ") || t("samo automatske", "automatic only")}</span></div>
+      <span style="color:var(--warn);font-weight:800;white-space:nowrap">★ ${dec(o.ukupno)}</span></a>`).join("")}</div>`
+      : `<div class="kart mali">${t("Još nema ocenjenih grla ove vrste. Otvori grlo → ⭐ Oceni.", "No scored animals of this species yet. Open an animal → ⭐ Score.")}</div>`}`;
+  $("#rV").onchange = e => { filtR.vrsta = e.target.value; ekranRang(); };
+  $("#rP").onchange = e => { filtR.pol = e.target.value; ekranRang(); };
+}
+
 function kartPrirasta(id) {
   const m = merenjaTezine(id);
   if (!m.length) return "";
@@ -740,13 +1037,14 @@ function ekranMindjuse(ix) {
 
 // ---------------------------------------------------------------- Novo grlo
 function ekranNovoGrlo(_, upit) {
-  postaviVrh(t("Novo grlo", "New animal"), true); meni("grla");
-  const k = K(), sva = M.grla(), posl = sva[0] || {};
+  const izm = upit && upit.get("izmena") ? S.grla.find(r => r.id === upit.get("izmena")) : null;   // izmena postojećeg grla
+  postaviVrh(izm ? t(`Izmeni: ${izm.id}`, `Edit: ${izm.id}`) : t("Novo grlo", "New animal"), true); meni("grla");
+  const k = K(), sva = M.grla(), posl = izm || sva[0] || {};
   const cesto = l => { const c = {}; l.forEach(x => { if (x) c[x] = (c[x] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ""; };
   const stada = [...new Set(sva.map(a => a.stado).filter(Boolean))], rase = [...new Set(sva.map(a => a.rasa).filter(Boolean))];
-  let pol = "", status = "";
+  let pol = izm ? izm.pol || "" : "", status = izm ? ((izm.status || "aktivno") === "aktivno" ? "aktivno" : "neaktivno") : "";
   ekran.innerHTML = `<div class="kart">
-    <div class="dve"><label class="polje"><span>${t("Oznaka (ime)", "Tag (name)")}</span><input class="unos" id="id" placeholder="${t("prazno = markica", "empty = ear tag")}"></label>
+    <div class="dve"><label class="polje"><span>${t("Oznaka (ime)", "Tag (name)")}</span><input class="unos" id="id" ${izm ? `value="${h(izm.id)}" readonly style="opacity:.6"` : `placeholder="${t("prazno = markica", "empty = ear tag")}"`}></label>
       <label class="polje"><span>${t("Markica", "Ear tag")}</span>${saKamerom(`<input class="unos" id="mk" value="${h(upit ? upit.get("mk") || "" : "")}">`, "markica")}</label></div>
     <div class="polje"><span class="mali" style="font-weight:700">${t("Pol *", "Sex *")}</span><div class="izbor" id="pol" style="margin-top:6px"><button data-p="z">${t("Žensko", "Female")}</button><button data-p="m">${t("Muško", "Male")}</button></div></div>
     <div style="height:12px"></div>
@@ -755,6 +1053,7 @@ function ekranNovoGrlo(_, upit) {
     <datalist id="dl-r"></datalist>
     <label class="polje skriveno" id="nam-p"><span>${t("Namena rase *", "Breed purpose *")}</span><select class="unos" id="nam"></select></label>
     <label class="polje"><span>${t("Datum rođenja", "Date of birth")}</span><input class="unos" id="dat" type="date"></label>
+    ${izm ? `<label class="polje"><span>${t("Udeo krvi (npr. romanovska=50;pramenka=50)", "Breed share (e.g. romanov=50;pramenka=50)")}</span><input class="unos" id="udeo" value="${h(izm.udeo_krvi || "")}"></label>` : ""}
     <div class="dve"><label class="polje"><span>${t("Otac", "Sire")}</span><input class="unos" id="otac" list="dl-o" autocomplete="off"></label>
       <label class="polje"><span>${t("Majka", "Dam")}</span><input class="unos" id="majka" list="dl-m" autocomplete="off"></label></div>
     ${datalistGrla("dl-o", sva.filter(a => a.pol === "m"))}${datalistGrla("dl-m", sva.filter(a => a.pol === "z"))}
@@ -767,7 +1066,19 @@ function ekranNovoGrlo(_, upit) {
     <label class="polje" style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="autoh" style="width:22px;height:22px"><span style="font-weight:700">${t("Autohtona rasa", "Native (indigenous) breed")}</span></label>
     <div class="polje"><span class="mali" style="font-weight:700">${t("Status grla *", "Status *")}</span><div class="izbor" id="status" style="margin-top:6px"><button data-s="aktivno">${t("Aktivno – na farmi", "Active – on the farm")}</button><button data-s="neaktivno">${t("Neaktivno – nije na farmi", "Inactive – not on the farm")}</button></div></div>
     <div class="greska" id="gr"></div>
-    <button class="dug glavno puno" id="sac">${t("Sačuvaj grlo", "Save animal")}</button></div>`;
+    <button class="dug glavno puno" id="sac">${izm ? t("Sačuvaj izmene", "Save changes") : t("Sačuvaj grlo", "Save animal")}</button></div>`;
+  if (izm) {                                       // popuni polja postojećim podacima
+    const pd = parsirajDatum(izm.datum_rodjenja);
+    for (const [sel, v] of [["#mk", izm.markica], ["#rasa", izm.rasa], ["#otac", izm.otac], ["#majka", izm.majka], ["#stado", izm.stado],
+      ["#pod", izm.poreklo_od], ["#rfid", izm.rfid], ["#nap", izm.napomena], ["#dat", pd ? uIso(pd) : ""]]) $(sel).value = v || "";
+    if (izm.vrsta && ![...$("#vrsta").options].some(o => o.value === izm.vrsta)) $("#vrsta").insertAdjacentHTML("beforeend", `<option>${h(izm.vrsta)}</option>`);
+    $("#vrsta").value = izm.vrsta || $("#vrsta").value;
+    if (izm.poreklo && ![...$("#por").options].some(o => o.value === izm.poreklo)) $("#por").insertAdjacentHTML("beforeend", `<option>${h(izm.poreklo)}</option>`);
+    $("#por").value = izm.poreklo || "";
+    $("#autoh").checked = !!izm.autohtona;
+    $("#pol").querySelectorAll("button").forEach(x => x.classList.toggle("akt", x.dataset.p === pol));
+    $("#status").querySelectorAll("button").forEach(x => x.classList.toggle("akt", x.dataset.s === status));
+  }
   $("#pol").onclick = e => { const b = e.target.closest("button"); if (!b) return; pol = b.dataset.p; $("#pol").querySelectorAll("button").forEach(x => x.classList.toggle("akt", x === b)); };
   $("#status").onclick = e => { const b = e.target.closest("button"); if (!b) return; status = b.dataset.s; $("#status").querySelectorAll("button").forEach(x => x.classList.toggle("akt", x === b)); };
   const namene = () => {                 // namena rase za goveda, ovce, koze i svinje
@@ -777,6 +1088,7 @@ function ekranNovoGrlo(_, upit) {
   };
   const raseLista = () => { $("#dl-r").innerHTML = raseZaVrstu($("#vrsta").value).map(r => `<option value="${h(r)}">`).join(""); };
   $("#vrsta").onchange = () => { namene(); raseLista(); }; namene(); raseLista();
+  if (izm && izm.namena && [...$("#nam").options].some(o => o.value === izm.namena)) $("#nam").value = izm.namena;
   $("#rasa").addEventListener("input", () => { if (autohtonaRasa($("#rasa").value)) $("#autoh").checked = true; });
   $("#rasa").addEventListener("change", () => {      // namena važi za celu rasu – popuni je kad rasa već ima grla
     const nm = namenaRase($("#vrsta").value, normRasa($("#rasa").value));
@@ -795,6 +1107,18 @@ function ekranNovoGrlo(_, upit) {
   });
   $("#sac").onclick = () => {
     const dat = $("#dat").value ? fmtD(parsirajDatum($("#dat").value)) : "";
+    if (izm) {
+      const v = { markica: $("#mk").value, pol, vrsta: $("#vrsta").value, rasa: $("#rasa").value, namena: $("#nam").value, autohtona: $("#autoh").checked,
+        rfid: $("#rfid").value, napomena: $("#nap").value, status, datum_rodjenja: dat, otac: $("#otac").value, majka: $("#majka").value,
+        stado: $("#stado").value, poreklo: $("#por").value, poreklo_od: $("#pod").value, udeo_krvi: $("#udeo").value };
+      const n = drugaNamenaRase(izm.id, v.vrsta, v.rasa, v.namena);
+      if (n && !confirm(t(`Namena važi za celu rasu ${normRasa(v.rasa)}.\n\nPromeniti namenu u „${v.namena}“ i kod još ${n} grla te rase?`,
+                          `The purpose applies to the whole ${normRasa(v.rasa)} breed.\n\nChange the purpose to “${v.namena}” for ${n} more animals of this breed?`))) return;
+      const rez = izmeniGrlo(izm.id, v);
+      if (typeof rez === "string") return ($("#gr").textContent = rez);
+      promena(rez.promene.length ? t(`Sačuvano: ${izm.id}`, `Saved: ${izm.id}`) : t("Nema izmena.", "No changes."));
+      return idi(`karton/${encodeURIComponent(izm.id)}`);
+    }
     const rez = novoGrlo({ id: $("#id").value, markica: $("#mk").value, pol, vrsta: $("#vrsta").value, rasa: $("#rasa").value, namena: $("#nam").value, autohtona: $("#autoh").checked, rfid: $("#rfid").value, napomena: $("#nap").value,
       status, datum_rodjenja: dat, otac: $("#otac").value, majka: $("#majka").value, stado: $("#stado").value, poreklo: $("#por").value, poreklo_od: $("#pod").value });
     if (typeof rez === "string") return ($("#gr").textContent = rez);
@@ -834,7 +1158,7 @@ function ekranSrodstvo(_, upit) {
   postaviVrh(t("Srodstvo", "Relationship"), true); meni("vise");
   const sva = M.grla();
   ekran.innerHTML = `<div class="kart"><div class="dve"><label class="polje"><span>${t("Grlo A", "Animal A")}</span><input class="unos" id="a" list="dl" value="${h(upit.get("a") || "")}" autocomplete="off"></label>
-    <label class="polje"><span>${t("Grlo B", "Animal B")}</span><input class="unos" id="b" list="dl" autocomplete="off"></label></div>${datalistGrla("dl", sva)}<div id="rez"></div></div>`;
+    <label class="polje"><span>${t("Grlo B", "Animal B")}</span><input class="unos" id="b" list="dl" value="${h(upit.get("b") || "")}" autocomplete="off"></label></div>${datalistGrla("dl", sva)}<div id="rez"></div></div>`;
   const crtaj = () => {
     const a = M.nadji($("#a").value), b = M.nadji($("#b").value);
     if (!a || !b || a === b) { $("#rez").innerHTML = `<p class="mali">${t("Upiši dva različita grla.", "Enter two different animals.")}</p>`; return; }
@@ -851,7 +1175,8 @@ function ekranSrodstvo(_, upit) {
 function ekranPodsetnik() {
   postaviVrh(t("Novi podsetnik", "New reminder"), true); meni("danas");
   const k = K();
-  ekran.innerHTML = `<div class="kart"><label class="polje"><span>${t("Grlo (može i prazno)", "Animal (can be empty)")}</span><input class="unos" id="g" list="dl" autocomplete="off"></label>${datalistGrla("dl", M.grla(true))}
+  const zaGrlo = delovi().upit.get("grlo") || "";            // otvoreno sa kartice grla – grlo je već upisano
+  ekran.innerHTML = `<div class="kart"><label class="polje"><span>${t("Grlo (može i prazno)", "Animal (can be empty)")}</span><input class="unos" id="g" list="dl" autocomplete="off" value="${h(zaGrlo)}"></label>${datalistGrla("dl", M.grla(true))}
     <label class="polje"><span>${t("Datum *", "Date *")}</span><input class="unos" id="d" type="date" value="${uIso(dodajDane(danas(), 7))}"></label>
     <label class="polje"><span>${t("Vreme (nije obavezno – javi tačno u to vreme)", "Time (optional – notify exactly then)")}</span><input class="unos" id="vr" type="time"></label>
     <label class="polje"><span>${t("Vrsta *", "Type *")}</span><input class="unos" id="tip" list="dl-t" value="${h(k.VAKCINA)}"></label>
@@ -876,6 +1201,14 @@ function ekranVise() {
     ${oblakPodesen() ? `<a class="red" href="#sinh"><span style="font-size:24px">☁</span><div class="sred"><b>${S.sinh ? t("Povezano sa računarom", "Connected to computer") : t("Upari sa računarom (QR kod ili kod)", "Pair with computer (QR or code)")}</b><span>${h(S.sinh ? (sinhStanje.tekst || S.sinh.naziv || "") : t("jednom skeniraš i sve se samo usklađuje", "scan once and everything syncs"))}</span></div></a>` : ""}
     <a class="red" href="#prenos"><span style="font-size:24px">⇅</span><div class="sred"><b>${t("Prenos sa računarom", "Transfer with computer")}</b><span>${n ? t(`${n} promena čeka slanje računaru`, `${n} changes waiting to be sent`) : t("sve je poslato", "everything sent")}</span></div>${n ? `<span class="znak warn">${n}</span>` : ""}</a>
     ${S.mreza ? `<a class="red" href="#udruzenje"><span style="font-size:24px">⌂</span><div class="sred"><b>${t("Udruženje – druge farme", "Association – other farms")}</b><span>${h(S.mreza.naziv || "")} · 🔒 ${t("samo pregled", "view only")}</span></div></a>` : ""}
+    <a class="red" href="#novarasa"><span style="font-size:24px">✦</span><div class="sred"><b>${t("Nova rasa", "New breed")}</b><span>${t("udeo krvi, cilj programa, parenja", "breed share, goal, matings")}</span></div></a>
+    <a class="red" href="#finansije"><span style="font-size:24px">💰</span><div class="sred"><b>${t("Finansije", "Finances")}</b><span>${t("prihodi i troškovi", "income and costs")}</span></div></a>
+    <a class="red" href="#istorija"><span style="font-size:24px">📜</span><div class="sred"><b>${t("Istorija farme", "Farm history")}</b><span>${t("svi događaji, pretraga", "all events, search")}</span></div></a>
+    <a class="red" href="#statistika"><span style="font-size:24px">📊</span><div class="sred"><b>${t("Statistika", "Statistics")}</b><span>${t("stado u brojevima, inbriding, očevi", "herd in numbers, inbreeding, sires")}</span></div></a>
+    <a class="red" href="#rase"><span style="font-size:24px">🧬</span><div class="sred"><b>${t("Moje rase", "My breeds")}</b><span>${t("rasa se upiše jednom, sa namenom", "enter a breed once, with its purpose")}</span></div></a>
+    <a class="red" href="#vrste"><span style="font-size:24px">🦌</span><div class="sred"><b>${t("Moje vrste", "My species")}</b><span>${t("magarci, bivoli, jeleni…", "donkeys, buffalo, deer…")}</span></div></a>
+    <a class="red" href="#" id="jaIme"><span style="font-size:24px">👤</span><div class="sred"><b>${h(S.korisnik || t("Ime i prezime nije upisano", "Name not entered"))}</b><span>${t("ko radi u aplikaciji – dodirni za promenu", "who is using the app – tap to change")}</span></div></a>
+    <a class="red" href="#rang"><span style="font-size:24px">⭐</span><div class="sred"><b>${t("Rang lista grla", "Animal ranking")}</b><span>${t("najbolja grla za priplod", "best animals for breeding")}</span></div></a>
     <a class="red" href="#srodstvo"><span style="font-size:24px">⚯</span><div class="sred"><b>${t("Srodstvo dva grla", "Relationship of two animals")}</b><span>${t("koliko su srodni, zajednički preci", "how related they are, common ancestors")}</span></div></a>
     <a class="red" href="#novo"><span style="font-size:24px">＋</span><div class="sred"><b>${t("Novo grlo", "New animal")}</b><span>${t("kupljeno ili rođeno", "bought or born")}</span></div></a>
     <a class="red" href="#muznja"><span style="font-size:24px">🥛</span><div class="sred"><b>${t("Mužnja", "Milking")}</b><span>${t("dnevni upis mleka za mlečna grla", "daily milk entry for dairy animals")}</span></div></a>
@@ -893,6 +1226,7 @@ function ekranVise() {
   $("#problem").onclick = ev => { ev.preventDefault(); prijaviProblem(); };
   $("#obUk").onclick = ev => { ev.preventDefault(); if (stanjeObavestenja()[0] !== "da") ukljuciObavestenja(); else poruka(stanjeObavestenja()[1]); };
   $("#jezikV").onchange = e => { izaberiJezik(e.target.value); prikazi(); };
+  $("#jaIme").onclick = ev => { ev.preventDefault(); traziIme(!!S.korisnik); };
   osveziInstalaciju();
 }
 
@@ -927,7 +1261,7 @@ function ekranUdruzenje() {
         const d = parsirajDatum(g.datum_rodjenja);
         return `<a class="red" href="#" data-ug="${i}"><span style="font-size:22px">${g.pol === "m" ? "♂" : g.pol === "z" ? "♀" : "•"}</span><div class="sred"><b>${h(g.id || "?")}</b><span>${h(f)} · ${h([g.rasa, d ? fmtD(d) : ""].filter(Boolean).join(" · "))}</span><span class="uDet skriveno" style="white-space:normal">${
           [[t("Vrsta", "Species"), g.vrsta], [t("Markica", "Ear tag"), g.markica], [t("Namena", "Purpose"), g.namena], [t("Otac", "Sire"), g.otac], [t("Majka", "Dam"), g.majka],
-           [t("Status", "Status"), g.status], [t("Udeo krvi", "Breed share"), g.udeo_krvi], [t("Ocena", "Score"), g.ocena ? g.ocena.split("@")[0].replace(/;/g, ", ") : ""]]
+           [t("Status", "Status"), g.status], [t("Udeo krvi", "Breed share"), g.udeo_krvi], [t("Ocena", "Score"), g.ocena ? Object.entries(procitajOcenu(g.ocena)[0]).map(([k, v]) => `${(rucneOsobine().find(r => r[0] === k) || [k, k])[1].split(" (")[0]} ${String(v).replace(".", EN() ? "." : ",")}`).join(", ") : ""]]
             .filter(x => x[1]).map(([n, v]) => `${h(n)}: <b style="display:inline">${h(v)}</b>`).join("<br>")}<br>🔒 ${h(t(`menja ga samo: ${f}`, `changed only by: ${f}`))}</span></div></a>`;
       }).join("")}</div>` : (P ? `<div class="kart mali">${farme.length ? t("Nema grla za ovaj izbor.", "No animals for this selection.") : t("Druge farme još nisu poslale podatke.", "Other farms have not sent data yet.")}</div>` : ""));
     $("#usp").querySelectorAll("[data-ug]").forEach(a => a.onclick = ev => { ev.preventDefault(); a.querySelector(".uDet").classList.toggle("skriveno"); });
@@ -1125,12 +1459,44 @@ async function ukljuciObavestenja() {
 if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => { if (e.data && e.data.idi) idi(e.data.idi); });
 if (podrzavaObavestenja() && Notification.permission === "granted") navigator.serviceWorker.ready.then(prijaviPozadinu).catch(() => {});
 
+// ---------------------------------------------------------------- ime i prezime korisnika (obavezno)
+// Svako ko radi u aplikaciji ostavi ime i prezime: vidi se kod svakog upisa i kod ocena grla.
+function traziIme(menja = false) {
+  if (document.querySelector(".ime-okvir")) return;
+  const [ime0, ...pr0] = (S.korisnik || "").split(" ");
+  const d = document.createElement("div");
+  d.className = "obavesti ime-okvir";
+  d.innerHTML = `<div class="okvir"><h2>👤 ${t("Ko radi u aplikaciji?", "Who is using the app?")}</h2>
+    <p class="mali" style="margin:0 0 12px">${t("Upiši svoje ime i prezime. Vidi se kod svakog upisa i kod ocena grla, da se zna ko je šta uradio.", "Enter your first and last name. It is shown with every entry and every animal score, so it is clear who did what.")}</p>
+    <label class="polje"><span>${t("Ime *", "First name *")}</span><input class="unos" id="kIme" autocomplete="given-name" value="${h(menja ? ime0 || "" : "")}"></label>
+    <label class="polje"><span>${t("Prezime *", "Last name *")}</span><input class="unos" id="kPrezime" autocomplete="family-name" value="${h(menja ? pr0.join(" ") : "")}"></label>
+    <div class="greska" id="kGr"></div>
+    <div style="display:flex;gap:8px;margin-top:6px">${menja ? `<button class="dug" id="kOtk">${t("Otkaži", "Cancel")}</button>` : ""}<button class="dug glavno" id="kSac" style="flex:1">${t("Sačuvaj", "Save")}</button></div></div>`;
+  document.body.appendChild(d);
+  const sac = () => {
+    const i = cistoIme($("#kIme").value), p = cistoIme($("#kPrezime").value);
+    if (i.length < 2 || p.length < 2) return ($("#kGr").textContent = t("Upiši i ime i prezime.", "Enter both first and last name."));
+    S.korisnik = `${i} ${p}`;
+    sacuvaj(); d.remove();
+    poruka(t(`Zdravo, ${i}!`, `Hello, ${i}!`));
+    if (delovi().ekran === "vise") prikazi();
+    if (!menja) setTimeout(obavestiPriUlasku, 300);
+  };
+  $("#kSac").onclick = sac;
+  $("#kPrezime").onkeydown = e => { if (e.key === "Enter") sac(); };
+  if (menja) $("#kOtk").onclick = () => d.remove();
+  setTimeout(() => $("#kIme").focus(), 50);
+}
+const proveriIme = () => { if (imaPodatke() && !cistoIme(S.korisnik || "")) traziIme(); };
+
 // ---------------------------------------------------------------- start
 ekran.innerHTML = `<div class="prazno">${t("Učitavam…", "Loading…")}</div>`;
 ucitajIzTelefona().then(() => {
   window.addEventListener("hashchange", prikazi);
+  window.addEventListener("hashchange", proveriIme);
   prikazi();
   pokreniUsaglasavanje();
+  proveriIme();
   setTimeout(obavestiPriUlasku, 600);
   setTimeout(() => { const sd = new Date(), hm = `${String(sd.getHours()).padStart(2, "0")}:${String(sd.getMinutes()).padStart(2, "0")}`; for (const p of S.podsetnici) if (normVreme(p.vreme) && normVreme(p.vreme) <= hm && +(parsirajDatum(p.datum) || 0) === +danas()) _vrJavljeno.add(`${p.grlo}|${p.tip}|${p.datum}|${p.vreme}`); zakaziVremenske(); }, 700);   // već prošla vremena pokriva prozor pri ulasku
   planUskoro();

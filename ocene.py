@@ -4,13 +4,14 @@
 Ručne ocene se čuvaju u koloni "ocena" tablice: "karakter=4;gradja=3;noge=5@2026-11-11" (ide i na telefon).
 Automatske se računaju u odnosu na ostala grla iste vrste u zapatu (najboljih 20 % = 5 ★).
 """
+import re
 import tkinter as tk
 from datetime import date, timedelta
 from tkinter import ttk
 
 import jezik
 from jezik import T
-from izgled import BRAND, INK2, SURF, WARN
+from izgled import BAD, BRAND, INK2, SURF, WARN
 from podaci import parsiraj_datum, sort_key
 import prirast as prirast_mod
 from namena_rase import vime_se_ocenjuje
@@ -34,7 +35,7 @@ def auto_osobine():
     return [("prirast", T("Prirast", "Weight gain")), ("plodnost", T("Plodnost", "Fertility")), ("zdravlje", T("Zdravlje", "Health"))]
 
 
-def procitaj_ocenu(tekst):
+def _jedna_ocena(tekst):
     """'karakter=4;gradja=3@2026-11-11' -> ({'karakter': 4, 'gradja': 3}, '2026-11-11')."""
     tekst = str(tekst or "")
     dat = ""
@@ -51,6 +52,57 @@ def procitaj_ocenu(tekst):
             if 1 <= v <= 5:
                 rez[k.strip()] = v
     return rez, dat.strip()
+
+
+def cisto_ime(ime):
+    """Ime ocenjivača bez znakova koji se koriste u zapisu ocene."""
+    return " ".join(re.sub(r"[|:;=@]", " ", str(ime or "")).split())[:60]
+
+
+def procitaj_ocene(tekst):
+    """Ocene svih ocenjivača: 'Marko Marković:karakter=4@2026-11-12|Jovan Jović:karakter=5@…' -> {ime: (ocene, datum)}.
+    Stari zapis bez imena ('karakter=4@…') ima ime ''."""
+    rez = {}
+    for seg in str(tekst or "").split("|"):
+        seg = seg.strip()
+        if not seg:
+            continue
+        ime, dv, jed = "", seg.find(":"), seg.find("=")
+        if dv != -1 and (jed == -1 or dv < jed):
+            ime, seg = cisto_ime(seg[:dv]), seg[dv + 1:]
+        oc, dat = _jedna_ocena(seg)
+        if oc:
+            rez[ime] = (oc, dat)
+    return rez
+
+
+def zapisi_ocene(mapa):
+    return "|".join((f"{cisto_ime(ime)}:" if cisto_ime(ime) else "") + zapisi_ocenu(oc, dat)
+                    for ime, (oc, dat) in mapa.items() if oc)
+
+
+def procitaj_ocenu(tekst):
+    """Prosek svih ocenjivača: ({'karakter': 4.5, …}, poslednji datum)."""
+    sve = procitaj_ocene(tekst)
+    zbir = {}
+    for oc, _ in sve.values():
+        for k, v in oc.items():
+            zbir.setdefault(k, []).append(v)
+    dat = max((d for _, d in sve.values() if d), default="")
+    return {k: round(sum(v) / len(v), 2) for k, v in zbir.items()}, dat
+
+
+def spoji_ocene(baza, moja, njihova):
+    """Spajanje ocena kad su ocenjivali na dva mesta: od 'njihova' se uzima sve, a od 'moja' ono što je
+    taj ocenjivač promenio u odnosu na 'baza' (svako menja samo svoju ocenu)."""
+    B, Mo, rez = procitaj_ocene(baza), procitaj_ocene(moja), procitaj_ocene(njihova)
+    for ime in set(B) | set(Mo):
+        if Mo.get(ime) != B.get(ime):
+            if ime in Mo:
+                rez[ime] = Mo[ime]
+            else:
+                rez.pop(ime, None)
+    return zapisi_ocene(rez)
 
 
 def zapisi_ocenu(ocene, dat=None):
@@ -156,13 +208,17 @@ class OceneDeo:
         lk = self.lbl(gl, T("Oceni  ›", "Score  ›"), 9, "bold", fg=BRAND, cursor="hand2")
         lk.pack(side="left", padx=14)
         lk.bind("<Button-1>", lambda e: self.oceni_prozor(x))
+        n_oc = len(procitaj_ocene((self.red_za(x) or {}).get("ocena")))
+        if n_oc > 1:
+            self.lbl(gl, T(f"prosek {n_oc} ocenjivača", f"average of {n_oc} scorers"), 9, fg=INK2).pack(side="left")
         fr = tk.Frame(parent, bg=SURF)
         fr.pack(anchor="w", fill="x")
         r = 0
         for k, naziv, _, samo_z in rucne_osobine():
             if k in o["rucne"]:
                 self.lbl(fr, naziv, 9, fg=INK2).grid(row=r, column=0, sticky="w", pady=1)
-                self.lbl(fr, zvezdice(o["rucne"][k]), 10, fg=WARN).grid(row=r, column=1, sticky="w", padx=(14, 0))
+                self.lbl(fr, zvezdice(o["rucne"][k]) + (f"  {o['rucne'][k]:g}".replace(".", "," if not jezik.EN else ".")
+                                                         if o["rucne"][k] != int(o["rucne"][k]) else ""), 10, fg=WARN).grid(row=r, column=1, sticky="w", padx=(14, 0))
                 r += 1
         for k, naziv in auto_osobine():
             if k in o["auto"]:
@@ -182,7 +238,9 @@ class OceneDeo:
         red = self.red_za(x)
         if red is None:
             return
-        stare, _ = procitaj_ocenu(red.get("ocena"))
+        sve = procitaj_ocene(red.get("ocena"))
+        v_ime = tk.StringVar(value=self.pod.get("korisnik", ""))
+        stare = sve.get(cisto_ime(v_ime.get()), ({}, ""))[0]
         win = tk.Toplevel(parent or self.root, bg=SURF)
         win.title(T("Ocena grla", "Animal score"))
         win.transient(parent or self.root)
@@ -193,9 +251,21 @@ class OceneDeo:
         self.lbl(b, T(f"Ocena – {x}", f"Score – {x}"), 15, "bold").grid(row=0, column=0, columnspan=3, sticky="w")
         self.lbl(b, T("Klikni na zvezdice (1 = loše, 5 = odlično). Klik na istu zvezdicu briše ocenu.",
                       "Click the stars (1 = poor, 5 = excellent). Clicking the same star clears the score."),
-                 9, fg=INK2).grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 12))
+                 9, fg=INK2).grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 6))
+        fi = tk.Frame(b, bg=SURF)
+        fi.grid(row=2, column=0, columnspan=3, sticky="w", pady=(0, 6))
+        self.lbl(fi, T("Ocenjuje (ime i prezime) *", "Scored by (first and last name) *"), 9, "bold", fg=INK2).pack(side="left")
+        ttk.Entry(fi, textvariable=v_ime, width=26, font=self.f(10)).pack(side="left", padx=(8, 0))
+        drugi = {i: oc for i, (oc, _) in sve.items() if i != cisto_ime(v_ime.get())}
+        if drugi:
+            self.lbl(b, T("Ocenili su i: ", "Also scored by: ") + "; ".join(
+                f"{i or T('ranije', 'earlier')} ({', '.join(f'{kratki_nazivi().get(k, k)} {v}' for k, v in oc.items())})" for i, oc in drugi.items()),
+                9, fg=INK2, wraplength=460, justify="left").grid(row=3, column=0, columnspan=3, sticky="w", pady=(0, 6))
+        self.lbl(b, T("Svako ocenjuje za sebe – na kraju se računa prosek svih ocena.", "Everyone scores for themselves – the average of all scores counts."),
+                 8, fg=INK2).grid(row=4, column=0, columnspan=3, sticky="w", pady=(0, 6))
+        greska = self.lbl(b, "", 9, "bold", fg=BAD)
         vr = {}
-        r = 2
+        r = 5
         for k, naziv, opis, samo_z in rucne_osobine():
             if samo_z and a["pol"] != "z":
                 continue
@@ -237,15 +307,28 @@ class OceneDeo:
         r += 1
 
         def sacuvaj():
+            ime = cisto_ime(v_ime.get())
+            if len(ime.split()) < 2:
+                greska.config(text=T("Upiši ime i prezime onoga ko ocenjuje.", "Enter the first and last name of the person scoring."))
+                return
+            self.pod["korisnik"] = ime
+            self.sacuvaj_podesavanja()
             nove = {k: v.get() for k, v in vr.items() if v.get()}
-            staro = red.get("ocena", "")
-            red["ocena"] = zapisi_ocenu(nove)
-            if procitaj_ocenu(staro)[0] != nove:
+            mapa = procitaj_ocene(red.get("ocena", ""))
+            staro = mapa.get(ime, ({}, ""))[0]
+            if nove:
+                mapa[ime] = (nove, date.today().isoformat())
+            else:
+                mapa.pop(ime, None)
+            red["ocena"] = zapisi_ocene(mapa)
+            if staro != nove:
                 opis = ", ".join(f"{n} {nove[k]}" for k, n, _, _ in rucne_osobine() if k in nove) or T("obrisana", "cleared")
-                self.ist.dodaj(x, jezik.AUTO, T(f"Ocena grla: {opis}", f"Animal score: {opis}"), automatski=True)
+                self.ist.dodaj(x, jezik.AUTO, T(f"Ocena grla ({ime}): {opis}", f"Animal score ({ime}): {opis}"), automatski=True)
             win.grab_release()
             win.destroy()
             self.promena(T(f"Ocena je sačuvana: {x}", f"Score saved: {x}"))
+        greska.grid(row=r, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        r += 1
         fb = tk.Frame(b, bg=SURF)
         fb.grid(row=r, column=0, columnspan=3, sticky="ew", pady=(16, 0))
         self.btn(fb, T("Sačuvaj", "Save"), sacuvaj, "Primary").pack(side="right")

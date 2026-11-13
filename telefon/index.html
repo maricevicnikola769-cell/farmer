@@ -71,6 +71,22 @@ nav.dno a.plus .ik { width: 48px; height: 48px; border-radius: 24px; background:
 .znak.bad { background: var(--bad-bg); color: var(--bad); }
 .znak.siv { background: var(--surf2); color: var(--ink2); }
 
+.rodlist { background: #fff; color: #111; padding: 14px; border-radius: 14px; overflow-x: auto; }
+.rodlist h1 { font-size: 20px; margin: 0 0 10px; } .rodlist h2 { font-size: 16px; margin: 16px 0 6px; }
+.rodlist table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.rodlist .podaci td { padding: 3px 8px 3px 0; border-bottom: 1px solid #eee; }
+.rodlist .rod th { font-size: 12px; text-align: left; padding: 4px; background: #f2f2f2; border: 1px solid #ccc; }
+.rodlist .rod td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: middle; }
+.rodlist .rod td.m { background: #eef4fb; } .rodlist .rod td.z { background: #fbeef3; } .rodlist .rod td.n { color: #999; font-style: italic; }
+.rodlist .potpis { margin-top: 18px; font-size: 12px; color: #555; }
+@media print {
+  body.stampam > *:not(main):not(#ekran), body.stampam header, body.stampam nav, body.stampam #meni, body.stampam .ne-stampa, body.stampam .obavesti, body.stampam #poruka { display: none !important; }
+  body.stampam, body.stampam #ekran { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+  body.stampam .rodlist { padding: 0; border-radius: 0; overflow: visible; }
+  body.stampam .rodlist .rod td.m, body.stampam .rodlist .rod td.z { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.zvezde { display: flex; gap: 4px; margin-top: 6px; }
+.zvezde button { font-size: 30px; line-height: 1; background: none; border: 0; color: var(--warn); padding: 4px 6px; cursor: pointer; }
 .polja { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 15px; }
 .polja dt { color: var(--ink2); }
 .polja dd { margin: 0; font-weight: 600; }
