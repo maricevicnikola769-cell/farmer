@@ -1385,3 +1385,14 @@ def test_ko_je_uneo_promenu(tmp_path):
         assert P.Istorija(str(tmp_path / "stado.csv")).zapisi[0]["upisao"] == "Pera Perić"
     finally:
         P.KORISNIK = staro
+
+
+def test_sifre_radnika():
+    import korisnik as K
+    n = K.novi_nalog("Pera  Perić", "1234", vlasnik=True)
+    assert n["ime"] == "Pera Perić" and n["vlasnik"] and "1234" not in str(n)        # šifra se ne čuva, samo otisak
+    assert K.sifra_valja(n, "1234") and not K.sifra_valja(n, "1235") and not K.sifra_valja({}, "1234")
+    assert K.novi_nalog("Pera Perić", "1234")["otisak"] != n["otisak"]              # svaki nalog ima svoju so
+    kod = K.novi_kod_za_vracanje()
+    assert len(K._cist_kod(kod)) == 12 and K._cist_kod(kod.lower()) == K._cist_kod(kod)
+    assert K.isto_ime("pera perić", "Pera  Perić")

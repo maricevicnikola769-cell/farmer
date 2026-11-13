@@ -239,7 +239,8 @@ class OceneDeo:
         if red is None:
             return
         sve = procitaj_ocene(red.get("ocena"))
-        v_ime = tk.StringVar(value=self.pod.get("korisnik", ""))
+        import podaci as _p
+        v_ime = tk.StringVar(value=_p.KORISNIK or self.pod.get("korisnik", ""))
         stare = sve.get(cisto_ime(v_ime.get()), ({}, ""))[0]
         win = tk.Toplevel(parent or self.root, bg=SURF)
         win.title(T("Ocena grla", "Animal score"))
@@ -255,7 +256,8 @@ class OceneDeo:
         fi = tk.Frame(b, bg=SURF)
         fi.grid(row=2, column=0, columnspan=3, sticky="w", pady=(0, 6))
         self.lbl(fi, T("Ocenjuje (ime i prezime) *", "Scored by (first and last name) *"), 9, "bold", fg=INK2).pack(side="left")
-        ttk.Entry(fi, textvariable=v_ime, width=26, font=self.f(10)).pack(side="left", padx=(8, 0))
+        ttk.Entry(fi, textvariable=v_ime, width=26, font=self.f(10),
+                  state="readonly" if _p.KORISNIK else "normal").pack(side="left", padx=(8, 0))   # prijavljen: ocenjuje pod svojim imenom
         drugi = {i: oc for i, (oc, _) in sve.items() if i != cisto_ime(v_ime.get())}
         if drugi:
             self.lbl(b, T("Ocenili su i: ", "Also scored by: ") + "; ".join(

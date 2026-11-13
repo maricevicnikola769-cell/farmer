@@ -133,9 +133,7 @@ class OsnovaProzora:
 
         self.shell()
         self.prikazi("grla")
-        root.after(400, self.korisnik_na_startu)          # ime i prezime – jednom, obavezno (uz promene piše ko ih je uneo)
-        if len(" ".join(str(self.pod.get("korisnik") or "").split()).split()) >= 2:
-            root.after(700, self.obavestenja_na_startu)  # inače posle upisa imena (da se prozori ne preklapaju)
+        self.korisnik_na_startu()                        # prijava šifrom – program se vidi tek posle nje (obaveštenja posle prijave)
         root.after(10 * 60 * 1000, self.iskacuce_provera)   # zatim na svakih 30 min: nova hitna obaveštenja kao poruka u uglu ekrana
         root.after(1500, self.dnevna_kopija)
         root.after(2500, self.licenca_na_startu)
@@ -159,10 +157,12 @@ class OsnovaProzora:
 
     def sacuvaj_podesavanja(self):
         self.pod.update(prag=self.prag, tablica=self.tab.putanja)
-        if not self.pod.get("korisnik"):              # drugi otvoren HerdDoc je možda upisao ime – ne briše se
-            ime = self.ucitaj_podesavanja().get("korisnik")
-            if ime:
-                self.pod["korisnik"] = ime
+        na_disku = None
+        for k in ("korisnik", "korisnici", "vracanje"):  # drugi otvoren HerdDoc je možda upisao ime/naloge – ne brišu se
+            if not self.pod.get(k):
+                na_disku = self.ucitaj_podesavanja() if na_disku is None else na_disku
+                if na_disku.get(k):
+                    self.pod[k] = na_disku[k]
         try:
             with open(PODESAVANJA, "w", encoding="utf-8") as f:
                 json.dump(self.pod, f, ensure_ascii=False, indent=1)
