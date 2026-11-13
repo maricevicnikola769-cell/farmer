@@ -18,6 +18,10 @@ class KorisnikDeo:
             pass
 
     def korisnik_na_startu(self):
+        if not self.pod.get("korisnik"):
+            ime = self.ucitaj_podesavanja().get("korisnik")      # možda ga je upisao drugi otvoren HerdDoc
+            if ime:
+                self.pod["korisnik"] = ime
         self.postavi_korisnika(self.pod.get("korisnik", ""))
         if len(podaci.KORISNIK.split()) < 2:
             self.prozor_korisnika(obavezno=True)

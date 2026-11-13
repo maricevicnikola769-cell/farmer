@@ -159,6 +159,10 @@ class OsnovaProzora:
 
     def sacuvaj_podesavanja(self):
         self.pod.update(prag=self.prag, tablica=self.tab.putanja)
+        if not self.pod.get("korisnik"):              # drugi otvoren HerdDoc je možda upisao ime – ne briše se
+            ime = self.ucitaj_podesavanja().get("korisnik")
+            if ime:
+                self.pod["korisnik"] = ime
         try:
             with open(PODESAVANJA, "w", encoding="utf-8") as f:
                 json.dump(self.pod, f, ensure_ascii=False, indent=1)
